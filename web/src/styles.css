@@ -1,0 +1,223 @@
+@import 'tailwindcss';
+
+/*
+ * The "paper" look: a warm ivory ground, cards a shade lighter, ink for text,
+ * vermilion as the one accent, serif for titles. Every colour the UI uses is
+ * one of these tokens, so `bg-paper`, `text-ink`, `border-line`… are the
+ * whole palette.
+ */
+@theme {
+  --color-paper: #f3efe6;
+  --color-paper-deep: #ebe5d8;
+  --color-card: #fbf9f4;
+  --color-line: #e2dccf;
+  --color-line-strong: #d6cfbf;
+  --color-ink: #1c1b18;
+  --color-ink-2: #4a463e;
+  --color-muted: #6f6a60;
+  --color-faint: #8a8478;
+  --color-ghost: #b8b0a0;
+  --color-accent: #c23a22;
+  --color-accent-dark: #8f2715;
+  --color-accent-soft: #f6e3dc;
+  --color-ok: #4f8a5b;
+
+  /* System faces only: a web font for Chinese is megabytes of slices, and
+     fetching them stalled the whole page (uploads included) for seconds. */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+  --font-serif: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'Source Han Serif SC', 'SimSun', serif;
+
+  --shadow-card: 0 1px 0 var(--color-line), 0 8px 24px rgba(60, 48, 20, 0.06);
+  --shadow-float: 0 1px 0 var(--color-line), 0 8px 24px rgba(60, 48, 20, 0.1);
+  --shadow-pop: 0 2px 4px rgba(60, 48, 20, 0.08), 0 16px 40px rgba(60, 48, 20, 0.16);
+}
+
+/* The editor owns its own chrome; keep the page from scrolling behind it. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+canvas {
+  display: block;
+}
+
+@layer components {
+  /* A floating island: the top bar's groups, the zoom pill, the toast. */
+  .island {
+    background: var(--color-card);
+    border-radius: 16px;
+    box-shadow: var(--shadow-float);
+  }
+
+  /* A side panel. */
+  .card {
+    background: var(--color-card);
+    border-radius: 18px;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Section titles inside panels. */
+  .section-title {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  /* A small secondary button. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 10px;
+    background: var(--color-paper);
+    font-size: 12px;
+    color: var(--color-ink);
+    white-space: nowrap;
+    transition: background-color 0.12s;
+  }
+  .chip:hover:not(:disabled) {
+    background: var(--color-paper-deep);
+  }
+  .chip:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  /* A round icon button on a card or island. */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    color: var(--color-ink);
+    transition: background-color 0.12s;
+  }
+  .icon-btn:hover:not(:disabled) {
+    background: var(--color-paper);
+  }
+  .icon-btn:disabled {
+    color: var(--color-ghost);
+    cursor: default;
+  }
+
+  /* The accent call-to-action. */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    padding: 0 18px;
+    border-radius: 18px;
+    background: var(--color-accent);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    transition: background-color 0.12s;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-accent-dark);
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    padding: 0 16px;
+    border-radius: 18px;
+    border: 1px solid var(--color-line-strong);
+    color: var(--color-ink);
+    font-size: 13px;
+    transition: background-color 0.12s;
+  }
+  .btn-ghost:hover {
+    background: var(--color-paper);
+  }
+
+  /* A menu (export, zoom, context menu). */
+  .menu {
+    background: var(--color-card);
+    border-radius: 14px;
+    box-shadow: var(--shadow-pop);
+    padding: 6px;
+  }
+  .menu-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--color-ink);
+    text-align: left;
+  }
+  .menu-item:hover:not(:disabled) {
+    background: var(--color-paper);
+  }
+  .menu-item:disabled {
+    opacity: 0.4;
+  }
+}
+
+/* Checkerboard for transparent previews (layer thumbnails, crop). */
+.dv-checker {
+  background-color: #fff;
+  background-image:
+    linear-gradient(45deg, #ece7dc 25%, transparent 25%, transparent 75%, #ece7dc 75%),
+    linear-gradient(45deg, #ece7dc 25%, transparent 25%, transparent 75%, #ece7dc 75%);
+  background-size: 12px 12px;
+  background-position:
+    0 0,
+    6px 6px;
+}
+
+/* "No colour": a white swatch struck through in red. */
+.dv-none {
+  background: linear-gradient(to top right, #fff calc(50% - 1px), #c23a22 calc(50% - 1px), #c23a22 calc(50% + 1px), #fff calc(50% + 1px));
+}
+
+/* Quiet scrollbars that sit on paper. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-line-strong);
+  border-radius: 4px;
+}
+
+/* Number inputs: no spinners; the value is typed or nudged with arrow keys. */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}

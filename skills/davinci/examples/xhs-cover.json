@@ -1,0 +1,10 @@
+[
+  {"type": "setBackground", "color": "#F4EFE3"},
+  {"type": "addShape", "kind": "rect", "x": 0, "y": 0, "width": 1242, "height": 620, "fill": "#2F4A43", "name": "顶部色块"},
+  {"type": "addImage", "url": "<素材 url，来自 davinci lib show --json>", "x": 470, "y": 700, "width": 810, "height": 956, "name": "人像"},
+  {"type": "addText", "text": "AI 编程\n实测", "x": 72, "y": 150, "width": 760, "name": "主标题",
+   "style": {"fontSize": 170, "fontWeight": 900, "fill": "#FFFFFF", "lineHeight": 1.05}},
+  {"type": "addText", "text": "10 款工具，这 3 个最值", "x": 72, "y": 700, "width": 560, "name": "副标题"},
+  {"type": "applyTextPreset", "id": "副标题", "preset": "yellow-box"},
+  {"type": "updateLayer", "id": "副标题", "props": {"fontSize": 64}}
+]

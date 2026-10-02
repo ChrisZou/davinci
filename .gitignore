@@ -1,0 +1,31 @@
+# 构建产物
+/bin/
+/dist/
+/web/dist/*
+!/web/dist/.gitkeep
+*.exe
+*.test
+*.out
+
+# 本地数据与依赖
+/data/
+*.db
+*.db-wal
+*.db-shm
+node_modules/
+.pnpm-store/
+
+# 环境与编辑器
+.env
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# 工具的本地构建与缓存
+/tools/layerize/bin/
+__pycache__/
+
+# 个人部署与制作素材（只在作者本机有效，不随开源发布）
+/scripts/
+/videos/
