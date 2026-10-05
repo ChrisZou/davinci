@@ -70,6 +70,10 @@ export function Editor({ projectID }: { projectID: string }) {
   const [stripOpen, setStripOpen] = useFilmstripOpen()
   const [name, setName] = useState('')
   const [isTemplate, setIsTemplate] = useState(false)
+  /** A template opens for viewing; 编辑模板 switches it to normal editing. */
+  const [editTemplate, setEditTemplate] = useState(() => new URLSearchParams(location.search).has('edit'))
+  const [starting, setStarting] = useState(false)
+  const viewOnly = isTemplate && !editTemplate
   const [rows, setRows] = useState<LayerRow[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [editing, setEditing] = useState<string | null>(null)
@@ -361,6 +365,31 @@ export function Editor({ projectID }: { projectID: string }) {
     return () => keys.dispose()
   }, [ready])
 
+  // A template being viewed is look-don't-touch: nothing selected, nothing
+  // movable, no editing shortcuts (zoom and pan still work).
+  useEffect(() => {
+    const s = sessionRef.current
+    if (!ready || !s) return
+    s.editor.readOnly = viewOnly
+    if (viewOnly) {
+      setEditing(null)
+      hostRef.current.select([])
+      setLibraryOpen(false)
+    }
+  }, [ready, viewOnly])
+
+  /** Starts a work as a copy of this template, and opens it. */
+  const useThisTemplate = async () => {
+    setStarting(true)
+    try {
+      const p = await api.duplicateProject(projectID)
+      navigate(`/editor/${p.id}`)
+    } catch (e: any) {
+      addLog(`✗ 新建失败：${e?.message ?? e}`)
+      setStarting(false)
+    }
+  }
+
   const runJSON = async () => {
     const s = sessionRef.current
     if (!s) return
@@ -426,10 +455,16 @@ export function Editor({ projectID }: { projectID: string }) {
               >
                 <Mark size={24} />
               </a>
-              <ProjectName projectID={projectID} name={name} onLog={addLog} onRenamed={(n) => {
-                setName(n)
-                document.title = `${n} · davinci`
-              }} />
+              {viewOnly ? (
+                <span className="max-w-[420px] truncate px-1 font-serif text-[17px] font-bold text-ink" data-testid="project-name">
+                  {name}
+                </span>
+              ) : (
+                <ProjectName projectID={projectID} name={name} onLog={addLog} onRenamed={(n) => {
+                  setName(n)
+                  document.title = `${n} · davinci`
+                }} />
+              )}
               {isTemplate && (
                 <a
                   href="/templates"
@@ -443,32 +478,45 @@ export function Editor({ projectID }: { projectID: string }) {
                   模板
                 </a>
               )}
-              <SaveDot state={saveState} />
+              {!viewOnly && <SaveDot state={saveState} />}
             </div>
 
-            <ToolDock
-              onTool={(t) => void addTool(t)}
-              onLine={(k) => void addLine(k)}
-              onFiles={(files) => void addImageFiles(files)}
-              libraryOpen={libraryOpen}
-              onToggleLibrary={() => setLibraryOpen((v) => !v)}
-            />
+            {viewOnly ? (
+              <div className="island absolute right-5 top-4 flex h-[52px] items-center gap-2 px-2">
+                <button className="btn-ghost" title="直接修改模板本身" onClick={() => setEditTemplate(true)} data-testid="edit-template">
+                  编辑模板
+                </button>
+                <button className="btn-primary" disabled={starting} title="把模板整份复制成一个新作品，在副本上改" onClick={() => void useThisTemplate()} data-testid="use-template">
+                  {starting ? '新建中…' : '使用此模板'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <ToolDock
+                  onTool={(t) => void addTool(t)}
+                  onLine={(k) => void addLine(k)}
+                  onFiles={(files) => void addImageFiles(files)}
+                  libraryOpen={libraryOpen}
+                  onToggleLibrary={() => setLibraryOpen((v) => !v)}
+                />
 
-            <div className="island absolute right-5 top-4 flex h-[52px] items-center gap-0.5 pl-1.5 pr-2">
-              <button className="icon-btn" disabled={!session.canUndo} title="撤销 ⌘Z" aria-label="撤销" onClick={() => void run({ type: 'undo' })}>
-                <Icon d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" />
-              </button>
-              <button className="icon-btn" disabled={!session.canRedo} title="重做 ⇧⌘Z" aria-label="重做" onClick={() => void run({ type: 'redo' })}>
-                <Icon d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" />
-              </button>
-              <ExportMenu doc={doc} name={name} editor={session.editor} selected={selected} onLog={addLog} />
-            </div>
+                <div className="island absolute right-5 top-4 flex h-[52px] items-center gap-0.5 pl-1.5 pr-2">
+                  <button className="icon-btn" disabled={!session.canUndo} title="撤销 ⌘Z" aria-label="撤销" onClick={() => void run({ type: 'undo' })}>
+                    <Icon d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" />
+                  </button>
+                  <button className="icon-btn" disabled={!session.canRedo} title="重做 ⇧⌘Z" aria-label="重做" onClick={() => void run({ type: 'redo' })}>
+                    <Icon d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" />
+                  </button>
+                  <ExportMenu doc={doc} name={name} editor={session.editor} selected={selected} onLog={addLog} />
+                </div>
+              </>
+            )}
           </>
         )}
       </header>
 
       <div className="flex min-h-0 flex-1 px-5 pb-5">
-        {showPanels && (
+        {showPanels && !viewOnly && (
           <aside className="card flex w-[252px] shrink-0 flex-col overflow-hidden">
             <LayerPanel rows={rows} doc={doc} selected={selected} onSelect={select} onRun={run} />
             <DevDrawer open={devOpen} onToggle={() => setDevOpen((v) => !v)} errors={log.filter((l) => l.startsWith('✗')).length}>
@@ -485,6 +533,7 @@ export function Editor({ projectID }: { projectID: string }) {
           onContextMenu={(e) => {
             if (!showPanels || !session) return
             e.preventDefault()
+            if (viewOnly) return
             const id = session.editor.layerAt(e.nativeEvent)
             if (id && !session.editor.selectionIDs().includes(id)) select([id])
             if (!id) select([])
@@ -492,7 +541,7 @@ export function Editor({ projectID }: { projectID: string }) {
           }}
           onDragOver={(e) => {
             const types = Array.from(e.dataTransfer.types)
-            if (!showPanels || !(types.includes('Files') || types.includes(LIBRARY_DRAG_TYPE))) return
+            if (!showPanels || viewOnly || !(types.includes('Files') || types.includes(LIBRARY_DRAG_TYPE))) return
             e.preventDefault()
             e.dataTransfer.dropEffect = 'copy'
             if (!dropping) setDropping(true)
@@ -501,7 +550,7 @@ export function Editor({ projectID }: { projectID: string }) {
             if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropping(false)
           }}
           onDrop={(e) => {
-            if (!showPanels) return
+            if (!showPanels || viewOnly) return
             e.preventDefault()
             setDropping(false)
             // A picture dragged out of the material panel.
@@ -520,7 +569,7 @@ export function Editor({ projectID }: { projectID: string }) {
           }}
         >
           {showPanels && session && <ZoomPill zoom={zoom} editor={session.editor} onHelp={() => setHelp(true)} />}
-          {showPanels && project && <Filmstrip project={project} open={stripOpen} onOpen={setStripOpen} onRun={(cmd) => void run(cmd)} />}
+          {showPanels && project && <Filmstrip project={project} open={stripOpen} onOpen={setStripOpen} onRun={(cmd) => void run(cmd)} readOnly={viewOnly} />}
           {dropping && (
             <div className="pointer-events-none absolute inset-4 z-10 flex items-center justify-center rounded-3xl border-2 border-dashed border-accent/60 bg-accent-soft/60 font-serif text-lg font-black text-accent">
               松开鼠标，把图片放到这里
@@ -553,7 +602,7 @@ export function Editor({ projectID }: { projectID: string }) {
           )}
         </div>
 
-        {showPanels && (
+        {showPanels && !viewOnly && (
           <aside className="card flex w-[280px] shrink-0 flex-col overflow-hidden">
             <Properties
               doc={doc}

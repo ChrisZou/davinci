@@ -374,7 +374,7 @@ function TemplateDetail({
           >
             {starting ? '新建中…' : '用这个模板新建'}
           </button>
-          <button className="btn-ghost" title="直接编辑模板本身" onClick={() => navigate(`/editor/${t.id}`)}>
+          <button className="btn-ghost" title="直接编辑模板本身" onClick={() => navigate(`/editor/${t.id}?edit`)}>
             编辑模板
           </button>
         </div>

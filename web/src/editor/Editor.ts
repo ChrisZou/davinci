@@ -128,6 +128,11 @@ function nearest(lines: number[], edges: number[], reach: number): { d: number; 
 
 export class Editor {
   readonly renderer: Renderer
+  /**
+   * Look, don't touch: the canvas still zooms and pans, but nothing can be
+   * selected, moved or edited (a template opened for viewing).
+   */
+  readOnly = false
   private ck: CanvasKit
   private container: HTMLElement
   private cb: EditorCallbacks
@@ -959,7 +964,7 @@ export class Editor {
       this.overlay.style.cursor = 'grabbing'
       return
     }
-    if (e.button !== 0) return
+    if (e.button !== 0 || this.readOnly) return
     // Clicking away from a text box closes it (its blur commits).
     if (this.editing) this.editing.ta.blur()
     const p = this.toBoard(s)
@@ -1016,7 +1021,7 @@ export class Editor {
     const g = this.gesture
     const s = this.local(e)
     if (!g) {
-      if (this.panning) return
+      if (this.panning || this.readOnly) return
       const handle = this.handleAt(s)
       const hover = handle ? null : this.hit(this.toBoard(s))
       const l = handle ? this.layer(this.selection[0]) : undefined
@@ -1113,6 +1118,7 @@ export class Editor {
   }
 
   private onDblClick(e: MouseEvent) {
+    if (this.readOnly) return
     const id = this.hit(this.toBoard(this.local(e)))
     const l = id ? this.board?.layers.find((x) => x.id === id) : undefined
     if (!l) return

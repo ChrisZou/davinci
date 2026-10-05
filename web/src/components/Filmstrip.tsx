@@ -45,9 +45,11 @@ interface Props {
   open: boolean
   onOpen: (v: boolean) => void
   onRun: (cmd: Record<string, unknown>) => void
+  /** Viewing only: boards can be flipped through, not added, renamed or moved. */
+  readOnly?: boolean
 }
 
-export function Filmstrip({ project, open, onOpen, onRun }: Props) {
+export function Filmstrip({ project, open, onOpen, onRun, readOnly }: Props) {
   const thumbs = useThumbnails(project)
   const [menu, setMenu] = useState<{ x: number; y: number; board: Board } | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -111,7 +113,7 @@ export function Filmstrip({ project, open, onOpen, onRun }: Props) {
                 )}
                 <button
                   ref={active ? activeRef : undefined}
-                  draggable
+                  draggable={!readOnly}
                   onDragStart={(e) => {
                     setDragging(b.id)
                     e.dataTransfer.effectAllowed = 'move'
@@ -123,7 +125,7 @@ export function Filmstrip({ project, open, onOpen, onRun }: Props) {
                   onClick={() => go(i)}
                   onContextMenu={(e) => {
                     e.preventDefault()
-                    setMenu({ x: e.clientX, y: e.clientY, board: b })
+                    if (!readOnly) setMenu({ x: e.clientX, y: e.clientY, board: b })
                   }}
                   title={`${b.name}（${b.canvas.width}×${b.canvas.height}）`}
                   className={`relative overflow-hidden rounded-md bg-paper-deep transition-shadow ${
@@ -158,8 +160,8 @@ export function Filmstrip({ project, open, onOpen, onRun }: Props) {
                   <span
                     className={`max-w-[96px] truncate text-[11px] leading-5 ${active ? 'font-bold text-ink' : 'text-muted'}`}
                     style={{ maxWidth: Math.max(56, w + 8) }}
-                    onDoubleClick={() => setRenaming(b.id)}
-                    title="双击重命名"
+                    onDoubleClick={() => !readOnly && setRenaming(b.id)}
+                    title={readOnly ? b.name : '双击重命名'}
                   >
                     {b.name}
                   </span>
@@ -167,6 +169,7 @@ export function Filmstrip({ project, open, onOpen, onRun }: Props) {
               </div>
             )
           })}
+          {!readOnly && (
           <div className="flex shrink-0 flex-col items-center gap-1">
             <button
               className="flex items-center justify-center rounded-md border border-dashed border-line-strong text-faint hover:border-accent hover:text-accent"
@@ -182,6 +185,7 @@ export function Filmstrip({ project, open, onOpen, onRun }: Props) {
             </button>
             <span className="text-[11px] leading-5 text-faint">新建</span>
           </div>
+          )}
           <div className="flex shrink-0 flex-col items-center gap-1">
             <button
               className="icon-btn rounded-md text-faint hover:text-ink"

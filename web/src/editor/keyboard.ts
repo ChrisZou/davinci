@@ -203,6 +203,9 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
       return
     }
 
+    // Viewing only: zoom and pan above, nothing that edits below.
+    if (ed.readOnly) return
+
     // --- history ---
     if (meta && lower === 'z') {
       e.preventDefault()
@@ -302,7 +305,7 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
   }
 
   const onCut = (e: ClipboardEvent) => {
-    if (standDown(e.target)) return
+    if (standDown(e.target) || ed.readOnly) return
     const layers = selectedLayers(ed)
     if (!layers.length || !e.clipboardData) return
     e.preventDefault()
@@ -311,7 +314,7 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
   }
 
   const onPaste = (e: ClipboardEvent) => {
-    if (standDown(e.target)) return
+    if (standDown(e.target) || ed.readOnly) return
     const data = e.clipboardData
     if (!data) return
     const files = Array.from(data.files ?? [])
