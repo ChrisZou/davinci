@@ -110,7 +110,7 @@ Layer   { id, name, type: 'text'|'image'|'shape'|'group', x, y, width, height,
 ```
 internal/doc/        文档模型、几何、命令注册表与 52 条命令、撤销历史
 internal/render/     Node 渲染进程的管理（拉起、请求、PNG→JPEG、空闲回收）
-internal/server/     Echo 路由、SQLite、每项目 Engine、WS hub、资产、字体（扫描/挑选/拆 TTC）、素材库
+internal/server/     Echo 路由、SQLite、每项目 Engine、WS hub、资产、字体（扫描/挑选/拆 TTC）、素材库、模板库
 internal/cli/        cobra 薄壳，全部是 HTTP 客户端
 web/src/render/      共享渲染器（浏览器 + Node）
 web/src/editor/      Editor.ts 画布视图与手势、bridge.ts 会话、ck.ts CanvasKit 加载与出图、keyboard.ts 快捷键

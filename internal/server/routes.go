@@ -42,12 +42,13 @@ func (s *Server) registerAPI(e *echo.Echo) {
 	api.GET("/projects/:id/export.:ext", s.handleExport)
 
 	s.registerLibrary(api)
+	s.registerTemplates(api)
 }
 
 // --- health & metadata ---
 
 func (s *Server) handleHealth(c echo.Context) error {
-	projects, err := s.store.ListProjects()
+	projects, err := s.store.ListProjects(ProjectQuery{})
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]any{"ok": false, "error": err.Error()})
 	}
@@ -95,8 +96,20 @@ func (s *Server) handleFontPrefs(c echo.Context) error {
 
 // --- projects ---
 
+// handleListProjects lists works by default: ?kind=template lists the template
+// library and ?kind=all both; ?q= and ?tag= narrow either.
 func (s *Server) handleListProjects(c echo.Context) error {
-	list, err := s.store.ListProjects()
+	q := ProjectQuery{Kind: KindDesign, Q: c.QueryParam("q"), Tag: c.QueryParam("tag")}
+	switch k := c.QueryParam("kind"); k {
+	case "", KindDesign:
+	case KindTemplate:
+		q.Kind = KindTemplate
+	case "all":
+		q.Kind = ""
+	default:
+		return badRequest(c, `kind must be "design", "template" or "all"`)
+	}
+	list, err := s.store.ListProjects(q)
 	if err != nil {
 		return errJSON(c, err)
 	}
@@ -115,6 +128,7 @@ type createProjectReq struct {
 	Preset string `json:"preset"`
 	Width  int    `json:"width"`
 	Height int    `json:"height"`
+	ProjectMeta
 }
 
 func (s *Server) handleCreateProject(c echo.Context) error {
@@ -140,6 +154,13 @@ func (s *Server) handleCreateProject(c echo.Context) error {
 	}
 	p, err := s.store.NewProject(name, w, h, doc)
 	if err != nil {
+		return errJSON(c, err)
+	}
+	if err := s.store.SetProjectMeta(p.ID, req.ProjectMeta); err != nil {
+		_ = s.store.DeleteProject(p.ID)
+		return badRequest(c, err.Error())
+	}
+	if p, err = s.store.GetProject(p.ID); err != nil {
 		return errJSON(c, err)
 	}
 	return c.JSON(http.StatusCreated, map[string]any{"ok": true, "project": p, "editorURL": s.Addr() + "/editor/" + p.ID})
@@ -178,10 +199,12 @@ func (s *Server) handlePutProject(c echo.Context) error {
 
 type patchProjectReq struct {
 	Name *string `json:"name"`
+	ProjectMeta
 }
 
-// handlePatchProject changes a project's metadata (today: its name) without
-// touching the document, which only commands change.
+// handlePatchProject changes a project's metadata — its name, which library it
+// is in (kind), tags, note and link — without touching the document, which
+// only commands change.
 func (s *Server) handlePatchProject(c echo.Context) error {
 	id := c.Param("id")
 	var req patchProjectReq
@@ -200,11 +223,16 @@ func (s *Server) handlePatchProject(c echo.Context) error {
 			return errJSON(c, err)
 		}
 	}
+	if err := s.store.SetProjectMeta(id, req.ProjectMeta); err != nil {
+		return badRequest(c, err.Error())
+	}
 	p, err := s.store.GetProject(id)
 	if err != nil {
 		return errJSON(c, err)
 	}
-	return c.JSON(http.StatusOK, map[string]any{"ok": true, "project": map[string]any{"id": p.ID, "name": p.Name}})
+	return c.JSON(http.StatusOK, map[string]any{"ok": true, "project": map[string]any{
+		"id": p.ID, "name": p.Name, "kind": p.Kind, "tags": p.Tags, "note": p.Note, "link": p.Link,
+	}})
 }
 
 // handleThumbnail serves the thumbnail the editor last saved as an image, so

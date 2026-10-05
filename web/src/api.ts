@@ -16,6 +16,11 @@ export interface CanvasPreset {
 export interface ProjectSummary {
   id: string
   name: string
+  /** design: a work (作品); template: kept in the template library (模板库). */
+  kind: ProjectKind
+  tags: string[]
+  note?: string
+  link?: string
   width: number
   height: number
   revision: number
@@ -51,6 +56,14 @@ export interface LibraryItem {
   createdAt: string
 }
 
+/** A tag with how many projects carry it. */
+export interface TagCount {
+  name: string
+  count: number
+}
+
+export type ProjectKind = 'design' | 'template'
+
 async function asJSON<T>(resp: Response): Promise<T> {
   const text = await resp.text()
   let body: any = null
@@ -77,8 +90,12 @@ export const api = {
     return out.presets
   },
 
-  async projects() {
-    const out = await asJSON<{ projects: ProjectSummary[] }>(await fetch(`${base}/api/projects`))
+  /** Works by default; 'template' lists the template library. */
+  async projects(query: { kind?: ProjectKind | 'all'; q?: string; tag?: string } = {}) {
+    const p = new URLSearchParams({ kind: query.kind ?? 'design' })
+    if (query.q) p.set('q', query.q)
+    if (query.tag) p.set('tag', query.tag)
+    const out = await asJSON<{ projects: ProjectSummary[] }>(await fetch(`${base}/api/projects?${p}`))
     return out.projects
   },
 
@@ -205,6 +222,48 @@ export const api = {
 
   async deleteLibraryItem(id: string) {
     await asJSON(await fetch(`${base}/api/library/items/${encodeURIComponent(id)}`, { method: 'DELETE' }))
+  },
+
+  // --- template library: projects of kind "template" ---
+
+  /** Tags in use among the projects of a kind, most used first. */
+  async projectTags(kind: ProjectKind = 'template') {
+    const out = await asJSON<{ tags: TagCount[] }>(await fetch(`${base}/api/projects/tags?kind=${kind}`))
+    return out.tags
+  },
+
+  /** Files a project in the works or the template library, and sets how it is found. */
+  async updateProject(id: string, patch: { name?: string; kind?: ProjectKind; tags?: string[]; note?: string; link?: string }) {
+    await asJSON(
+      await fetch(`${base}/api/projects/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      }),
+    )
+  },
+
+  /** Copies a project: a template into a new work by default. */
+  async duplicateProject(id: string, input: { kind?: ProjectKind; name?: string } = {}) {
+    const out = await asJSON<{ project: ProjectSummary }>(
+      await fetch(`${base}/api/projects/${encodeURIComponent(id)}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      }),
+    )
+    return out.project
+  },
+
+  /** A project made of one picture (a file, or an image URL the server fetches), filed as a template by default. */
+  async projectFromImage(src: File | string, fields: { kind?: ProjectKind; tags?: string[] } = {}) {
+    const form = new FormData()
+    if (typeof src === 'string') form.append('ref', src)
+    else form.append('file', src, src.name)
+    form.append('kind', fields.kind ?? 'template')
+    if (fields.tags?.length) form.append('tags', fields.tags.join(','))
+    const out = await asJSON<{ project: ProjectSummary }>(await fetch(`${base}/api/projects/from-image`, { method: 'POST', body: form }))
+    return out.project
   },
 
   async fonts() {

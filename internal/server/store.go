@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -22,11 +23,23 @@ import (
 // schema was written by a different generation of davinci.
 var ErrIncompatibleDB = errors.New("incompatible database schema")
 
+// Project kinds. A template is a project like any other — layered, editable,
+// exportable — kept in the template library (模板库) as a reference to build
+// new designs from, instead of among the works (作品).
+const (
+	KindDesign   = "design"
+	KindTemplate = "template"
+)
+
 // Project is one design. Document is an opaque JSON blob owned by the editor;
 // the backend only reads canvas width/height out of it for listings.
 type Project struct {
 	ID        string          `json:"id"`
 	Name      string          `json:"name"`
+	Kind      string          `json:"kind"`
+	Tags      []string        `json:"tags"`
+	Note      string          `json:"note"`
+	Link      string          `json:"link"`
 	Width     int             `json:"width"`
 	Height    int             `json:"height"`
 	Document  json.RawMessage `json:"document"`
@@ -49,6 +62,10 @@ type Asset struct {
 type ProjectSummary struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
+	Kind      string    `json:"kind"`
+	Tags      []string  `json:"tags"`
+	Note      string    `json:"note,omitempty"`
+	Link      string    `json:"link,omitempty"`
 	Width     int       `json:"width"`
 	Height    int       `json:"height"`
 	Revision  int64     `json:"revision"`
@@ -146,7 +163,35 @@ func (s *Store) initSchema() error {
 			return fmt.Errorf("create tables: %w", err)
 		}
 	}
+	if err := s.addProjectColumns(); err != nil {
+		return err
+	}
 	return s.initLibrary()
+}
+
+// projectColumns arrived after the projects table did; a database from before
+// gets them added, with every existing project a design.
+var projectColumns = []struct{ name, ddl string }{
+	{"kind", `ALTER TABLE projects ADD COLUMN kind TEXT NOT NULL DEFAULT 'design'`},
+	{"tags", `ALTER TABLE projects ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`},
+	{"note", `ALTER TABLE projects ADD COLUMN note TEXT NOT NULL DEFAULT ''`},
+	{"link", `ALTER TABLE projects ADD COLUMN link TEXT NOT NULL DEFAULT ''`},
+}
+
+func (s *Store) addProjectColumns() error {
+	cols, err := s.tableColumns("projects")
+	if err != nil {
+		return err
+	}
+	for _, c := range projectColumns {
+		if cols[c.name] {
+			continue
+		}
+		if _, err := s.db.Exec(c.ddl); err != nil {
+			return fmt.Errorf("add projects.%s: %w", c.name, err)
+		}
+	}
+	return nil
 }
 
 func (s *Store) tableColumns(table string) (map[string]bool, error) {
@@ -211,6 +256,8 @@ func (s *Store) NewProject(name string, width, height int, document json.RawMess
 	p := &Project{
 		ID:        id,
 		Name:      name,
+		Kind:      KindDesign,
+		Tags:      []string{},
 		Width:     width,
 		Height:    height,
 		Document:  document,
@@ -226,40 +273,114 @@ func (s *Store) NewProject(name string, width, height int, document json.RawMess
 	return p, nil
 }
 
-// ListProjects sums up every project, newest first.
-func (s *Store) ListProjects() ([]ProjectSummary, error) {
-	rows, err := s.db.Query(`SELECT id,name,width,height,revision,updated_at FROM projects ORDER BY updated_at DESC`)
+// ProjectQuery narrows a project listing.
+type ProjectQuery struct {
+	// Kind is KindDesign, KindTemplate, or "" for every project.
+	Kind string
+	// Q matches the name, tags, note and link; spaces separate terms that
+	// must all match.
+	Q string
+	// Tag keeps only projects carrying exactly this tag.
+	Tag string
+}
+
+const summaryColumns = `id,name,kind,tags,note,link,width,height,revision,updated_at`
+
+// ListProjects sums up the projects a query picks, newest first.
+func (s *Store) ListProjects(q ProjectQuery) ([]ProjectSummary, error) {
+	where := []string{"1=1"}
+	args := []any{}
+	if q.Kind != "" {
+		where = append(where, "kind = ?")
+		args = append(args, q.Kind)
+	}
+	for _, term := range strings.Fields(q.Q) {
+		like := "%" + term + "%"
+		where = append(where, "(name LIKE ? OR tags LIKE ? OR note LIKE ? OR link LIKE ?)")
+		args = append(args, like, like, like, like)
+	}
+	if tag := strings.TrimSpace(q.Tag); tag != "" {
+		// Tags are a JSON array of strings; match the quoted element so "红"
+		// does not also pick up "红底白字".
+		b, _ := json.Marshal(tag)
+		where = append(where, "tags LIKE ?")
+		args = append(args, "%"+string(b)+"%")
+	}
+	rows, err := s.db.Query(`SELECT `+summaryColumns+` FROM projects WHERE `+strings.Join(where, " AND ")+` ORDER BY updated_at DESC`, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []ProjectSummary
+	out := []ProjectSummary{}
 	for rows.Next() {
 		var p ProjectSummary
+		var tags string
 		var updated int64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Width, &p.Height, &p.Revision, &updated); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Kind, &tags, &p.Note, &p.Link, &p.Width, &p.Height, &p.Revision, &updated); err != nil {
 			return nil, err
 		}
+		p.Tags = parseTags(tags)
 		p.UpdatedAt = fromDB(updated)
 		out = append(out, p)
 	}
 	return out, rows.Err()
 }
 
+// ProjectTags counts the tags used by projects of a kind, most used first.
+func (s *Store) ProjectTags(kind string) ([]TagCount, error) {
+	list, err := s.ListProjects(ProjectQuery{Kind: kind})
+	if err != nil {
+		return nil, err
+	}
+	counts := map[string]int{}
+	for _, p := range list {
+		for _, t := range p.Tags {
+			counts[t]++
+		}
+	}
+	out := make([]TagCount, 0, len(counts))
+	for name, n := range counts {
+		out = append(out, TagCount{Name: name, Count: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Count != out[j].Count {
+			return out[i].Count > out[j].Count
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}
+
+// TagCount is a tag with how many projects carry it.
+type TagCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+func parseTags(raw string) []string {
+	var tags []string
+	if err := json.Unmarshal([]byte(raw), &tags); err != nil || tags == nil {
+		return []string{}
+	}
+	return tags
+}
+
 // GetProject loads one project.
 func (s *Store) GetProject(id string) (*Project, error) {
-	row := s.db.QueryRow(`SELECT id,name,width,height,document,thumbnail,revision,created_at,updated_at FROM projects WHERE id=?`, id)
+	row := s.db.QueryRow(`SELECT id,name,kind,tags,note,link,width,height,document,thumbnail,revision,created_at,updated_at FROM projects WHERE id=?`, id)
 	var p Project
 	// The document column is TEXT; database/sql will not scan a string straight
 	// into a json.RawMessage, so it goes through a []byte first.
 	var doc []byte
+	var tags string
 	var created, updated int64
-	if err := row.Scan(&p.ID, &p.Name, &p.Width, &p.Height, &doc, &p.Thumbnail, &p.Revision, &created, &updated); err != nil {
+	if err := row.Scan(&p.ID, &p.Name, &p.Kind, &tags, &p.Note, &p.Link, &p.Width, &p.Height, &doc, &p.Thumbnail, &p.Revision, &created, &updated); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
 	}
+	p.Tags = parseTags(tags)
 	p.Document = json.RawMessage(doc)
 	p.CreatedAt, p.UpdatedAt = fromDB(created), fromDB(updated)
 	return &p, nil
@@ -303,6 +424,69 @@ func (s *Store) SetThumbnail(id, thumbnail string) error {
 func (s *Store) RenameProject(id, name string) error {
 	_, err := s.db.Exec(`UPDATE projects SET name=?, updated_at=? WHERE id=?`, name, dbTime(time.Now()), id)
 	return err
+}
+
+// ProjectMeta changes what a project is filed as and how it is found; nil
+// leaves a field alone.
+type ProjectMeta struct {
+	Kind *string   `json:"kind"`
+	Tags *[]string `json:"tags"`
+	Note *string   `json:"note"`
+	Link *string   `json:"link"`
+}
+
+// SetProjectMeta applies a ProjectMeta. Moving a project between the works and
+// the template library does not count as an edit: updated_at stays put.
+func (s *Store) SetProjectMeta(id string, m ProjectMeta) error {
+	set := []string{}
+	args := []any{}
+	if m.Kind != nil {
+		if *m.Kind != KindDesign && *m.Kind != KindTemplate {
+			return fmt.Errorf("kind must be %q or %q", KindDesign, KindTemplate)
+		}
+		set, args = append(set, "kind=?"), append(args, *m.Kind)
+	}
+	if m.Tags != nil {
+		b, _ := json.Marshal(cleanTags(*m.Tags))
+		set, args = append(set, "tags=?"), append(args, string(b))
+	}
+	if m.Note != nil {
+		set, args = append(set, "note=?"), append(args, strings.TrimSpace(*m.Note))
+	}
+	if m.Link != nil {
+		set, args = append(set, "link=?"), append(args, strings.TrimSpace(*m.Link))
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	_, err := s.db.Exec(`UPDATE projects SET `+strings.Join(set, ", ")+` WHERE id=?`, append(args, id)...)
+	return err
+}
+
+// DuplicateProject copies a project's document and thumbnail as a new project
+// of the given kind.
+func (s *Store) DuplicateProject(id, name, kind string) (*Project, error) {
+	src, err := s.GetProject(id)
+	if err != nil || src == nil {
+		return nil, err
+	}
+	p, err := s.NewProject(name, src.Width, src.Height, src.Document)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.SetThumbnail(p.ID, src.Thumbnail); err != nil {
+		return nil, err
+	}
+	meta := ProjectMeta{Kind: &kind}
+	if kind == src.Kind {
+		// A copy within the same library keeps how the original is filed; a
+		// design started from a template starts out bare.
+		meta.Tags, meta.Note, meta.Link = &src.Tags, &src.Note, &src.Link
+	}
+	if err := s.SetProjectMeta(p.ID, meta); err != nil {
+		return nil, err
+	}
+	return s.GetProject(p.ID)
 }
 
 // DeleteProject removes a project.

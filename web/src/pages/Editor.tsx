@@ -69,6 +69,7 @@ export function Editor({ projectID }: { projectID: string }) {
   const [project, setProject] = useState<ProjectDoc | null>(null)
   const [stripOpen, setStripOpen] = useFilmstripOpen()
   const [name, setName] = useState('')
+  const [isTemplate, setIsTemplate] = useState(false)
   const [rows, setRows] = useState<LayerRow[]>([])
   const [selected, setSelected] = useState<string[]>([])
   const [editing, setEditing] = useState<string | null>(null)
@@ -128,6 +129,7 @@ export function Editor({ projectID }: { projectID: string }) {
         const p = await api.project(projectID)
         if (!alive) return
         setName(p.name)
+        setIsTemplate(p.kind === 'template')
         document.title = `${p.name} · davinci`
 
         const session = new Session(projectID, {
@@ -428,6 +430,19 @@ export function Editor({ projectID }: { projectID: string }) {
                 setName(n)
                 document.title = `${n} · davinci`
               }} />
+              {isTemplate && (
+                <a
+                  href="/templates"
+                  title="这是模板库里的模板：改动会改到模板本身"
+                  className="rounded-full bg-paper-deep px-2 py-0.5 text-[11px] font-bold text-muted no-underline hover:text-accent"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    navigate(`/templates?t=${encodeURIComponent(projectID)}`)
+                  }}
+                >
+                  模板
+                </a>
+              )}
               <SaveDot state={saveState} />
             </div>
 

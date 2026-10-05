@@ -48,11 +48,11 @@ curl -s localhost:7789/api/schema | jq '.commands[] | {type, summary}'
 | PUT | `/api/fonts/prefs` | 收藏或隐藏字体：`{"family":"…","favorite":true}` / `{"family":"…","hidden":true}`，返回新的列表 |
 | POST | `/api/fonts` | 上传 `.ttf`/`.otf`，按 `@font-face` 注入页面 |
 | POST | `/api/assets` | 导入图片（multipart `file`，或表单字段 `path` / `url`） |
-| GET | `/api/projects` | 项目列表，最近更新的在前 |
-| POST | `/api/projects` | 新建项目：`{name, preset?, width?, height?}` |
+| GET | `/api/projects` | 项目列表，最近更新的在前。默认只列作品；`?kind=template` 列模板库，`?kind=all` 全部；`?q=`（名称/标签/备注/链接，空格拆词都要命中）`&tag=`（整个标签匹配） |
+| POST | `/api/projects` | 新建项目：`{name, preset?, width?, height?, kind?, tags?, note?, link?}` |
 | GET | `/api/projects/:id` | 项目详情，含整份文档 |
 | PUT | `/api/projects/:id` | 用一整份文档 JSON 覆盖（导入） |
-| PATCH | `/api/projects/:id` | 改项目元数据：`{name}`（不碰文档） |
+| PATCH | `/api/projects/:id` | 改项目元数据（不碰文档）：`{name, kind, tags, note, link}`；`kind` 改成 `template` / `design` 就是移进模板库 / 移回作品 |
 | DELETE | `/api/projects/:id` | 删除项目 |
 | GET | `/api/projects/:id/thumbnail` | 编辑器最近一次保存的缩略图（没有时 404）；列表页用 `?rev=<revision>` 做缓存键 |
 | POST | `/api/projects/:id/commands` | **AI 的主入口**：执行命令 |
@@ -65,6 +65,9 @@ curl -s localhost:7789/api/schema | jq '.commands[] | {type, summary}'
 | POST | `/api/library/items` | 加素材：multipart `file` + `category name tags description meta source trim`，或 JSON `{ref, category, …}`（`ref` 是本机路径 / http(s) / `/assets/…`）。同一 `source` 在同一分类只存一份，重复导入会更新；`trim=true` 裁掉 PNG 四周的透明边 |
 | GET / PATCH / DELETE | `/api/library/items/:id` | 单条素材（含 `meta` 标注）/ 改 `{name, category, tags, description}` / 删除（设计里已用的图不受影响） |
 | GET | `/api/library/items/:id/thumb` | 缩略图 PNG（保留透明），`?w=` 最长边，默认 320 |
+| GET | `/api/projects/tags` | 某类项目用过的标签及数量：`?kind=template`（默认）或 `design` |
+| POST | `/api/projects/:id/duplicate` | 复制项目（文档 + 缩略图）：`{name?, kind?}`，`kind` 默认 `design`——「用这个模板新建」就是它；同类复制会带上标签和备注 |
+| POST | `/api/projects/from-image` | 用一张图新建项目（画布同图片尺寸，长边不超过 3000，整张图是一个图层）：multipart `file` + `name kind tags note link`，或 JSON `{ref, …}`；`kind` 默认 `template` |
 | GET | `/assets/*` `/fonts/*` | 资产与用户字体文件 |
 | WS | `/ws?project=<id>` | 编辑器页面与服务的双向通道（见下） |
 

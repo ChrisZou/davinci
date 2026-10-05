@@ -63,6 +63,7 @@ func newRootCmd() *cobra.Command {
 		newUndoCmd(),
 		newRedoCmd(),
 		newLibraryCmd(),
+		newTemplateCmd(),
 		newBoardsCmd(),
 		newBoardCmd(),
 	)

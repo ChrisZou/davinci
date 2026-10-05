@@ -356,6 +356,27 @@ davinci lib category add 表情包               # 新建分类（rename / rm �
 导入的封面人像带有标注：`show` 里的「适合怎么P」和 `placement.best_subject_regions`
 告诉你人物该放哪、标题该放哪，先读再摆。
 
+## 模板库（`davinci tpl`）
+
+模板就是普通项目（分层、可编辑、可导出），只是归在「模板库」而不是「作品」里，带标签、
+备注（喜欢它哪里）和来源链接，用来照着做新作品。编辑模板本身和编辑作品一样：`-p <模板id>`
+加任意命令。不带 `-p` 时默认的「最近项目」只在作品里找，不会落到模板上。
+
+```bash
+davinci tpl ls                                # 全部模板
+davinci tpl ls --tag 大字 -q 人物              # 按标签 + 关键词（名称/标签/备注/链接）
+davinci tpl tags                              # 用过的标签及数量
+davinci tpl show p_xxx                        # 备注、标签、来源、画板数
+davinci tpl get p_xxx [-o cover.png]          # 渲染第 1 个画板成 PNG，打印路径（拿来看图）
+davinci tpl use p_xxx "新封面"                 # 整份复制成新作品（全部画板和图层），在副本上改
+davinci tpl add cover.jpg --tags 大字 --note "标题压满上半屏" --link <原帖>   # 一张图收藏成模板
+davinci tpl move p_xxx                        # 作品移进模板库；--to design 移回作品
+davinci tpl update p_xxx --note "人物压字"     # 改名称 / 标签 / 备注 / 链接
+davinci projects --templates                  # 同样列出模板（--all 作品和模板都列）
+```
+
+删除模板用 `davinci projects rm`，和删作品一样。
+
 ## CLI → 命令对照
 
 CLI 只是 cobra 薄壳，`exec` 是万能兜底——任何命令都有 CLI 哈希，但不一定都有顺手子命令。

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, type CanvasPreset, type ProjectSummary } from '../api'
 import { navigate } from '../App'
 import { ConfirmDialog, Modal } from '../components/Dialog'
@@ -6,7 +6,8 @@ import { Lockup } from '../components/Brand'
 
 /**
  * The home page: a row of canvas sizes to start from (one click creates the
- * project and opens it), then the recent designs with their thumbnails.
+ * project and opens it), then the recent designs with their thumbnails, then
+ * the template library. Both lists show two rows until expanded.
  */
 
 /** Tile colours for the size previews, in order. */
@@ -14,6 +15,7 @@ const TILE_FILLS = ['#c23a22', '#1c1b18', '#2f4a43', '#f2c230', '#8a8478', '#e2d
 
 export function Home() {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
+  const [templates, setTemplates] = useState<ProjectSummary[] | null>(null)
   const [presets, setPresets] = useState<CanvasPreset[]>([])
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -24,9 +26,10 @@ export function Home() {
   const reload = useCallback(async () => {
     try {
       setError('')
-      const [p, ps] = await Promise.all([api.projects(), api.presets()])
+      const [p, ps, t] = await Promise.all([api.projects(), api.presets(), api.projects({ kind: 'template' })])
       setProjects(p)
       setPresets(ps)
+      setTemplates(t)
     } catch (e: any) {
       setError(e?.message ?? String(e))
     }
@@ -42,6 +45,28 @@ export function Home() {
     try {
       const proj = await api.createProject(input)
       navigate(`/editor/${proj.id}`)
+    } catch (e: any) {
+      setError(e?.message ?? String(e))
+      setBusy(false)
+    }
+  }
+
+  /** Moves a project between the works and the template library. */
+  async function move(p: ProjectSummary, kind: ProjectSummary['kind']) {
+    try {
+      await api.updateProject(p.id, { kind })
+      await reload()
+    } catch (e: any) {
+      setError(e?.message ?? String(e))
+    }
+  }
+
+  /** Starts a work as a copy of a template, and opens it. */
+  async function useTemplate(t: ProjectSummary) {
+    setBusy(true)
+    try {
+      const p = await api.duplicateProject(t.id)
+      navigate(`/editor/${p.id}`)
     } catch (e: any) {
       setError(e?.message ?? String(e))
       setBusy(false)
@@ -86,7 +111,7 @@ export function Home() {
       <div className="mx-auto flex max-w-[1240px] flex-col items-center gap-12 px-10 pb-16 pt-12">
         <section className="flex flex-col items-center gap-6">
           <Lockup size={40} />
-          <h1 className="m-0 font-serif text-[40px] font-black tracking-tight text-ink">新建一张图</h1>
+          <h1 className="m-0 font-serif text-[40px] font-black tracking-tight text-ink">开始新的创作</h1>
           <div className="flex flex-wrap justify-center gap-4">
             {presets.map((p, i) => (
               <SizeTile
@@ -134,45 +159,75 @@ export function Home() {
           )}
           {projects !== null && projects.length > 0 && shown.length === 0 && <p className="text-sm text-faint">没有名字里带「{query}」的设计。</p>}
 
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-5">
+          {/* A search shows every match; otherwise two rows until expanded. */}
+          <CollapsibleGrid key={query ? 'search' : 'all'} expanded={!!query} label="设计">
             {shown.map((p) => (
-              <div key={p.id} className="group relative flex flex-col gap-2.5">
-                <a
-                  href={`/editor/${p.id}`}
-                  className="flex flex-col gap-2.5 no-underline"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    navigate(`/editor/${p.id}`)
-                  }}
-                >
-                  <div className="flex aspect-[180/250] items-center justify-center rounded-2xl bg-card p-5 shadow-[0_1px_0_var(--color-line)] transition-shadow group-hover:shadow-[var(--shadow-float)]">
-                    <Thumbnail project={p} />
-                  </div>
-                  <span className="flex flex-col gap-0.5 px-1">
-                    <span className="truncate text-sm font-bold text-ink">{p.name}</span>
-                    <span className="text-xs text-faint">{when(p.updatedAt)}</span>
-                  </span>
-                </a>
-                <button
-                  onClick={() => setConfirmDelete(p)}
-                  title="删除"
-                  aria-label={`删除「${p.name}」`}
-                  className="icon-btn absolute right-2 top-2 h-8 w-8 bg-card/90 text-muted opacity-0 shadow-[var(--shadow-float)] transition-opacity hover:!bg-accent-soft hover:text-accent focus:opacity-100 group-hover:opacity-100"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
-                  </svg>
-                </button>
-              </div>
+              <ProjectTile
+                key={p.id}
+                project={p}
+                subtitle={when(p.updatedAt)}
+                actions={[
+                  { label: '移到模板库', icon: ICON_TEMPLATE, onClick: () => void move(p, 'template') },
+                  { label: '删除', icon: ICON_TRASH, danger: true, onClick: () => setConfirmDelete(p) },
+                ]}
+              />
             ))}
+          </CollapsibleGrid>
+        </section>
+
+        <section className="flex w-full flex-col gap-5">
+          <div className="flex items-center gap-3">
+            <h2 className="m-0 font-serif text-xl font-black">模板库</h2>
+            <span className="text-xs text-faint">{templates ? `${templates.length} 个模板` : ''}</span>
+            <div className="flex-1" />
+            <a
+              href="/templates"
+              className="text-[13px] text-muted no-underline hover:text-accent"
+              onClick={(e) => {
+                e.preventDefault()
+                navigate('/templates')
+              }}
+            >
+              打开模板库 →
+            </a>
           </div>
+          {templates?.length === 0 && (
+            <p className="rounded-2xl border border-dashed border-line-strong px-6 py-12 text-center text-sm leading-relaxed text-muted">
+              还没有模板。把喜欢的封面
+              <a
+                href="/templates"
+                className="text-accent"
+                onClick={(e) => {
+                  e.preventDefault()
+                  navigate('/templates')
+                }}
+              >
+                存进模板库
+              </a>
+              ，或者把自己的作品移进来（卡片右上角的 ☆）。
+            </p>
+          )}
+          <CollapsibleGrid label="模板">
+            {(templates ?? []).map((t) => (
+              <ProjectTile
+                key={t.id}
+                project={t}
+                subtitle={t.tags.length ? t.tags.map((x) => `#${x}`).join(' ') : when(t.updatedAt)}
+                actions={[
+                  { label: '用这个模板新建', icon: ICON_COPY, onClick: () => void useTemplate(t) },
+                  { label: '移回作品', icon: ICON_UNTEMPLATE, onClick: () => void move(t, 'design') },
+                  { label: '删除', icon: ICON_TRASH, danger: true, onClick: () => setConfirmDelete(t) },
+                ]}
+              />
+            ))}
+          </CollapsibleGrid>
         </section>
       </div>
 
       {confirmDelete && (
         <ConfirmDialog
           title={`删除「${confirmDelete.name}」？`}
-          message="项目和它的全部图层都会被删除，此操作不能撤销。"
+          message={`${confirmDelete.kind === 'template' ? '模板' : '项目'}和它的全部图层都会被删除，此操作不能撤销。`}
           confirmLabel="删除"
           danger
           onConfirm={() => void remove(confirmDelete.id)}
@@ -180,6 +235,107 @@ export function Home() {
         />
       )}
       {custom && <CustomSize busy={busy} onClose={() => setCustom(false)} onCreate={(width, height) => void create({ width, height })} />}
+    </div>
+  )
+}
+
+const svg = (d: string) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d={d} />
+  </svg>
+)
+const ICON_TRASH = svg('M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3')
+const ICON_TEMPLATE = svg('M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z')
+const ICON_UNTEMPLATE = svg('M9 14l-4-4 4-4M5 10h10a4 4 0 0 1 0 8h-3')
+const ICON_COPY = svg('M9 9h11v11H9zM5 15H4V4h11v1')
+
+/**
+ * A project on the home page — a work or a template, they are the same kind
+ * of thing: its thumbnail opens the editor, and the actions show on hover.
+ */
+function ProjectTile({
+  project: p,
+  subtitle,
+  actions,
+}: {
+  project: ProjectSummary
+  subtitle: string
+  actions: { label: string; icon: ReactNode; danger?: boolean; onClick: () => void }[]
+}) {
+  return (
+    <div className="group relative flex flex-col gap-2.5" data-testid={p.kind === 'template' ? 'template-tile' : 'project-tile'}>
+      <a
+        href={`/editor/${p.id}`}
+        className="flex flex-col gap-2.5 no-underline"
+        onClick={(e) => {
+          e.preventDefault()
+          navigate(`/editor/${p.id}`)
+        }}
+      >
+        <div className="flex aspect-[180/250] items-center justify-center rounded-2xl bg-card p-5 shadow-[0_1px_0_var(--color-line)] transition-shadow group-hover:shadow-[var(--shadow-float)]">
+          <Thumbnail project={p} />
+        </div>
+        <span className="flex flex-col gap-0.5 px-1">
+          <span className="truncate text-sm font-bold text-ink">{p.name}</span>
+          <span className="truncate text-xs text-faint">{subtitle}</span>
+        </span>
+      </a>
+      <div className="absolute right-2 top-2 flex gap-1.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        {actions.map((a) => (
+          <button
+            key={a.label}
+            onClick={a.onClick}
+            title={a.label}
+            aria-label={`${a.label}「${p.name}」`}
+            className={`icon-btn h-8 w-8 bg-card/90 text-muted shadow-[var(--shadow-float)] ${a.danger ? 'hover:!bg-accent-soft hover:text-accent' : 'hover:text-ink'}`}
+          >
+            {a.icon}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Tile width the home grids aim for, and the gap between tiles (gap-5). */
+const TILE_MIN = 180
+const TILE_GAP = 20
+
+/**
+ * The home page's tile grid: as many 180px-or-wider columns as fit, showing
+ * the first two rows until 展开.
+ */
+function CollapsibleGrid({ children, label, expanded: startExpanded = false }: { children: ReactNode[]; label: string; expanded?: boolean }) {
+  const box = useRef<HTMLDivElement>(null)
+  const [cols, setCols] = useState(0)
+  const [expanded, setExpanded] = useState(startExpanded)
+
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const measure = () => setCols(Math.max(1, Math.floor((el.clientWidth + TILE_GAP) / (TILE_MIN + TILE_GAP))))
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const limit = cols * 2
+  const overflows = cols > 0 && children.length > limit
+  const visible = overflows && !expanded ? children.slice(0, limit) : children
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div ref={box} className="grid gap-5" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${TILE_MIN}px, 1fr))` }}>
+        {visible}
+      </div>
+      {overflows && !startExpanded && (
+        <div className="flex justify-center">
+          <button className="chip" onClick={() => setExpanded((v) => !v)}>
+            {expanded ? '收起' : `展开更多${label}（还有 ${children.length - limit} 个）`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -3,7 +3,7 @@ name: davinci
 description: >
   用 davinci（本地的图层化图片编辑器）做封面和配图、管理素材库。凡是要做 / 改
   小红书封面、B 站封面、视频号竖图、公众号头图、海报、缩略图、带文字的配图，
-  或者要往素材库里上传人像 / 背景 / APP Logo、从素材库找图、导出 PNG/JPG 时使用。
+  或者要往素材库里上传人像 / 背景 / APP Logo、从素材库找图、收藏或参考模板库里的封面、导出 PNG/JPG 时使用。
   用户发来 davinci.localhost 的链接（如 http://davinci.localhost/editor/p_xxx）时
   也一律用本 skill：链接就是一个 davinci 项目，用 CLI 处理，不要用浏览器或 WebFetch 去读。
   Use when the user asks to create or edit a cover image, thumbnail, poster or
@@ -96,6 +96,24 @@ davinci lib update <id> --tags 指向,推荐 --name "新名字"         # 改信
 - 名称、标签、说明写中文、写"这张图是什么、适合干什么"——后面搜索全靠它们。
 - `--source <唯一标识>` 可让重复导入只更新不重复（批量同步外部素材时用）。
 - 删除（`lib rm`）、删分类属于破坏性操作，用户明确要求才做。
+
+## 2.5 模板库（照着做）
+
+模板库是用户收藏的封面。每个模板都是完整的分层项目（和作品一样），只是归在模板库里，
+带标签和备注。用户说"照着我收藏的那种做""用模板库里的大字报风"时用它。
+
+```bash
+davinci tpl tags                       # 有哪些标签
+davinci tpl ls --tag 大字 -q 人物       # 找模板（名称/标签/备注/链接都会搜）
+davinci tpl show <模板id>              # 读备注：版式、配色、适合什么选题、文字块位置和字数
+davinci tpl get <模板id>               # 渲染成 PNG 并打印路径——用你能看图的方式打开看一眼
+davinci tpl use <模板id> "新作品名"     # 整份复制成新作品，然后用 -p <新作品id> 改字、换图
+davinci tpl add <文件|URL> --tags a,b --note "喜欢它哪里"   # 用户让你收藏时
+davinci tpl move <作品>                 # 用户让你把某个作品放进模板库时
+```
+
+- **不要直接改模板本身**（除非用户明确要求）：先 `tpl use` 复制出新作品，再在新作品上改。
+- 不带 `-p` 时默认的项目只会是作品，不会是模板。
 
 ## 3. 改已有的设计
 

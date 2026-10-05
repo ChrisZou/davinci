@@ -135,8 +135,8 @@ func (c *Client) ping() bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// resolveProject fills in the default project — the most recently updated one —
-// when --project was not given. It is a no-op once a project is known.
+// resolveProject fills in the default project — the most recently updated work
+// (templates are not picked by default) — when --project was not given. It is a no-op once a project is known.
 func (c *Client) resolveProject() error {
 	if c.Project != "" {
 		return nil
@@ -181,7 +181,8 @@ func (c *Client) ProjectID() (string, error) {
 		OK       bool                    `json:"ok"`
 		Projects []server.ProjectSummary `json:"projects"`
 	}
-	if err := c.getJSON("/api/projects", &list); err != nil {
+	// Templates are projects too, and can be named with -p like any work.
+	if err := c.getJSON("/api/projects?kind=all", &list); err != nil {
 		return "", err
 	}
 	for _, p := range list.Projects {
@@ -457,14 +458,15 @@ func humanBytes(n int64) string {
 	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
 }
 
-// listProjects returns every project, newest first.
-func (c *Client) listProjects() ([]server.ProjectSummary, error) {
+// listProjects returns the projects of a kind ("design", "template" or
+// "all"), newest first.
+func (c *Client) listProjects(kind string) ([]server.ProjectSummary, error) {
 	var out struct {
 		OK       bool                    `json:"ok"`
 		Projects []server.ProjectSummary `json:"projects"`
 		Error    string                  `json:"error"`
 	}
-	if err := c.getJSON("/api/projects", &out); err != nil {
+	if err := c.getJSON("/api/projects?kind="+url.QueryEscape(kind), &out); err != nil {
 		return nil, err
 	}
 	if !out.OK {
