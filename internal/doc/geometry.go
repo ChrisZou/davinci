@@ -6,8 +6,8 @@ import "math"
 // uses, which in turn follows Fabric.js so documents from those days stay
 // put: (x, y) is the box's top-left corner and the box turns about it; the
 // box counts half the stroke on each side (a stroke of 1 when none is set,
-// except images and groups); a slanted text's box is the box around the
-// slanted shape; the content is drawn centred in the box.
+// except images and groups); a slanted or sheared text's box is the box
+// around that shape; the content is drawn centred in the box.
 
 // Mat is an affine transform [a b c d e f]: x' = a·x + c·y + e, y' = b·x + d·y + f.
 type Mat [6]float64
@@ -38,6 +38,7 @@ type Frame struct {
 	CW, CH         float64 // content size in its own units
 	ScaleX, ScaleY float64
 	SkewX          float64 // Fabric's skewX, degrees (negative leans right)
+	SkewY          float64 // Fabric's skewY, degrees (negative lifts the right end)
 	FlipX, FlipY   bool
 	StrokeWidth    float64
 }
@@ -54,13 +55,16 @@ func (f Frame) dims() Mat {
 	if f.SkewX != 0 {
 		m = mul(m, Mat{1, 0, math.Tan(f.SkewX * math.Pi / 180), 1, 0, 0})
 	}
+	if f.SkewY != 0 {
+		m = mul(m, Mat{1, math.Tan(f.SkewY * math.Pi / 180), 0, 1, 0, 0})
+	}
 	return m
 }
 
 // BoxSize is the layer's box on the board before rotation.
 func (f Frame) BoxSize() (float64, float64) {
 	dx, dy := f.CW+f.StrokeWidth, f.CH+f.StrokeWidth
-	if f.SkewX == 0 {
+	if f.SkewX == 0 && f.SkewY == 0 {
 		return dx * f.ScaleX, dy * f.ScaleY
 	}
 	m := f.dims()
@@ -146,7 +150,7 @@ func FrameOf(l *Layer) Frame {
 		if s := str(l.S("stroke")); s != "" {
 			sw = strokeWidthOf(s, l.S("strokeWidth"))
 		}
-		return Frame{CW: math.Max(1, l.Width/stretch), CH: math.Max(1, l.Height), ScaleX: stretch, ScaleY: 1, SkewX: -num(l.S("skew"), 0), StrokeWidth: sw}
+		return Frame{CW: math.Max(1, l.Width/stretch), CH: math.Max(1, l.Height), ScaleX: stretch, ScaleY: 1, SkewX: -num(l.S("skew"), 0), SkewY: -num(l.S("skewY"), 0), StrokeWidth: sw}
 	case "image":
 		nw, nh := l.Width, l.Height
 		if l.Image != nil {

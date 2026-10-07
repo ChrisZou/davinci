@@ -33,6 +33,11 @@ export interface TextStyle {
    * but by any amount (Chinese faces have no italic of their own).
    */
   skew?: number
+  /**
+   * Vertical shear in degrees (稿定 / PS 的斜切): positive lifts the right end,
+   * so the line climbs while vertical strokes stay upright.
+   */
+  skewY?: number
   /** Horizontal scale of the glyphs: 0.8 condenses, 1.2 widens. */
   stretch?: number
   /** Envelope warp (稿定's 变形): arch, flag, bulge, taperRight … see editor/warp.ts. */

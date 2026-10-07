@@ -11,8 +11,8 @@ import type { Layer } from '../types'
  *  - (x, y) is the top-left corner of the layer's box, and the box turns
  *    about that corner by `rotation` degrees clockwise;
  *  - the box counts half the stroke on each side (a stroke of 1 when none is
- *    set, except images and groups), and for slanted text it is the box
- *    around the slanted shape;
+ *    set, except images and groups), and for slanted or sheared text it is
+ *    the box around that shape;
  *  - the content (text lines, image pixels, a shape) is drawn centred in the
  *    box, in its own units, then stretched, slanted and flipped.
  */
@@ -69,6 +69,8 @@ export interface Frame {
   scaleY: number
   /** Fabric's skewX in degrees (negative leans the tops to the right). */
   skewX: number
+  /** Fabric's skewY in degrees (negative lifts the right end). */
+  skewY: number
   flipX: boolean
   flipY: boolean
   /** Counted into the box: half on each side. */
@@ -79,6 +81,7 @@ export interface Frame {
 function dimensions(f: Frame): Mat {
   let m: Mat = [f.flipX ? -f.scaleX : f.scaleX, 0, 0, f.flipY ? -f.scaleY : f.scaleY, 0, 0]
   if (f.skewX) m = multiply(m, [1, 0, Math.tan(rad(f.skewX)), 1, 0, 0])
+  if (f.skewY) m = multiply(m, [1, Math.tan(rad(f.skewY)), 0, 1, 0, 0])
   return m
 }
 
@@ -86,7 +89,7 @@ function dimensions(f: Frame): Mat {
 export function boxSize(f: Frame): { w: number; h: number } {
   const dx = f.cw + f.strokeWidth
   const dy = f.ch + f.strokeWidth
-  if (!f.skewX) return { w: dx * f.scaleX, h: dy * f.scaleY }
+  if (!f.skewX && !f.skewY) return { w: dx * f.scaleX, h: dy * f.scaleY }
   const m = dimensions(f)
   const pts = [
     apply(m, -dx / 2, -dy / 2),
@@ -150,6 +153,7 @@ export function frameOf(l: Layer): Frame {
       scaleX: stretch,
       scaleY: 1,
       skewX: -(Number(st.skew) || 0),
+      skewY: -(Number(st.skewY) || 0),
       flipX: false,
       flipY: false,
       strokeWidth: sw,
@@ -165,6 +169,7 @@ export function frameOf(l: Layer): Frame {
       scaleX: (l.width || nw) / nw,
       scaleY: (l.height || nh) / nh,
       skewX: 0,
+      skewY: 0,
       flipX: st.flipX === true,
       flipY: st.flipY === true,
       strokeWidth: 0,
@@ -178,6 +183,7 @@ export function frameOf(l: Layer): Frame {
       scaleX: (l.width || b.width || 1) / (b.width || 1),
       scaleY: (l.height || b.height || 1) / (b.height || 1),
       skewX: 0,
+      skewY: 0,
       flipX: false,
       flipY: false,
       strokeWidth: 0,
@@ -185,7 +191,7 @@ export function frameOf(l: Layer): Frame {
   }
   // Shapes (a line included): sized by width/height directly.
   const sw = st.strokeWidth !== undefined ? Number(st.strokeWidth) || 0 : 1
-  return { cw: Math.max(0.5, l.width), ch: Math.max(0.5, l.height), scaleX: 1, scaleY: 1, skewX: 0, flipX: false, flipY: false, strokeWidth: sw }
+  return { cw: Math.max(0.5, l.width), ch: Math.max(0.5, l.height), scaleX: 1, scaleY: 1, skewX: 0, skewY: 0, flipX: false, flipY: false, strokeWidth: sw }
 }
 
 /** The box around a group's members, in the group's own (unscaled) units. */

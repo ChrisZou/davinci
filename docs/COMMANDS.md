@@ -225,6 +225,8 @@ davinci layer z 标题 front
 | `paintFirst` | 先画描边再画填充——**描边在文字下面**，粗描边必开 |
 | `underline` / `linethrough` | 布尔 |
 | `padding` | 文字文本框内边距 |
+| `skew` | 倾斜角度，正值向右倒（只歪竖笔，像斜体） |
+| `skewY` | 纵向斜切角度，正值右端抬高：整行斜向上走，竖笔仍竖直（PS / 稿定的「斜切」）；改它时文字中心不动 |
 
 ```bash
 davinci text set 标题 "AI 编程实测（2026）"

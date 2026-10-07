@@ -19,14 +19,14 @@ var propKeys = []string{
 	"color", "fill", "fontFamily", "fontSize", "fontWeight", "fontStyle", "textAlign",
 	"lineHeight", "charSpacing", "padding", "textBackgroundColor", "underline",
 	"linethrough", "paintFirst", "shadow", "stroke", "strokeWidth", "cornerRadius",
-	"flipX", "flipY", "filters", "width", "height", "skew", "stretch", "warp", "warpAmount", "warpBias",
+	"flipX", "flipY", "filters", "width", "height", "skew", "skewY", "stretch", "warp", "warpAmount", "warpBias",
 }
 
 // textStyleKeys is what addText's and setTextStyle's style bag may hold.
 var textStyleKeys = []string{
 	"fontFamily", "fontSize", "fontWeight", "fontStyle", "fill", "color", "textAlign",
 	"lineHeight", "charSpacing", "shadow", "textBackgroundColor", "stroke", "strokeWidth",
-	"paintFirst", "underline", "linethrough", "padding", "skew", "stretch", "warp", "warpAmount", "warpBias",
+	"paintFirst", "underline", "linethrough", "padding", "skew", "skewY", "stretch", "warp", "warpAmount", "warpBias",
 }
 
 // Warps are the envelope shapes text can take (稿定's 变形).
@@ -184,8 +184,23 @@ func applyProps(l *Layer, props map[string]any) error {
 	}
 
 	if isText {
+		// Slant and shear grow the box around the text; like a turn, they
+		// leave the text where it was unless the same patch moves it.
+		_, sk := props["skew"]
+		_, skY := props["skewY"]
+		keep := (sk || skY) && !has(props, "x") && !has(props, "y")
+		var cx, cy float64
+		if keep {
+			cx, cy = Centre(l, FrameOf(l))
+		}
 		if v, ok := props["skew"]; ok {
 			l.SetS("skew", nilIfZero(clamp(num(v, 0), -45, 45)))
+		}
+		if v, ok := props["skewY"]; ok {
+			l.SetS("skewY", nilIfZero(clamp(num(v, 0), -45, 45)))
+		}
+		if keep {
+			PlaceCentre(l, FrameOf(l), cx, cy)
 		}
 		if v, ok := props["stretch"]; ok {
 			// The width on the page stays; the glyphs get wider or narrower.

@@ -26,7 +26,7 @@ func init() {
 	define(Spec{
 		Type: "setTextStyle", Summary: "修改文字样式：字体/字号/颜色/行高/字距/阴影/底色/描边/下划线",
 		Params: []Param{REF, {Name: "style", Type: "object", Required: true,
-			Desc: `fontFamily,fontSize,fontWeight,fontStyle,fill|color,textAlign,lineHeight,charSpacing,shadow("color:blur:offX:offY"),textBackgroundColor,stroke("color:width"),paintFirst,underline,linethrough,padding,skew(倾斜角度，正值向右倒),stretch(横向拉伸倍数，0.8 压窄 1.2 拉宽),warp(变形：none 或 trapezoid 梯形，右端收窄),warpAmount(梯形强度 -100~100),warpBias(相对高度 -100~100：-100 下沿平直，100 上沿平直)`}},
+			Desc: `fontFamily,fontSize,fontWeight,fontStyle,fill|color,textAlign,lineHeight,charSpacing,shadow("color:blur:offX:offY"),textBackgroundColor,stroke("color:width"),paintFirst,underline,linethrough,padding,skew(倾斜角度，正值向右倒),skewY(纵向斜切角度，正值右端抬高、整行斜向上走，竖笔仍竖直),stretch(横向拉伸倍数，0.8 压窄 1.2 拉宽),warp(变形：none 或 trapezoid 梯形，右端收窄),warpAmount(梯形强度 -100~100),warpBias(相对高度 -100~100：-100 下沿平直，100 上沿平直)`}},
 		Run: func(c *Ctx, cmd map[string]any) (any, error) {
 			l, err := c.layer(cmd["id"])
 			if err != nil {

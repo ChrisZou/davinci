@@ -86,7 +86,8 @@ davinci -p <项目> exec --file cover.json          # 从文件读（长的一�
 斜体：`fontStyle: "italic"`。
 变形（梯形，右端收窄的透视标题）：`warp: "trapezoid"`，`warpAmount` 梯形强度 -100~100（常用 15–35），
 `warpBias` 相对高度 -100~100（-100 下沿平直、上沿往右压低；100 上沿平直；0 上下各收一半）；`warp: "none"` 取消。
-另有 `skew` 字形倾斜角度、`stretch` 横向拉伸倍数（0.85 压窄）。
+另有 `skew` 字形倾斜角度（只歪竖笔）、`skewY` 纵向斜切角度（正值右端抬高，整行斜向上走、竖笔仍竖直）、
+`stretch` 横向拉伸倍数（0.85 压窄）。整行连字带竖笔一起斜着走用 `rotateLayer`；只想让行往右上爬用 `skewY`。
 
 预设：`plain-white` 白字、`yellow-box` 黄底黑字、`red-box` 红底白字、`outline-black` 白字黑描边、
 `soft-shadow` 柔和投影、`subtitle` 小字副标题、`marker` 荧光笔。

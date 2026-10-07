@@ -135,7 +135,8 @@ function AlignRow({ onAlign }: { onAlign: (h?: string, v?: string) => void }) {
 
 /**
  * 变形, the way 稿定 does it: a card showing the current shape; clicking it
- * opens a panel of shapes with the strength and relative-height sliders.
+ * opens a panel of shapes with the strength and relative-height sliders, and
+ * the vertical shear (斜切) that makes a line climb.
  */
 function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (props: Record<string, unknown>) => void }) {
   const [open, setOpen] = useState(false)
@@ -166,7 +167,7 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
     const r = card.current?.getBoundingClientRect()
     if (r) {
       // Beside the property panel, level with the card, kept on screen.
-      const h = 300
+      const h = 380
       setPos({ left: Math.max(8, r.left - 336), top: Math.max(8, Math.min(r.top - 20, window.innerHeight - h - 8)) })
     }
     setOpen((v) => !v)
@@ -200,6 +201,7 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
           {shape ? <WarpIcon d={shape.icon} size={30} /> : <span className="text-[11px] text-faint">无</span>}
         </span>
         <span className="flex-1 text-[13px] font-bold text-ink">变形</span>
+        {Number(style.skewY) ? <span className="text-xs text-muted">斜切 {Number(style.skewY)}°</span> : null}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-muted">
           <path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
         </svg>
@@ -240,6 +242,18 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
               />
             </div>
           )}
+          <div className="mt-4 border-t border-line pt-4">
+            <Slider
+              label="纵向斜切"
+              value={Number(style.skewY ?? 0)}
+              min={-30}
+              max={30}
+              step={1}
+              display={(v) => `${v}°`}
+              testId="skew-y"
+              onChange={(skewY) => patch({ skewY })}
+            />
+          </div>
         </div>
       )}
     </>

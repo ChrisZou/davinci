@@ -80,7 +80,7 @@ func init() {
 	define(Spec{
 		Type: "updateLayer", Summary: "通用属性补丁：位置/尺寸/旋转/不透明度/显隐/锁定 + 该类型支持的样式键",
 		Params: []Param{REF, {Name: "props", Type: "object", Required: true,
-			Desc: "要改的属性：name,x,y,width,height,rotation,opacity,visible,locked,color/fill,fontFamily,fontSize,fontWeight,fontStyle,textAlign,lineHeight,charSpacing,shadow,textBackgroundColor,stroke,strokeWidth,paintFirst,underline,linethrough,cornerRadius,flipX,flipY,skew,stretch,warp,warpAmount,warpBias"}},
+			Desc: "要改的属性：name,x,y,width,height,rotation,opacity,visible,locked,color/fill,fontFamily,fontSize,fontWeight,fontStyle,textAlign,lineHeight,charSpacing,shadow,textBackgroundColor,stroke,strokeWidth,paintFirst,underline,linethrough,cornerRadius,flipX,flipY,skew,skewY,stretch,warp,warpAmount,warpBias"}},
 		Run: func(c *Ctx, cmd map[string]any) (any, error) {
 			l, err := c.layer(cmd["id"])
 			if err != nil {

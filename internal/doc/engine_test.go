@@ -134,6 +134,39 @@ func TestRotateKeepsCentre(t *testing.T) {
 	}
 }
 
+func TestShearKeepsCentreAndGrowsBox(t *testing.T) {
+	e, _ := engine(t)
+	run(t, e, `{"type":"addText","text":"斜向上","x":100,"y":100,"width":600,"name":"t"}`)
+	l := layer(e, "t")
+	f := FrameOf(l)
+	w0, h0 := f.BoxSize()
+	cx, cy := Centre(l, f)
+	run(t, e, `{"type":"setTextStyle","id":"t","style":{"skewY":8}}`)
+	f = FrameOf(l)
+	w1, h1 := f.BoxSize()
+	nx, ny := Centre(l, f)
+	if math.Abs(nx-cx) > 1 || math.Abs(ny-cy) > 1 {
+		t.Fatalf("centre moved: %v,%v → %v,%v", cx, cy, nx, ny)
+	}
+	// The right end rises by the width × tan(8°); the width does not change.
+	if math.Abs(w1-w0) > 0.01 || math.Abs(h1-h0-w0*math.Tan(8*math.Pi/180)) > 0.5 {
+		t.Fatalf("box %vx%v → %vx%v", w0, h0, w1, h1)
+	}
+	// The right end is higher than the left: content x → board y goes up.
+	m := ContentMatrix(l, f)
+	if _, yr := m.apply(100, 0); yr >= ny {
+		t.Fatalf("right end at y=%v, centre %v: not rising", yr, ny)
+	}
+	run(t, e, `{"type":"updateLayer","id":"t","props":{"skewY":90}}`)
+	if l.S("skewY") != 45.0 {
+		t.Fatalf("skewY not clamped: %v", l.S("skewY"))
+	}
+	run(t, e, `{"type":"setTextStyle","id":"t","style":{"skewY":0}}`)
+	if l.S("skewY") != nil {
+		t.Fatalf("skewY 0 should be dropped: %v", l.S("skewY"))
+	}
+}
+
 func TestGroupUngroupRoundTrip(t *testing.T) {
 	e, _ := engine(t)
 	run(t, e, `[{"type":"addShape","kind":"rect","x":100,"y":200,"width":50,"height":60,"name":"a"},{"type":"addShape","kind":"ellipse","x":300,"y":250,"width":80,"height":40,"name":"b"},{"type":"addText","text":"标","x":150,"y":400,"name":"c","style":{"fontSize":60}}]`)
