@@ -20,6 +20,8 @@ FONTS = [
     ('songti900', 'Songti SC', 900, f'{S}/Supplemental/Songti.ttc', 0, 'cjk'),
     ('songti700', 'Songti SC', 700, f'{S}/Supplemental/Songti.ttc', 1, 'cjk'),
     ('xingshu', 'hongleixingshu', 400, f'{H}/HongLeiXingShuJianTi-2.otf', 0, 'cjk'),
+    # 庞门正道粗书体: heavy brush lettering, strokes rising to the right (free for commercial use).
+    ('cushu', 'PangMenZhengDao-Cu', 400, f'{H}/PangMenZhengDaoCuShuTi.ttf', 0, 'cjk'),
     ('impact', 'Impact', 400, f'{S}/Supplemental/Impact.ttf', 0, 'latin'),
     ('arialblack', 'Arial Black', 900, f'{S}/Supplemental/Arial Black.ttf', 0, 'latin'),
     ('futura', 'Futura', 700, f'{S}/Supplemental/Futura.ttc', 2, 'latin'),
@@ -28,3 +30,6 @@ FONTS = [
     ('courier', 'Courier New', 700, f'{S}/Supplemental/Courier New Bold.ttf', 0, 'latin'),
     ('georgia', 'Georgia', 700, f'{S}/Supplemental/Georgia Bold.ttf', 0, 'latin'),
 ]
+
+# Faces already slanted by design: Chrome's synthetic italic is not tried on them.
+SLANTED_FACES = {'youshe', 'smiley', 'cushu'}

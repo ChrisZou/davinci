@@ -38,10 +38,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 from crop import find_cover  # noqa: E402
-from fonts import FONTS  # noqa: E402
+from fonts import FONTS, SLANTED_FACES  # noqa: E402
 from glyphs import calibration, draw, ink_box  # noqa: E402
 
 VISION = os.environ.get('LAYERIZE_VISION', os.path.join(HERE, 'bin', 'vision'))
+DEBUG = bool(os.environ.get('LAYERIZE_DEBUG'))  # print ink colour groups and each angle tried for a line
 CJK = re.compile(r'[　-鿿＀-￯]')
 
 
@@ -77,11 +78,15 @@ class TextRun:
         self.__dict__.update(kw)
 
 
-def deskew(img: np.ndarray, quad, center):
-    """Rotates the image so a text line's baseline is horizontal."""
-    (x0, y0), (x1, y1) = quad[0], quad[1]
-    angle = math.degrees(math.atan2(y1 - y0, x1 - x0))
-    if abs(angle) < 1.2:
+def deskew(img: np.ndarray, quad, center, angle=None):
+    """Rotates the image so a text line's baseline is horizontal: by the line
+    box's own slope, or by `angle` (degrees, measured from the ink) if given."""
+    if angle is None:
+        (x0, y0), (x1, y1) = quad[0], quad[1]
+        angle = math.degrees(math.atan2(y1 - y0, x1 - x0))
+        if abs(angle) < 1.2:
+            return img, 0.0, np.eye(3)
+    elif abs(angle) < 0.5:
         return img, 0.0, np.eye(3)
     m = cv2.getRotationMatrix2D(center, angle, 1.0)
     rot = cv2.warpAffine(img, m, (img.shape[1], img.shape[0]), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
@@ -157,7 +162,7 @@ def separate_ink(patch: np.ndarray, inside: np.ndarray, background: np.ndarray, 
     share_in = n_in / max(1, inside.sum())
     share_bg = n_bg / max(1, background.sum())
     is_ink = [(share_in[c] > 0.04 and share_in[c] > 2.5 * share_bg[c]) for c in range(len(centers))]
-    if os.environ.get('LAYERIZE_DEBUG'):
+    if DEBUG:
         print('ink?', [(hexcolor(cv2.cvtColor(np.uint8([[centers[c]]]), cv2.COLOR_LAB2RGB)[0, 0]), round(share_in[c], 3), round(share_bg[c], 3), is_ink[c]) for c in range(len(centers))])
     label = find_label(patch, L, inside, rim)
     if label is not None:
@@ -318,12 +323,12 @@ def fix_spaces(chars):
     return out
 
 
-def analyse_line(cover: np.ndarray, line: dict, fixes: dict, text_boxes: np.ndarray, all_lines=()):
+def analyse_line(cover: np.ndarray, line: dict, fixes: dict, text_boxes: np.ndarray, all_lines=(), angle=None):
     H, W, _ = cover.shape
     quad = line['quad']
     cx = sum(p[0] for p in quad) / 4
     cy = sum(p[1] for p in quad) / 4
-    img, angle, M = deskew(cover, quad, (cx, cy))
+    img, angle, M = deskew(cover, quad, (cx, cy), angle)
     q = tf(M, quad)
     x0, y0 = q[:, 0].min(), q[:, 1].min()
     x1, y1 = q[:, 0].max(), q[:, 1].max()
@@ -491,6 +496,7 @@ def analyse_line(cover: np.ndarray, line: dict, fixes: dict, text_boxes: np.ndar
         bx0, by0 = r.box[0] - X0, r.box[1] - Y0
         run_ink[by0:by0 + r.mask.shape[0], bx0:bx0 + r.mask.shape[1]] |= r.mask
     ink = ink | run_ink
+    climb, climb_n = ink_climb(run_ink, chars, cuts)
     outline_info = None
     if outline is not None:
         outline_info = {'rgb': outline['rgb'], 'width': 2.0 * outline['dt']}
@@ -503,10 +509,91 @@ def analyse_line(cover: np.ndarray, line: dict, fixes: dict, text_boxes: np.ndar
     full[Y0:Y1, X0:X1] = removal * 255
     if angle:
         full = cv2.warpAffine(full, np.linalg.inv(M)[:2], (W, H), flags=cv2.INTER_NEAREST)
-    return out, (outline_info, full)
+    return out, (outline_info, full, climb, climb_n)
 
 
-def fit_font(run: TextRun, calib: dict, only=None, italic_ok=True, spacing_em=None):
+def ink_climb(ink: np.ndarray, chars, cuts):
+    """How steeply the glyphs still climb in the line's frame, in degrees
+    (negative: rising to the right, as image y grows downwards), and how many
+    characters that rests on.
+
+    Vision's line box is often level when a title is set at an angle, so the
+    angle is checked against the ink: the middle of each character's ink,
+    fitted with Theil–Sen (the median of the pairwise slopes) so one odd
+    glyph — a dot, a descender, a short punctuation mark — does not tilt it.
+    Only CJK, capitals and digits count: lower case sits at mixed heights."""
+    pts = []
+    for ch, (a, b) in zip(chars, cuts):
+        if not (CJK.search(ch['c']) or re.fullmatch(r'[A-Z0-9]', ch['c'])):
+            continue
+        m0 = max(0, a + (b - a) // 6)
+        m1 = min(ink.shape[1], max(m0 + 1, b - (b - a) // 6))
+        rows = np.nonzero(ink[:, m0:m1].any(axis=1))[0]
+        if len(rows) < 3:
+            continue
+        pts.append(((m0 + m1) / 2, (rows.min() + rows.max()) / 2, rows.max() - rows.min()))
+    if len(pts) < 2:
+        return 0.0, len(pts)
+    tall = np.median([p[2] for p in pts])
+    pts = [p for p in pts if p[2] >= 0.6 * tall]
+    ks = [(q[1] - p[1]) / (q[0] - p[0]) for i, p in enumerate(pts) for q in pts[i + 1:] if abs(q[0] - p[0]) > 1]
+    if not ks:
+        return 0.0, len(pts)
+    return float(np.clip(math.degrees(math.atan(float(np.median(ks)))), -20, 20)), len(pts)
+
+
+def stroke_angles(mask: np.ndarray):
+    """Which way a glyph mask's strokes run, in degrees: (rise, lean) — how
+    much the near-horizontal edges climb to the right and how much the
+    near-vertical ones lean to the right at the top. This is what tells a
+    turned line (both tilt), a sheared one (only the horizontals climb) and
+    italic (only the verticals lean) apart, whatever the face.
+
+    A binary edge at a small angle is a staircase whose pixels point exactly
+    sideways or diagonally; averaging the gradient directions (doubled, so
+    opposite edges agree) recovers the true angle where a median would not."""
+    sigma = max(2.0, 0.012 * max(mask.shape))
+    m = cv2.GaussianBlur(mask.astype(np.float32), (0, 0), sigma)
+    gx = cv2.Sobel(m, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(m, cv2.CV_32F, 0, 1, ksize=3)
+    mag = np.hypot(gx, gy)
+    sel = mag > 0.05 * (mag.max() or 1)
+    t = np.arctan2(gy[sel], gx[sel])
+    w = mag[sel] ** 2
+
+    def mean_dir(keep):
+        if keep.sum() < 20:
+            return None
+        c, s_ = (w[keep] * np.cos(2 * t[keep])).sum(), (w[keep] * np.sin(2 * t[keep])).sum()
+        return math.degrees(0.5 * math.atan2(s_, c))
+
+    deg = np.degrees(t) % 180
+    lean = mean_dir(np.abs(((deg + 90) % 180) - 90) < 40)  # vertical edges: gradient ≈ horizontal
+    across = mean_dir(np.abs(deg - 90) < 40)  # horizontal edges: gradient ≈ vertical
+    rise = None if across is None else 90 - (across % 180)
+    return (rise or 0.0), (lean or 0.0)
+
+
+def sheared(mask: np.ndarray, origin, angle: float):
+    """A drawing of upright text, sheared so its line climbs by −`angle`
+    degrees (davinci's skewY) and then turned level the way deskew turns the
+    cover by `angle`: what a sheared title looks like in the deskewed frame.
+    Returns the new mask and where the text origin landed in it."""
+    r = math.radians(angle)
+    rot = np.array([[math.cos(r), math.sin(r)], [-math.sin(r), math.cos(r)]])  # cv2.getRotationMatrix2D's
+    shear = np.array([[1.0, 0.0], [math.tan(r), 1.0]])  # y' = y + tan(angle)·x: rises when angle < 0
+    L = rot @ shear
+    h, w = mask.shape
+    o = np.asarray(origin, float)
+    corners = (np.array([[0, 0], [w, 0], [0, h], [w, h]], float) - o) @ L.T
+    lo, hi = corners.min(axis=0), corners.max(axis=0)
+    A = np.hstack([L, (-lo).reshape(2, 1)]) @ np.vstack([np.hstack([np.eye(2), -o.reshape(2, 1)]), [0, 0, 1]])
+    out = cv2.warpAffine(mask.astype(np.uint8) * 255, A[:2], (int(math.ceil(hi[0] - lo[0])) + 1, int(math.ceil(hi[1] - lo[1])) + 1),
+                         flags=cv2.INTER_LINEAR)
+    return out > 127, (float(-lo[0]), float(-lo[1]))
+
+
+def fit_font(run: TextRun, calib: dict, only=None, italic_ok=True, spacing_em=None, modes=None):
     """Finds the candidate face (and size / spacing / synthetic italic) that
     best redraws the run.
 
@@ -514,24 +601,37 @@ def fit_font(run: TextRun, calib: dict, only=None, italic_ok=True, spacing_em=No
     squeezed together hard to fit the ink width — then the height is inflated
     (a 3D extrusion or shadow under the glyphs, a descending tail) and the
     width is the better witness. The drawing is then laid over the cover's
-    glyph mask, top-left aligned, unstretched, and scored by overlap."""
+    glyph mask, top-left aligned, unstretched, and scored by overlap.
+
+    A line set at an angle was turned level before the run was cut out; it
+    was either turned as a whole (the vertical strokes lean with it) or
+    sheared (稿定's 斜切: the line climbs, vertical strokes stay upright).
+    Both are tried: 'turn' draws upright, 'shear' draws the sheared text as
+    it looks once turned level."""
     obs = run.mask
     oh, ow = obs.shape
     text = run.text
     n = len(text)
     has_cjk = bool(CJK.search(text))
-    best = None
+    if modes is None:
+        modes = ('turn', 'shear') if abs(run.angle) >= 1 else ('turn',)
+    # The strokes' directions, for telling a turned line from a sheared one
+    # when overlap cannot (see fit_runs).
+    o_rise, o_lean = stroke_angles(obs)
+    cands = []
     for key, family, weight, *_rest, scripts in FONTS:
         if only and key not in only:
             continue
         if has_cjk and 'cjk' not in scripts and not only:
             continue
-        slanted_face = key in ('youshe', 'smiley')
-        for italic in ((False,) if slanted_face or not italic_ok else (False, True)):
+        slanted_face = key in SLANTED_FACES
+        for italic, mode in ((i, m) for i in ((False,) if slanted_face or not italic_ok else (False, True)) for m in modes):
             try:
-                m100, _ = draw(key, text, 100, italic=italic)
+                m100, o100 = draw(key, text, 100, italic=italic)
             except Exception:
                 continue
+            if mode == 'shear':
+                m100, o100 = sheared(m100, o100, run.angle)
             b = ink_box(m100)
             if b is None:
                 continue
@@ -546,7 +646,11 @@ def fit_font(run: TextRun, calib: dict, only=None, italic_ok=True, spacing_em=No
                 if spacing_em is not None:
                     spacing = spacing_em * size
                 m, origin = draw(key, text, size, spacing, italic=italic)
+                if mode == 'shear':
+                    m, origin = sheared(m, origin, run.angle)
                 bb = ink_box(m)
+                if bb is None:
+                    continue
                 glyph = m[bb[1]:bb[3], bb[0]:bb[2]]
                 gh, gw = glyph.shape
                 A = np.zeros((max(gh, oh), max(gw, ow)), bool)
@@ -556,16 +660,77 @@ def fit_font(run: TextRun, calib: dict, only=None, italic_ok=True, spacing_em=No
                 # Rows below the drawing's own bottom are extrusion/shadow: ignore.
                 A, B = A[:gh], B[:gh]
                 score = (A & B).sum() / max(1, (A | B).sum())
+                d_rise, d_lean = stroke_angles(glyph)
                 # Covers are set tight, but not this tight: beyond −0.1 em the
                 # fit is squeezing an inflated height back into the width.
                 em = spacing / size
-                score -= 0.1 * abs(em) + 0.8 * max(0.0, -em - 0.1) + (0.01 if italic else 0)
-                cand = {'key': key, 'family': family, 'weight': weight, 'size': size, 'spacing': spacing, 'italic': italic,
+                score -= 0.1 * abs(em) + 0.8 * max(0.0, -em - 0.1) + (0.01 if italic else 0) + (0.005 if mode == 'shear' else 0)
+                cand = {'key': key, 'family': family, 'weight': weight, 'size': size, 'spacing': spacing, 'italic': italic, 'mode': mode,
+                        'strokes': (round(d_rise, 1), round(d_lean, 1), round(o_rise, 1), round(o_lean, 1)),
+                        'mismatch': abs(d_rise - o_rise) + abs(d_lean - o_lean),
                         'score': float(score), 'ink_dx': bb[0] - origin[0], 'ink_dy': bb[1] - origin[1],
                         'dy': calib[key]['H' if not has_cjk else '国']['dy'], 'ink_w': gw}
-                if best is None or cand['score'] > best['score']:
-                    best = cand
-    return best
+                cands.append(cand)
+    if not cands:
+        return None
+    return max(cands, key=lambda c: c['score'])
+
+
+def fit_runs(runs, line, styles, replace, drop_runs, calib):
+    """Fits a face to every run the review keeps: [(run, fit, overrides)].
+    Runs the review dropped are marked `dropped` and left out. A line is
+    turned or sheared as a whole, never some runs one way and some the other:
+    both are tried on all its runs and the better reading is kept."""
+    if runs and abs(runs[0].angle) >= 1:
+        turn, shear = (fit_line(runs, line, styles, replace, drop_runs, calib, (m,)) for m in ('turn', 'shear'))
+        if abs(quality(turn) - quality(shear)) >= 0.01 or not turn or not shear:
+            return max((turn, shear), key=quality)
+        # Overlap cannot tell them apart (a perspective title overlaps both
+        # about equally): the strokes can — turned, the verticals lean with
+        # the line; sheared, they stay upright. Too rough on hand-drawn
+        # lettering to overrule overlap, so only here, and only between these two.
+        return min((turn, shear), key=mismatch)
+    return fit_line(runs, line, styles, replace, drop_runs, calib, ('turn',))
+
+
+def fit_line(runs, line, styles, replace, drop_runs, calib, modes):
+    out = []
+    for r in runs:
+        r.text = replace.get(r.text, r.text)
+        r.dropped = r.text in drop_runs and not line.get('manual')
+        if r.dropped:
+            continue
+        # Review overrides for this run: a face, a colour, an outline.
+        ov = {**styles.get(r.text, {}), **line.get('style', {})}
+        want = ov.get('font')
+        fit = fit_font(r, calib, only=[want] if isinstance(want, str) else want, italic_ok=ov.get('italic', True), spacing_em=ov.get('spacing'),
+                       modes=modes)
+        if fit is not None:
+            out.append((r, fit, ov))
+    return out
+
+
+def mismatch(fitted) -> float:
+    """How far the fits' stroke directions are from the cover's, by ink."""
+    total = sum(float(r.mask.sum()) for r, _f, _o in fitted)
+    return sum(f['mismatch'] * float(r.mask.sum()) for r, f, _o in fitted) / total if total else 0.0
+
+
+def quality(fitted) -> float:
+    """How well a line's fits redraw it: overlap scores weighted by ink."""
+    total = sum(float(r.mask.sum()) for r, _f, _o in fitted)
+    return sum(f['score'] * float(r.mask.sum()) for r, f, _o in fitted) / total if total else 0.0
+
+
+def stroke_width(stroke) -> float:
+    """The width in a "colour:width" stroke; davinci counts 1 when there is none."""
+    if not stroke:
+        return 1.0
+    head, _, tail = str(stroke).rpartition(':')
+    try:
+        return float(tail) if head and ')' not in tail else 1.0
+    except ValueError:
+        return 1.0
 
 
 # --- main -----------------------------------------------------------------------
@@ -577,6 +742,7 @@ def main():
     ap.add_argument('--crop', help='x0,y0,x1,y1 of the cover inside the screenshot')
     ap.add_argument('--fix', help='JSON with corrections: {"text": {"OCR text": "real text"}, "drop": ["text"]}')
     ap.add_argument('--width', type=int, default=0, help='canvas width (default 1242 portrait / 1920 landscape)')
+    ap.add_argument('--text-only', action='store_true', help='stop after the text: write report.json and text.json (no inpainting or cut-outs)')
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     fixes = json.load(open(args.fix)) if args.fix else {}
@@ -667,31 +833,81 @@ def main():
         runs, extra = analyse_line(cover, line, fixes, text_boxes, vis['lines'])
         if extra is None:
             continue
-        outline, ink_full = extra
-        text_mask |= ink_full
+        fitted = fit_runs(runs, line, styles, replace, drop_runs, calib)
+        # Vision's box can be level when the title is not. Two witnesses say
+        # by how much: the characters' centres still climbing, and the glyphs'
+        # horizontal strokes climbing (all a two-character line has). The line
+        # is read again at those angles and the reading that redraws the
+        # glyphs best is kept. Only titles: small print read at another angle
+        # just turns up more of the photo's own lettering.
+        if runs and not line.get('manual') and line['box'][3] >= H * 0.04:
+            best = [runs, extra, fitted, quality(fitted)]
+            tried = {round(runs[0].angle, 1)}
+
+            def attempt(a, margin=0.005):
+                if round(a, 1) in tried or abs(a) > 25:
+                    return None
+                if DEBUG:
+                    print(f'  try {line["text"]!r} at {a:.2f}°', file=sys.stderr)
+                tried.add(round(a, 1))
+                runs2, extra2 = analyse_line(cover, line, fixes, text_boxes, vis['lines'], angle=a)
+                # Cut into other runs, the line is not the same reading at
+                # another angle and the scores do not compare.
+                if extra2 is None or len(runs2) != len(runs):
+                    return None
+                fitted2 = fit_runs(runs2, line, styles, replace, drop_runs, calib)
+                if DEBUG:
+                    print(f'  {line["text"]!r} at {a:.2f}°: {quality(fitted2):.3f} vs {best[3]:.3f} (+{margin})', file=sys.stderr)
+                if fitted2 and quality(fitted2) > best[3] + margin:
+                    best[:] = [runs2, extra2, fitted2, quality(fitted2)]
+                return extra2[2]
+
+            base = runs[0].angle
+            a, climb = base, extra[2]
+            for _ in range(4):
+                if abs(climb) < (1.0 if a == base else 0.4):
+                    break
+                a += climb
+                climb = attempt(a)
+                if climb is None:
+                    break
+            ink = sum(float(r.mask.sum()) for r in runs) or 1.0
+            rise = sum(stroke_angles(r.mask)[0] * float(r.mask.sum()) for r in runs) / ink
+            if abs(rise) >= 2.0:
+                # The weaker witness (a face's own strokes may climb): it has
+                # to win clearly — unless the centres rest on two characters,
+                # which say little.
+                for a in (base - rise, base - rise / 2):
+                    attempt(a, 0.015 if extra[3] > 2 else 0.005)
+            runs, extra, fitted = best[0], best[1], best[2]
+        outline, ink_full = extra[0], extra[1]
+        # Runs the review dropped are part of the picture (print on a paper,
+        # a sign): they are neither layers nor painted out.
+        spare = np.zeros_like(ink_full)
+        for r in runs:
+            if r.dropped:
+                q = [(r.box[0], r.box[1]), (r.box[2], r.box[1]), (r.box[2], r.box[3]), (r.box[0], r.box[3])]
+                if r.angle:
+                    q = tf(np.linalg.inv(r.M), q)
+                cv2.fillPoly(spare, [np.round(np.asarray(q)).astype(np.int32)], 1)
+        text_mask |= np.where(spare > 0, 0, ink_full).astype(np.uint8)
         if (line.get('style') or {}).get('erase_box'):
             # The reviewer asked for the whole box to be repainted (the text
             # has glows or outlines colour matching cannot catch).
             cv2.fillPoly(text_mask, [np.round(np.array(line['quad'])).astype(np.int32)], 255)
-        for r in runs:
-            real = replace.get(r.text, r.text)
-            if real != r.text:
-                r.text = real
-            if r.text in drop_runs and not line.get('manual'):
-                continue
-            # Review overrides for this run: a face, a colour, an outline.
-            ov = {**styles.get(r.text, {}), **line.get('style', {})}
-            want = ov.get('font')
-            fit = fit_font(r, calib, only=[want] if isinstance(want, str) else want, italic_ok=ov.get('italic', True), spacing_em=ov.get('spacing'))
-            if fit is None:
-                continue
+        for r, fit, ov in fitted:
             size = fit['size']
-            # Layer origin in the deskewed frame, then back to the cover.
+            shear = fit['mode'] == 'shear'
+            # Layer origin in the deskewed frame, then back to the cover. A
+            # turned layer's box turns about its corner, so the calibrated
+            # offset goes along the turned axes; a sheared one stays upright.
             ox = r.box[0] - fit['ink_dx']
-            oy = r.box[1] - fit['ink_dy'] - fit['dy'] * size
+            oy = r.box[1] - fit['ink_dy'] - (0 if shear else fit['dy'] * size)
             if r.angle:
                 inv = np.linalg.inv(r.M)
                 ox, oy = tf(inv, [(ox, oy)])[0]
+            if shear:
+                oy -= fit['dy'] * size
             nudge = ov.get('nudge')
             if nudge:
                 ox, oy = ox + nudge[0], oy + nudge[1]
@@ -720,17 +936,39 @@ def main():
                     style.pop('paintFirst', None)
             if 'opacity' in ov:
                 style['_opacity'] = ov['opacity']
+            width = round((fit['ink_w'] + size * 2) * K)
+            x, y = round(ox * K, 1), round(oy * K, 1)
+            rotation = r.angle
+            if shear:
+                # davinci shears about the box centre, and the box is the one
+                # around the sheared shape, so the text's top-left corner sits
+                # lower in it than on an upright layer: by t·w/2 + |t|·(w+sw)/2
+                # (t = tan(rise), w the wrap width), i.e. t·(w + sw/2) for a
+                # climbing line and next to nothing for a falling one.
+                rise = -r.angle
+                style['skewY'] = round(rise, 2)
+                sw = stroke_width(style.get('stroke'))
+                t = math.tan(math.radians(rise))
+                y = round(y - (t * width / 2 + abs(t) * (width + sw) / 2), 1)
+                rotation = 0
             layers.append({
                 '_behind': bool(line.get('behind')),
                 'type': 'addText', 'text': r.text, 'name': r.text[:12],
-                'x': round(ox * K, 1), 'y': round(oy * K, 1),
-                'width': round((fit['ink_w'] + size * 2) * K),
+                'x': x, 'y': y,
+                'width': width,
                 'style': style,
-                **({'_rotation': round(r.angle, 2)} if r.angle else {}),
+                **({'_rotation': round(rotation, 2)} if rotation else {}),
             })
             report['runs'].append({'text': r.text, 'font': fit['key'], 'score': round(fit['score'], 3),
                                    'size': round(size * K, 1), 'fill': style['fill'], 'stroke': style.get('stroke'), 'italic': fit['italic'],
-                                   'angle': round(r.angle, 2)})
+                                   'angle': round(r.angle, 2), 'mode': fit['mode']})
+
+    if args.text_only:
+        json.dump(report, open(os.path.join(args.out, 'report.json'), 'w'), ensure_ascii=False, indent=1, default=float)
+        json.dump([{'type': 'setCanvasSize', 'width': cw, 'height': ch}, *layers], open(os.path.join(args.out, 'text.json'), 'w'),
+                  ensure_ascii=False, indent=1, default=float)
+        print(json.dumps({'canvas': [cw, ch], 'runs': len(report['runs'])}, ensure_ascii=False))
+        return
 
     # Text out first: people and elements are cut from a cover without it.
     from simple_lama_inpainting import SimpleLama
