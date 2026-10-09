@@ -22,9 +22,11 @@ davinci 是一个本地的图层化图片编辑器。**你用 `davinci` 命令�
 只需要会调 CLI。服务进程、数据存在哪、端口，CLI 都会自己处理：服务没开会自动拉起，
 不要自己去 `serve`、不要传 `--data`。
 
-**用户发来 `http://davinci.localhost/editor/p_xxx` 这样的链接**：`p_xxx` 就是项目 id，
-直接 `-p p_xxx` 交给 CLI（`davinci layers -p p_xxx`、`davinci render -p p_xxx -o cur.png` 看图），
-按用户的要求改。不要用浏览器打开或抓取这个页面。
+**用户发来 `http://davinci.localhost/editor/p_xxx?board=board_yyy` 这样的链接**：`p_xxx` 是项目 id，
+`board=` 后面是用户正在看的那个画板的 id。直接交给 CLI，**每条命令都带上 `-p p_xxx -b board_yyy`**
+（`davinci -p p_xxx -b board_yyy layers`、`davinci -p p_xxx -b board_yyy render -o cur.png` 看图），
+按用户的要求改；链接没带 `board=` 时先 `davinci -p p_xxx boards` 看有几个画板。
+不要用浏览器打开或抓取这个页面。
 
 ## 0. 先确认能用
 
@@ -50,7 +52,8 @@ davinci projects          # 能列出项目（可能是空的）就说明一切�
 4. **看结果**：`davinci -p <项目> render -o cover.png`，然后**用你能看图的方式打开这张 PNG 看一眼**。
    文字压到人脸、字太小、对比度不够、元素出界——看到就改（见第 3 节），再 render 再看。
    没看过渲染结果之前，不要说"做好了"。
-5. **交给人精修**：`davinci open <项目>` 打印（并尝试打开）编辑器地址，把地址原样给用户。
+5. **交给人精修**：`davinci open <项目>` 打印（并尝试打开）编辑器地址，把地址原样给用户；
+   要指到某个画板就加 `-b <画板>`，地址里会带上 `?board=<画板id>`，打开就停在那个画板。
    本机的编辑器地址是 `http://davinci.localhost/editor/<项目id>`（不带端口）；别自己拼 `127.0.0.1:7789`，
    以 CLI 打印的为准（没配本地域名的机器上它会给出能用的地址）。
 
