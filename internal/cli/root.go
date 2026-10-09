@@ -30,8 +30,8 @@ func newRootCmd() *cobra.Command {
 		Short: "AI Native 的本地图片编辑器",
 		Long: `davinci — 一个图层化、AI 可编程的本地图片编辑器。
 
-人用编辑器界面，AI 用这里的命令（或 HTTP API），两者改的是同一份文档、
-同一个撤销栈。缺省操作最近更新的项目。`,
+编辑器里的每一个操作都是一条命令：AI 用这里的命令（或 HTTP API）就能改任何一个图层，
+和编辑器界面改的是同一份文档、同一个撤销栈。缺省操作最近更新的项目。`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

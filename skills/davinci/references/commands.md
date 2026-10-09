@@ -118,7 +118,7 @@ davinci -p <项目> exec --file cover.json          # 从文件读（长的一�
 ```bash
 davinci projects                         # 列表
 davinci new "名字" --preset xhs-3-4       # 新建（--json 返回 {project:{id,…}}）
-davinci open <项目>                       # 编辑器地址 http://davinci.localhost/editor/<id>（交给人精修）
+davinci open <项目>                       # 编辑器地址 http://davinci.localhost/editor/<id>（浏览器里打开同一份设计）
 davinci doc -p <项目>                     # 整份文档 JSON
 davinci watch -p <项目>                   # 实时打印人在编辑器里的改动
 ```

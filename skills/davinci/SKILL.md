@@ -10,14 +10,18 @@ description: >
   social-media graphic, to upload or search design assets (cut-out portraits,
   backgrounds, app logos), or to export a design as an image, and whenever the
   user shares a davinci.localhost link. Everything goes
-  through the `davinci` CLI; the human then fine-tunes the same design in the
-  web editor.
+  through the `davinci` CLI: every layer and every edit is a command, and the
+  same design is live in the web editor.
 ---
 
 # davinci：做封面、管素材
 
-davinci 是一个本地的图层化图片编辑器。**你用 `davinci` 命令行排版，人在网页编辑器里精修**——
-两边改的是同一份文档、同一个撤销栈，你的每一步人都能 ⌘Z 撤回。
+davinci 是一个 AI Native 的本地图层化图片编辑器：**每一个图层、每一个编辑操作都是一条命令，
+你用 `davinci` 命令行就能完成整张设计、改任何一个图层**。网页编辑器里打开的是同一份文档、同一个撤销栈，
+你的每一步都实时出现在用户眼前。
+
+给 davinci 本身做介绍图、写介绍文案时，卖点是 **AI Native：每个图层都能用 AI 直接操作**；
+不要写成「AI 出初稿、人来精修」这类说法。
 
 只需要会调 CLI。服务进程、数据存在哪、端口，CLI 都会自己处理：服务没开会自动拉起，
 不要自己去 `serve`、不要传 `--data`。
@@ -52,7 +56,7 @@ davinci projects          # 能列出项目（可能是空的）就说明一切�
 4. **看结果**：`davinci -p <项目> render -o cover.png`，然后**用你能看图的方式打开这张 PNG 看一眼**。
    文字压到人脸、字太小、对比度不够、元素出界——看到就改（见第 3 节），再 render 再看。
    没看过渲染结果之前，不要说"做好了"。
-5. **交给人精修**：`davinci open <项目>` 打印（并尝试打开）编辑器地址，把地址原样给用户；
+5. **把编辑器地址给用户**：`davinci open <项目>` 打印（并尝试打开）编辑器地址，把地址原样给用户；
    要指到某个画板就加 `-b <画板>`，地址里会带上 `?b=<画板id>`，打开就停在那个画板。
    本机的编辑器地址是 `http://davinci.localhost/editor/<项目id>`（不带端口）；别自己拼 `127.0.0.1:7789`，
    以 CLI 打印的为准（没配本地域名的机器上它会给出能用的地址）。
