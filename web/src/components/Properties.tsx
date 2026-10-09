@@ -4,7 +4,7 @@ import { FontPicker } from './FontPicker'
 import { presets } from '../editor/presets'
 import { textPresets, type TextPreset } from '../editor/textPresets'
 import { parseStroke, parseShadow } from '../editor/style'
-import { WARPS, warpShape } from '../editor/warp'
+import { DEFAULT_SHEAR, SHEAR, WARPS, warpShape } from '../editor/warp'
 import { ColorField, NumField, Section, Segmented, Select, Slider, Switch, Toggle } from './fields'
 
 /**
@@ -135,15 +135,23 @@ function AlignRow({ onAlign }: { onAlign: (h?: string, v?: string) => void }) {
 
 /**
  * 变形, the way 稿定 does it: a card showing the current shape; clicking it
- * opens a panel of shapes with the strength and relative-height sliders, and
- * the vertical shear (斜切) that makes a line climb.
+ * opens a panel of shapes — 梯形, and 斜切 that makes a line climb — with the
+ * chosen one's sliders under them.
  */
 function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (props: Record<string, unknown>) => void }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
   const card = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
-  const shape = warpShape(style.warp)
+  // Chosen in the open panel: a shear dragged through 0° (which drops
+  // skewY) keeps its tile and slider.
+  const [shearing, setShearing] = useState(false)
+  const warp = warpShape(style.warp)
+  const shape = warp ?? (Number(style.skewY) || shearing ? SHEAR : undefined)
+
+  useEffect(() => {
+    if (!open) setShearing(false)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -173,14 +181,22 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
     setOpen((v) => !v)
   }
 
+  // Picking one shape drops the other: a warp and a shear do not stack.
+  const pick = (key: string) => {
+    setShearing(key === SHEAR.key)
+    if (!key) patch({ warp: 'none', skewY: 0 })
+    else if (key === SHEAR.key) patch({ warp: 'none', skewY: Number(style.skewY) || DEFAULT_SHEAR })
+    else patch({ warp: key, warpAmount: Number(style.warpAmount) || 30, skewY: 0 })
+  }
+
   const tile = (key: string, label: string, icon: string | null) => {
-    const on = (style.warp ?? '') === key || (!key && !shape)
+    const on = (shape?.key ?? '') === key
     return (
       <button
         key={key || 'none'}
         title={label}
         aria-pressed={on}
-        onClick={() => patch(key ? { warp: key, warpAmount: Number(style.warpAmount) || 30 } : { warp: 'none' })}
+        onClick={() => pick(key)}
         className={`flex h-[72px] items-center justify-center rounded-xl bg-paper transition-shadow hover:bg-paper-deep ${on ? 'ring-2 ring-accent' : ''}`}
       >
         {icon ? <WarpIcon d={icon} size={44} /> : <span className="text-xs text-muted">无</span>}
@@ -201,7 +217,7 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
           {shape ? <WarpIcon d={shape.icon} size={30} /> : <span className="text-[11px] text-faint">无</span>}
         </span>
         <span className="flex-1 text-[13px] font-bold text-ink">变形</span>
-        {Number(style.skewY) ? <span className="text-xs text-muted">斜切 {Number(style.skewY)}°</span> : null}
+        {shape && <span className="text-xs text-muted">{shape === SHEAR ? `斜切 ${Number(style.skewY)}°` : shape.label}</span>}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-muted">
           <path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} />
         </svg>
@@ -219,11 +235,12 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
           <div className="grid grid-cols-3 gap-2.5">
             {tile('', '无变形', null)}
             {WARPS.map((w) => tile(w.key, w.label, w.icon))}
+            {tile(SHEAR.key, SHEAR.label, SHEAR.icon)}
           </div>
-          {shape && (
+          {warp && (
             <div className="mt-4 flex flex-col gap-3">
               <Slider
-                label={`${shape.label}强度`}
+                label={`${warp.label}强度`}
                 value={Number(style.warpAmount ?? 0)}
                 min={-100}
                 max={100}
@@ -242,18 +259,20 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
               />
             </div>
           )}
-          <div className="mt-4 border-t border-line pt-4">
-            <Slider
-              label="纵向斜切"
-              value={Number(style.skewY ?? 0)}
-              min={-30}
-              max={30}
-              step={1}
-              display={(v) => `${v}°`}
-              testId="skew-y"
-              onChange={(skewY) => patch({ skewY })}
-            />
-          </div>
+          {shape === SHEAR && (
+            <div className="mt-4">
+              <Slider
+                label="斜切角度"
+                value={Number(style.skewY ?? 0)}
+                min={-30}
+                max={30}
+                step={1}
+                display={(v) => `${v}°`}
+                testId="skew-y"
+                onChange={(skewY) => patch({ skewY })}
+              />
+            </div>
+          )}
         </div>
       )}
     </>
