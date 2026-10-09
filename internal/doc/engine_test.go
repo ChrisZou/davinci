@@ -216,9 +216,18 @@ func TestFitTextShrinksTheBoxAndKeepsTheText(t *testing.T) {
 			}
 		})
 	}
+	// An older document kept heights rounded: fitting goes by the layout's,
+	// so an upright line does not shift up or down at all.
 	e, _ := engine(t)
-	run(t, e, `[{"type":"addText","text":"a","name":"t"},{"type":"addShape","kind":"rect","x":0,"y":0,"width":50,"height":50,"name":"r"}]`)
-	for _, bad := range []string{`{"type":"fitText","id":"r"}`, `{"type":"fitText","id":"t","align":"middle"}`} {
+	run(t, e, `{"type":"addText","text":"怎样","x":2,"y":1268,"width":1400,"name":"t","style":{"fontSize":165.2,"stroke":"#ffffff:12.2"}}`)
+	l := layer(e, "t")
+	l.Height = 187
+	run(t, e, `{"type":"fitText","id":"t","align":"center"}`)
+	if l.Y != 1268 || l.Height != 186.7 {
+		t.Fatalf("y %v, height %v: want 1268, 186.7", l.Y, l.Height)
+	}
+	run(t, e, `[{"type":"addText","text":"a","name":"a"},{"type":"addShape","kind":"rect","x":0,"y":0,"width":50,"height":50,"name":"r"}]`)
+	for _, bad := range []string{`{"type":"fitText","id":"r"}`, `{"type":"fitText","id":"a","align":"middle"}`} {
 		if r := e.Apply([]byte(bad)); r.OK {
 			t.Fatalf("%s should fail", bad)
 		}

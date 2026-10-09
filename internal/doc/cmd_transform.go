@@ -89,6 +89,10 @@ func init() {
 			if tw <= 0 {
 				return nil, errf(`"%s" measured no width`, l.Name)
 			}
+			// Where the text is drawn now goes by its layout height; a stored
+			// one can be off by a fraction (older documents kept it rounded),
+			// and a fraction is enough to drop the baseline a whole pixel.
+			l.Height = roundTo(sizes[l.ID].Height, 1)
 			// Where the lines' block sits across the box, in the box's own
 			// (centred) units: it stays where it is on the board while the box
 			// narrows around it — whatever the rotation, skew or stretch.
@@ -114,7 +118,7 @@ func init() {
 			bx, by := m.apply(block(nf.CW, align), 0)
 			cx, cy := Centre(l, nf)
 			PlaceCentre(l, nf, cx+px-bx, cy+py-by)
-			l.X, l.Y = roundTo(l.X, 1), roundTo(l.Y, 1)
+			l.X, l.Y = roundTo(l.X, 2), roundTo(l.Y, 2)
 			return position(l), nil
 		},
 	})
