@@ -80,8 +80,9 @@ func Boards(doc json.RawMessage) []BoardInfo {
 	return out
 }
 
-// boardLayers returns the layers array of one board: the one named by ref (id,
-// name or 1-based number), or the active board when ref is empty.
+// boardLayers returns the layers array of one board: the one named by ref (id
+// with or without its "board_", name or 1-based number), or the active board
+// when ref is empty.
 func boardLayers(doc json.RawMessage, ref string) (json.RawMessage, error) {
 	var d docShape
 	if err := json.Unmarshal(doc, &d); err != nil {
@@ -105,7 +106,7 @@ func boardLayers(doc json.RawMessage, ref string) (json.RawMessage, error) {
 		}
 	} else {
 		for i, b := range d.Boards {
-			if b.ID == ref || (pick < 0 && b.Name == ref) {
+			if b.ID == ref || b.ID == "board_"+ref || (pick < 0 && b.Name == ref) {
 				pick = i
 			}
 		}

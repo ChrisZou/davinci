@@ -193,10 +193,11 @@ export function Editor({ projectID }: { projectID: string }) {
     }
   }, [devOpen])
 
-  // The address names the board on show (?board=<id>), so a link handed on —
-  // to an agent, say — says which board it means. A link opens on its board;
-  // from then on the address follows whichever board is showing.
-  const linkedBoard = useRef(new URLSearchParams(location.search).get('board'))
+  // The address names the board on show (?b=<its id without "board_">), so a
+  // link handed on — to an agent, say — says which board it means. A link
+  // opens on its board; from then on the address follows whichever board is
+  // showing.
+  const linkedBoard = useRef(new URLSearchParams(location.search).get('b'))
   useEffect(() => {
     if (!project?.active) return
     const want = linkedBoard.current
@@ -207,8 +208,9 @@ export function Editor({ projectID }: { projectID: string }) {
       return
     }
     const url = new URL(location.href)
-    if (url.searchParams.get('board') === project.active) return
-    url.searchParams.set('board', project.active)
+    const short = project.active.replace(/^board_/, '')
+    if (url.searchParams.get('b') === short) return
+    url.searchParams.set('b', short)
     history.replaceState(history.state, '', url)
   }, [project?.active])
 
@@ -1024,10 +1026,14 @@ function ZoomPill({ zoom, editor, onHelp }: { zoom: number; editor: import('../e
 
 // --- context menu ---------------------------------------------------------
 
-/** A board by id, 1-based position or name — the ways a link may name it. */
+/** A board by id (with or without "board_"), name or 1-based position — as the CLI's -b takes it. */
 function findBoard(p: ProjectDoc, ref: string): Board | undefined {
   const n = Number(ref)
-  return p.boards.find((b) => b.id === ref) ?? (Number.isInteger(n) ? p.boards[n - 1] : undefined) ?? p.boards.find((b) => b.name === ref)
+  return (
+    p.boards.find((b) => b.id === ref || b.id === `board_${ref}`) ??
+    p.boards.find((b) => b.name === ref) ??
+    (Number.isInteger(n) ? p.boards[n - 1] : undefined)
+  )
 }
 
 /** Reads whatever is on the system clipboard, for the menu's "粘贴". */

@@ -181,11 +181,12 @@ func (p *Project) ActiveBoard() *Board {
 	return p.Boards[0]
 }
 
-// FindBoard looks a board up by id, by name, or by its 1-based position.
+// FindBoard looks a board up by id (editor links leave off its "board_"),
+// by name, or by its 1-based position.
 func (p *Project) FindBoard(ref string) (*Board, int) {
 	ref = strings.TrimSpace(ref)
 	for i, b := range p.Boards {
-		if b.ID == ref {
+		if b.ID == ref || b.ID == "board_"+ref {
 			return b, i
 		}
 	}

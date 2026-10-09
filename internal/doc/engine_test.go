@@ -117,6 +117,12 @@ func TestBoardParameterAndBoards(t *testing.T) {
 		t.Fatal("board:1 should run on the first board and bring it up")
 	}
 	fail(t, e, `{"type":"listLayers","board":"9"}`, `no board "9"`)
+	// Editor links (?b=) leave off the id's "board_".
+	short := strings.TrimPrefix(e.p.Boards[1].ID, "board_")
+	run(t, e, `{"type":"addText","text":"原图上","name":"t2","board":"`+short+`"}`)
+	if e.p.Boards[1].Find("t2") == nil {
+		t.Fatal("a board id without board_ should find the board")
+	}
 	run(t, e, `{"type":"moveBoard","id":"原图","index":1}`)
 	if e.p.Boards[0].Name != "原图" {
 		t.Fatal("moveBoard")

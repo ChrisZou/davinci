@@ -417,7 +417,7 @@ CLI 只是 cobra 薄壳，`exec` 是万能兜底——任何命令都有 CLI 哈
 ```bash
 davinci projects          # 项目列表
 davinci new "封面" --preset xhs-3-4
-davinci open <id|name>    # 浏览器里打开；地址带 ?board=<画板id>（-b 指定画板，默认当前画板）
+davinci open <id|name>    # 浏览器里打开；地址带 ?b=<画板id，不带 board_ 前缀>（-b 指定画板，默认当前画板）
 davinci doc export-doc -o a.json / import-doc a.json   # 整份文档进出
 ```
 

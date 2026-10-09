@@ -94,8 +94,8 @@ func openBrowser(url string) {
 }
 
 // openEditor prints a project's editor URL and tries to open it. The URL
-// names the board (the one -b picks, else the one showing), so a link handed
-// to someone — an agent — says which board it means.
+// names the board (?b=, the one -b picks, else the one showing; its id without
+// "board_"), so a link handed to someone — an agent — says which board it means.
 func openEditor(c *Client, id string) error {
 	url := c.EditorURL(id)
 	c.Project = id
@@ -104,15 +104,15 @@ func openEditor(c *Client, id string) error {
 		return err
 	}
 	if b != nil && b.ID != "" {
-		url += "?board=" + b.ID
+		url += "?b=" + strings.TrimPrefix(b.ID, "board_")
 	}
 	c.print(url)
 	openBrowser(url)
 	return nil
 }
 
-// pickBoard finds a board by id, name or 1-based index; with no ref, the one
-// showing.
+// pickBoard finds a board by id (with or without "board_"), name or 1-based
+// index; with no ref, the one showing.
 func (c *Client) pickBoard(ref string) (*server.BoardInfo, error) {
 	boards, err := c.Boards()
 	if err != nil {
@@ -122,7 +122,7 @@ func (c *Client) pickBoard(ref string) (*server.BoardInfo, error) {
 	n, _ := strconv.Atoi(ref)
 	for i := range boards {
 		b := &boards[i]
-		if (ref == "" && b.Active) || (ref != "" && (b.ID == ref || b.Name == ref || b.Index == n)) {
+		if (ref == "" && b.Active) || (ref != "" && (b.ID == ref || b.ID == "board_"+ref || b.Name == ref || b.Index == n)) {
 			return b, nil
 		}
 	}
