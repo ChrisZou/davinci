@@ -8,14 +8,19 @@ import (
 )
 
 // fake stands in for the renderer: heights follow the layout rule with
-// explicit lines only, every image is 400×300.
+// explicit lines only, every character is an em wide, every image is 400×300.
 type fake struct{ measured int }
 
 func (f *fake) Measure(ls []*Layer) (map[string]TextSize, error) {
 	out := map[string]TextSize{}
 	for _, l := range ls {
 		f.measured++
-		out[l.ID] = TextSize{Height: estimateHeight(l), Lines: strings.Count(l.TextOf(), "\n") + 1}
+		longest := 0
+		for _, line := range strings.Split(l.TextOf(), "\n") {
+			longest = max(longest, len([]rune(line)))
+		}
+		w := math.Min(float64(longest)*num(l.S("fontSize"), 40), l.Width/num(l.S("stretch"), 1))
+		out[l.ID] = TextSize{Height: estimateHeight(l), Width: w, Lines: strings.Count(l.TextOf(), "\n") + 1}
 	}
 	return out, nil
 }
@@ -164,6 +169,59 @@ func TestShearKeepsCentreAndGrowsBox(t *testing.T) {
 	run(t, e, `{"type":"setTextStyle","id":"t","style":{"skewY":0}}`)
 	if l.S("skewY") != nil {
 		t.Fatalf("skewY 0 should be dropped: %v", l.S("skewY"))
+	}
+}
+
+func TestFitTextShrinksTheBoxAndKeepsTheText(t *testing.T) {
+	for _, tc := range []struct{ name, style, after, align string }{
+		{"left", `{"fontSize":100}`, ``, ""},
+		{"rotated, centred", `{"fontSize":100}`, `{"type":"updateLayer","id":"t","props":{"rotation":350}}`, "center"},
+		{"sheared with a stroke", `{"fontSize":100,"skewY":4.6,"stroke":"#000000:12","paintFirst":true}`, ``, "center"},
+		{"stretched, right", `{"fontSize":100,"stretch":0.8,"textAlign":"right"}`, ``, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, _ := engine(t)
+			run(t, e, `{"type":"addText","text":"多简","x":100,"y":300,"width":800,"name":"t","style":`+tc.style+`}`)
+			if tc.after != "" {
+				run(t, e, tc.after)
+			}
+			l := layer(e, "t")
+			const tw = 200 // two characters of 100
+			// The board point at the middle of the line.
+			middle := func() (float64, float64) {
+				f := FrameOf(l)
+				dx := map[string]float64{"left": -(f.CW - tw) / 2, "center": 0, "right": (f.CW - tw) / 2}
+				return ContentMatrix(l, f).apply(dx[pick(l.S("textAlign"), []string{"left", "center", "right"}, "left")], 0)
+			}
+			x0, y0 := middle()
+			h0 := Bounds(l, FrameOf(l)).Height
+			cmd := `{"type":"fitText","id":"t"}`
+			if tc.align != "" {
+				cmd = `{"type":"fitText","id":"t","align":"` + tc.align + `"}`
+			}
+			run(t, e, cmd)
+			x1, y1 := middle()
+			if math.Abs(x1-x0) > 0.1 || math.Abs(y1-y0) > 0.1 {
+				t.Fatalf("text moved: %v,%v → %v,%v", x0, y0, x1, y1)
+			}
+			if want := math.Ceil(tw * num(l.S("stretch"), 1)); l.Width != want {
+				t.Fatalf("width %v, want %v", l.Width, want)
+			}
+			if tc.align != "" && str(l.S("textAlign")) != tc.align {
+				t.Fatalf("textAlign %v, want %v", l.S("textAlign"), tc.align)
+			}
+			// A sheared or turned box was tall because it was wide.
+			if h1 := Bounds(l, FrameOf(l)).Height; tc.name != "left" && tc.name != "stretched, right" && h1 >= h0-1 {
+				t.Fatalf("box height %v → %v: did not shrink", h0, h1)
+			}
+		})
+	}
+	e, _ := engine(t)
+	run(t, e, `[{"type":"addText","text":"a","name":"t"},{"type":"addShape","kind":"rect","x":0,"y":0,"width":50,"height":50,"name":"r"}]`)
+	for _, bad := range []string{`{"type":"fitText","id":"r"}`, `{"type":"fitText","id":"t","align":"middle"}`} {
+		if r := e.Apply([]byte(bad)); r.OK {
+			t.Fatalf("%s should fail", bad)
+		}
 	}
 }
 

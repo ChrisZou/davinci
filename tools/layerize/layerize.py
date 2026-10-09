@@ -936,6 +936,7 @@ def main():
                     style.pop('paintFirst', None)
             if 'opacity' in ov:
                 style['_opacity'] = ov['opacity']
+            # Room enough that nothing wraps; fitText narrows it in davinci.
             width = round((fit['ink_w'] + size * 2) * K)
             x, y = round(ox * K, 1), round(oy * K, 1)
             rotation = r.angle
@@ -1043,6 +1044,8 @@ def main():
             # rotated box's corner back where the cover has it.
             cmds.append({'type': 'updateLayer', 'id': l['name'], 'props': {'rotation': rot}})
             cmds.append({'type': 'moveLayer', 'id': l['name'], 'x': l['x'], 'y': l['y']})
+        # The box hugs the text, centred in it; the text itself stays put.
+        cmds.append({'type': 'fitText', 'id': l['name'], 'align': 'center'})
 
     # Lettering the people stand in front of goes under them.
     for l in [l for l in layers if l.get('_behind')]:

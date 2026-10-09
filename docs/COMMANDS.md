@@ -120,6 +120,7 @@ davinci layer rm 副标题
 |---|---|---|
 | `moveLayer` | `id` `x` `y` | 左上角绝对坐标 |
 | `resizeLayer` | `id` `width` `height` | 文字图层只改折行宽度（高度随内容长） |
+| `fitText` | `id` `align` | 文字图层的宽度收到正好包住文字；字在画布上不动、换行不变，可顺便改对齐（left/center/right） |
 | `rotateLayer` | `id` `rotation` | 顺时针，可负 |
 | `updateLayer` | `id` `props{}` | 通用补丁：位置/尺寸/旋转/不透明度/显隐/锁定 + 该类型支持的样式键 |
 | `setOpacity` | `id` `opacity` | `0-1` |

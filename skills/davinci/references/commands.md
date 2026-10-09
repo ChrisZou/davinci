@@ -52,6 +52,7 @@ davinci -p <项目> exec --file cover.json          # 从文件读（长的一�
 |---|---|---|
 | `moveLayer` | `id* x* y*` | 绝对坐标（左上角） |
 | `resizeLayer` | `id*` `width` `height` | 文字只改折行宽度；只给一边则等比 |
+| `fitText` | `id*` `align`(left/center/right) | 文字框宽度收到正好包住文字，字不动、换行不变 |
 | `rotateLayer` | `id* rotation*` | 顺时针角度 |
 | `alignLayer` | `id*` `h`(left/center/right) `v`(top/middle/bottom) | 对齐到画布 |
 | `alignLayers` | `ids*[]` `h` `v` `to`(selection/canvas) | 多个图层互相对齐 |

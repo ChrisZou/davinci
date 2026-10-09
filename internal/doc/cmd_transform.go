@@ -60,6 +60,66 @@ func init() {
 	})
 
 	define(Spec{
+		Type: "fitText", Summary: "文字图层的宽度收到正好包住文字（高度本来就随内容）；字在画布上不动，换行也不变",
+		Params: []Param{REF, {Name: "align", Type: "string", Desc: "顺便改对齐方式 left/center/right，字同样不动"}},
+		Run: func(c *Ctx, cmd map[string]any) (any, error) {
+			l, err := c.layer(cmd["id"])
+			if err != nil {
+				return nil, err
+			}
+			if l.Type != "text" {
+				return nil, errf(`"%s" is not a text layer`, l.Name)
+			}
+			was := pick(l.S("textAlign"), []string{"left", "center", "right"}, "left")
+			align := was
+			if v, ok := cmd["align"]; ok {
+				align = str(v)
+				if align != "left" && align != "center" && align != "right" {
+					return nil, errf(`align must be left, center or right, not "%s"`, align)
+				}
+			}
+			if c.svc() == nil {
+				return nil, errf("fitText needs the renderer to measure the text")
+			}
+			sizes, err := c.svc().Measure([]*Layer{l})
+			if err != nil {
+				return nil, err
+			}
+			tw := sizes[l.ID].Width
+			if tw <= 0 {
+				return nil, errf(`"%s" measured no width`, l.Name)
+			}
+			// Where the lines' block sits across the box, in the box's own
+			// (centred) units: it stays where it is on the board while the box
+			// narrows around it — whatever the rotation, skew or stretch.
+			block := func(cw float64, a string) float64 {
+				switch a {
+				case "center":
+					return 0
+				case "right":
+					return (cw - tw) / 2
+				}
+				return -(cw - tw) / 2
+			}
+			f := FrameOf(l)
+			px, py := ContentMatrix(l, f).apply(block(f.CW, was), 0)
+			// Every line is at most tw wide, so none of them re-wraps.
+			l.Width = math.Max(1, math.Ceil(tw*f.ScaleX))
+			l.SetS("textAlign", nilIf(align, "left"))
+			if err := c.measure(); err != nil {
+				return nil, err
+			}
+			nf := FrameOf(l)
+			m := ContentMatrix(l, nf)
+			bx, by := m.apply(block(nf.CW, align), 0)
+			cx, cy := Centre(l, nf)
+			PlaceCentre(l, nf, cx+px-bx, cy+py-by)
+			l.X, l.Y = roundTo(l.X, 1), roundTo(l.Y, 1)
+			return position(l), nil
+		},
+	})
+
+	define(Spec{
 		Type: "rotateLayer", Summary: "旋转图层（角度，顺时针）",
 		Params: []Param{REF, {Name: "rotation", Type: "number", Desc: "角度", Required: true}},
 		Run: func(c *Ctx, cmd map[string]any) (any, error) {
