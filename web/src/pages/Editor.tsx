@@ -419,7 +419,7 @@ export function Editor({ projectID }: { projectID: string }) {
       <header className="relative h-[84px] shrink-0">
         {doc && session && (
           <>
-            <div className={`island absolute left-5 top-4 flex h-[52px] items-center gap-2.5 pl-2 ${viewOnly ? 'pr-2' : 'pr-1.5'}`}>
+            <div className={`island absolute left-[calc(20px+var(--tl-inset,0px))] top-4 flex h-[52px] items-center gap-2.5 pl-2 ${viewOnly ? 'pr-2' : 'pr-1.5'}`}>
               <a
                 href="/"
                 className="icon-btn"

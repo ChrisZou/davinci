@@ -51,6 +51,29 @@ canvas {
   display: block;
 }
 
+/*
+ * The macOS desktop app has no title bar: the page runs to the top of the
+ * window and the traffic lights sit on it (main.tsx sets .desktop-mac). A
+ * strip across the top drags the window; anything clickable is cut out of it.
+ * --tl-inset is the room the traffic lights take at the top left.
+ */
+.titlebar-drag {
+  display: none;
+}
+.desktop-mac {
+  --tl-inset: 72px;
+}
+.desktop-mac .titlebar-drag {
+  display: block;
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 52px;
+  -webkit-app-region: drag;
+}
+.desktop-mac :is(button, a, input, textarea, select, label, [role='button'], [role='menu'], [role='dialog'], .island, .menu) {
+  -webkit-app-region: no-drag;
+}
+
 @layer components {
   /* A floating island: the top bar's groups, the zoom pill, the toast. */
   .island {

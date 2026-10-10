@@ -30,8 +30,11 @@ export function App() {
     return () => window.removeEventListener('popstate', on)
   }, [])
 
-  if (r.page === 'editor') return <Editor projectID={r.id} />
-  if (r.page === 'library') return <Library />
-  if (r.page === 'templates') return <Templates />
-  return <Home />
+  // The drag strip comes first: the clickable things after it cut themselves out of it.
+  return (
+    <>
+      <div className="titlebar-drag" aria-hidden />
+      {r.page === 'editor' ? <Editor projectID={r.id} /> : r.page === 'library' ? <Library /> : r.page === 'templates' ? <Templates /> : <Home />}
+    </>
+  )
 }

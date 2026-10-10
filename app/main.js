@@ -118,6 +118,13 @@ function openRoute(route) {
   }
 }
 
+// 红黄绿按钮和页面顶部那排面板垂直居中对齐（面板高 52，离顶 16）。
+const TRAFFIC_LIGHTS = { x: 20, y: 35 }
+
+function placeTrafficLights(win) {
+  if (process.platform === 'darwin' && !win.isDestroyed()) win.setWindowButtonPosition(TRAFFIC_LIGHTS)
+}
+
 function createWindow(route = '/') {
   const win = new BrowserWindow({
     width: 1440,
@@ -129,6 +136,8 @@ function createWindow(route = '/') {
     show: false,
     // Windows 的菜单栏在窗口里：平时收起，按 Alt 出来。
     autoHideMenuBar: isWin,
+    // macOS 不要单独的标题栏：页面铺到窗口顶上，红黄绿按钮浮在左上角，和顶部那排面板对齐。
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden', trafficLightPosition: TRAFFIC_LIGHTS } : {}),
   })
   // 本服务的页面（比如「管理素材库 ↗」）在 App 里另开窗口，别的网址交给浏览器。
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -142,7 +151,12 @@ function createWindow(route = '/') {
       shell.openExternal(url)
     }
   })
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => {
+    placeTrafficLights(win)
+    win.show()
+  })
+  // macOS 会在缩放、进出全屏后把红黄绿按钮放回默认位置，再摆一次。
+  for (const ev of ['resize', 'leave-full-screen']) win.on(ev, () => placeTrafficLights(win))
   win.loadURL(baseURL + route)
   if (!mainWindow || mainWindow.isDestroyed()) mainWindow = win
   return win

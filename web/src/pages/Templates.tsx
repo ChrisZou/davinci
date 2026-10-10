@@ -137,7 +137,7 @@ export function Templates() {
         void save(Array.from(e.dataTransfer.files))
       }}
     >
-      <header className="flex h-[84px] shrink-0 items-center gap-4 px-8">
+      <header className="flex h-[84px] shrink-0 items-center gap-4 pl-[calc(32px+var(--tl-inset,0px))] pr-8">
         <a
           href="/"
           onClick={(e) => {
