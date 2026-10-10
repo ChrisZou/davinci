@@ -796,20 +796,35 @@ function ProjectName({
  * link is the app's davinci:// one (which also opens the app when clicked).
  */
 function CopyLink({ projectID, board, onLog }: { projectID: string; board?: string; onLog: (line: string) => void }) {
+  // "已复制链接" shows right beside the button, where the eye already is.
+  const [copied, setCopied] = useState(false)
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
   const copy = async () => {
     const b = board ? `?b=${board.replace(/^board_/, '')}` : ''
     const link = /Electron\//.test(navigator.userAgent) ? `davinci://${projectID}${b}` : `${location.origin}/editor/${projectID}${b}`
     try {
       await navigator.clipboard.writeText(link)
-      onLog('✓ 已复制链接：发给 Agent，它就知道是哪个设计稿、哪个画板')
+      setCopied(true)
+      window.clearTimeout(timer.current)
+      timer.current = window.setTimeout(() => setCopied(false), 1600)
     } catch {
       onLog(`✗ 没能复制，手动复制这个链接：${link}`)
     }
   }
   return (
-    <button className="icon-btn" title="复制当前画板的链接（发给 Agent）" aria-label="复制链接" onClick={() => void copy()} data-testid="copy-link">
-      <Icon size={16} d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </button>
+    <span className="relative flex">
+      <button className="icon-btn" title="复制当前画板的链接（发给 Agent）" aria-label="复制链接" onClick={() => void copy()} data-testid="copy-link">
+        <Icon size={16} d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </button>
+      <span
+        role="status"
+        className={`pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-full bg-ink px-3 py-1.5 text-xs font-bold text-card shadow-[var(--shadow-float)] transition-opacity duration-200 ${copied ? 'opacity-100' : 'opacity-0'}`}
+        data-testid="copy-link-done"
+      >
+        已复制链接
+      </span>
+    </span>
   )
 }
 
