@@ -22,6 +22,9 @@ import (
 // Client talks to a running davinci server over HTTP.
 type Client struct {
 	BaseURL string
+	// boot, when set, is the boot id the server at BaseURL must report: an
+	// address read from server.json may by now belong to someone else.
+	boot    string
 	Project string
 	HTTP    *http.Client
 	JSON    bool
@@ -40,20 +43,41 @@ func dataDir() string {
 	return server.DefaultDataDir()
 }
 
-func serverURL() string {
+// serverURL is where the server is, and the boot id to expect there (or ""):
+// the address given (--server, DAVINCI_SERVER, DAVINCI_PORT), else what the
+// data directory's server.json says, else the default port — where a server
+// from before server.json existed still listens.
+func serverURL() (string, string) {
+	if u := explicitURL(); u != "" {
+		return u, ""
+	}
+	if f, err := server.ReadServerFile(dataDir()); err == nil && f.URL != "" {
+		return strings.TrimRight(f.URL, "/"), f.Boot
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d", defaultPort), ""
+}
+
+// explicitURL is the server address the person named, or "".
+func explicitURL() string {
 	if gf.server != "" {
 		return strings.TrimRight(gf.server, "/")
 	}
 	if v := os.Getenv("DAVINCI_SERVER"); v != "" {
 		return strings.TrimRight(v, "/")
 	}
-	port := defaultPort
-	if v := os.Getenv("DAVINCI_PORT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			port = n
-		}
+	if p := explicitPort(); p > 0 {
+		return fmt.Sprintf("http://127.0.0.1:%d", p)
 	}
-	return fmt.Sprintf("http://127.0.0.1:%d", port)
+	return ""
+}
+
+// explicitPort is DAVINCI_PORT, or 0.
+func explicitPort() int {
+	n, err := strconv.Atoi(strings.TrimSpace(os.Getenv("DAVINCI_PORT")))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
 }
 
 func portOf(url string) int {
@@ -73,8 +97,10 @@ func portOf(url string) int {
 // davinci process itself. Project resolution is deliberately lazy: `new` and
 // `projects` must work on an empty database.
 func NewClient() (*Client, error) {
+	base, boot := serverURL()
 	c := &Client{
-		BaseURL: serverURL(),
+		BaseURL: base,
+		boot:    boot,
 		// --project / DAVINCI_PROJECT, or empty to mean "the project I touched
 		// last". Leaving it empty here is what makes `resolveProject` kick in.
 		Project: firstNonEmpty(gf.project, os.Getenv("DAVINCI_PROJECT")),
@@ -88,10 +114,13 @@ func NewClient() (*Client, error) {
 }
 
 // EnsureServer starts `davinci serve` in the background if nothing answers.
+// Unless an address was given, the new server picks its own port and says
+// where in server.json.
 func (c *Client) EnsureServer() error {
 	if c.ping() {
 		return nil
 	}
+	explicit := explicitURL() != ""
 	logPath := filepath.Join(dataDir(), "serve.log")
 	if err := os.MkdirAll(dataDir(), 0o755); err != nil {
 		return err
@@ -104,7 +133,10 @@ func (c *Client) EnsureServer() error {
 	if err != nil {
 		return err
 	}
-	args := []string{"serve", "--port", strconv.Itoa(portOf(c.BaseURL)), "--quiet", "--data", dataDir()}
+	args := []string{"serve", "--quiet", "--data", dataDir()}
+	if explicit {
+		args = append(args, "--port", strconv.Itoa(portOf(c.BaseURL)))
+	}
 	cmd := exec.Command(exe, args...)
 	cmd.Env = os.Environ()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -118,6 +150,12 @@ func (c *Client) EnsureServer() error {
 
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
+		if !explicit {
+			// Ours, or one that beat it to this data directory.
+			if f, err := server.ReadServerFile(dataDir()); err == nil {
+				c.BaseURL, c.boot = strings.TrimRight(f.URL, "/"), f.Boot
+			}
+		}
 		if c.ping() {
 			return nil
 		}
@@ -127,6 +165,9 @@ func (c *Client) EnsureServer() error {
 }
 
 func (c *Client) ping() bool {
+	if c.boot != "" {
+		return bootOf(c.BaseURL) == c.boot
+	}
 	resp, err := c.HTTP.Get(c.BaseURL + "/api/health")
 	if err != nil {
 		return false

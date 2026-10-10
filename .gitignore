@@ -1,6 +1,7 @@
 # 构建产物
 /bin/
 /dist/
+/app/dist/
 /web/dist/*
 !/web/dist/.gitkeep
 *.exe

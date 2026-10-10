@@ -1,0 +1,64 @@
+{
+  "name": "davinci-app",
+  "productName": "davinci",
+  "version": "0.1.0",
+  "private": true,
+  "description": "davinci 桌面版：AI Native 的本地图片编辑器",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "pack": "electron-builder --mac dir",
+    "dist": "electron-builder --mac dmg"
+  },
+  "build": {
+    "appId": "com.chriszou.davinci",
+    "productName": "davinci",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../bin/davinci",
+        "to": "bin/davinci"
+      },
+      {
+        "from": "../bin/davinci-cutout",
+        "to": "bin/davinci-cutout"
+      },
+      {
+        "from": "../skills/davinci",
+        "to": "skills/davinci"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "davinci",
+        "schemes": [
+          "davinci"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "icon": "build/icon.icns",
+      "minimumSystemVersion": "14.0",
+      "target": [
+        "dmg"
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  }
+}

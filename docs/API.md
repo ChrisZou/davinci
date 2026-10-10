@@ -1,6 +1,6 @@
 # davinci HTTP API
 
-本地服务，**只绑 `127.0.0.1`**，默认端口 `7789`。所有响应都是 JSON（导出图片除外），
+本地服务，**只绑 `127.0.0.1`**，默认端口 `7789`（被占用时换一个空闲端口，实际地址见数据目录的 `server.json`）。所有响应都是 JSON（导出图片除外），
 失败时统一是 `{"ok": false, "error": "人能看懂的原因"}`。
 
 服务端拥有文档：每条命令都由它执行（`internal/doc`）、落库，再推给开着这个项目的编辑器页面。
@@ -165,11 +165,14 @@ curl -XPOST localhost:7789/api/assets -F url=https://example.com/a.png
 ## 端口与数据目录
 
 ```bash
-davinci serve --port 7789 --data ./data   # 不给 --data 就用仓库里的 data/
+davinci serve --data ./data               # 不给 --data 就用仓库里的 data/（桌面版里是 ~/Library/Application Support/davinci）
+davinci serve --port 7789 --data ./data   # 指定端口：被占用就报错，不会换
 # 或者 DAVINCI_PORT / DAVINCI_DATA
 ```
 
-注意 `--port` 只对 `serve` 有意义；CLI 的其他子命令用 `--server http://127.0.0.1:7789`
-或 `DAVINCI_SERVER`。给人看的编辑器地址（`open`、`new`、`serve --open`）在 `davinci.localhost` 指向
+不指定端口时，服务先试 7789，被占用就换一个空闲端口，并把实际地址写进数据目录的 `server.json`
+（`{"url", "pid", "boot"}`，服务退出时删掉）。一个数据目录同时只能有一个服务（`server.lock`）。
+CLI 的其他子命令按 `--server` / `DAVINCI_SERVER` / `DAVINCI_PORT` → `server.json` → 7789 的顺序找服务，
+都找不到就自己拉起一个。给人看的编辑器地址（`open`、`new`、`serve --open`）在 `davinci.localhost` 指向
 同一个服务时用 `http://davinci.localhost`，否则用 API 地址；`DAVINCI_WEB_URL` 可以直接指定。数据目录里是 `davinci.db`（SQLite）、`assets/`、`fonts/`。
 数据目录里若是更早版本建的库（文档格式不同），启动时会明确报错，换个 `--data` 即可。

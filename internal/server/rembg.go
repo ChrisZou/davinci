@@ -12,12 +12,17 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"davinci/internal/bundle"
 )
 
 // Background removal runs rembg (https://github.com/danielgatis/rembg) with a
-// BiRefNet model as a command-line tool. A cut-out is kept under
-// data/rembg/<source sha>-<model>.png, so cutting the same picture again —
-// an undo and redo, the same photo in another project — is instant.
+// BiRefNet model as a command-line tool when it is installed, else the subject
+// lifting built into macOS through the davinci-cutout helper shipped beside
+// davinci (the app has no Python; Vision has one model, so the general /
+// portrait choice does not apply). A cut-out is kept under
+// data/rembg/<source sha>-<model or "vision">.png, so cutting the same picture
+// again — an undo and redo, the same photo in another project — is instant.
 //
 // One cut at a time: a BiRefNet run holds a couple of GB of memory.
 
@@ -57,9 +62,24 @@ func (s *Server) removeBackground(ref, model string) (string, int, int, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", 0, 0, err
 	}
+	bin, err := rembgBinary()
+	cutout := ""
+	if err != nil {
+		if cutout = bundle.Tool("davinci-cutout"); cutout == "" {
+			return "", 0, 0, err
+		}
+	}
 	out := filepath.Join(dir, as.SHA+"-"+model+".png")
+	if cutout != "" {
+		out = filepath.Join(dir, as.SHA+"-vision.png")
+	}
 	if _, err := os.Stat(out); err != nil {
-		if err := runRembg(src, out, model); err != nil {
+		if cutout != "" {
+			err = runCutter(cutout, out, []string{src})
+		} else {
+			err = runCutter(bin, out, []string{"i", "-m", model, src})
+		}
+		if err != nil {
 			return "", 0, 0, err
 		}
 	}
@@ -78,11 +98,9 @@ func (s *Server) removeBackground(ref, model string) (string, int, int, error) {
 	return "/assets/" + cut.SHA + ".png", cfg.Width, cfg.Height, nil
 }
 
-func runRembg(src, out, model string) error {
-	bin, err := rembgBinary()
-	if err != nil {
-		return err
-	}
+// runCutter runs a cutter — rembg or davinci-cutout — with args plus the
+// output path, and keeps its PNG at out.
+func runCutter(bin, out string, args []string) error {
 	rembgMu.Lock()
 	defer rembgMu.Unlock()
 	if _, err := os.Stat(out); err == nil {
@@ -93,7 +111,7 @@ func runRembg(src, out, model string) error {
 	tmp := out + ".tmp.png"
 	defer os.Remove(tmp)
 	var stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, bin, "i", "-m", model, src, tmp)
+	cmd := exec.CommandContext(ctx, bin, append(args, tmp)...)
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
@@ -103,7 +121,7 @@ func runRembg(src, out, model string) error {
 		if i := strings.LastIndex(msg, "\n"); i >= 0 {
 			msg = msg[i+1:]
 		}
-		return fmt.Errorf("rembg 失败：%v %s", err, msg)
+		return fmt.Errorf("去除背景失败：%v %s", err, msg)
 	}
 	return os.Rename(tmp, out)
 }

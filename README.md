@@ -84,6 +84,23 @@ Claude Code、Codex、Hermes 这些 AI Agent。
   </tbody>
 </table>
 
+## 桌面版（macOS）
+
+```bash
+./start.sh app
+```
+
+打包出 `app/dist/mac-arm64/davinci.app`（Electron 外壳 + 同一个 davinci 服务，本机构建，未签名）。双击打开就能用，
+不需要另装 Go、Node 或 Python：
+
+- 数据放在 `~/Library/Application Support/davinci`，和仓库里的 `data/` 互不影响。
+- 菜单「davinci → 安装命令行工具…」把 `davinci` 命令装到 `/usr/local/bin`，「安装 Agent skill…」装给
+  Claude Code / Codex / Hermes。之后 Agent 改的每一个图层都实时出现在 App 里。
+- `davinci://p_xxx?b=画板` 这样的链接直接在 App 里打开到对应画板。
+- 去除背景：没装 rembg 时用 macOS 自带的主体抠图（需要 macOS 14+），不用下载模型。
+
+开发时用 `./start.sh app-dev` 直接以 Electron 打开（用仓库里构建的 davinci 和 `data/`）。
+
 ## 给 AI 用
 
 本项目提供了 CLI 和 REST API，使用这两种方式的效果是一样的，具体的命令和接口说明见 [docs/COMMANDS.md](docs/COMMANDS.md)、[docs/API.md](docs/API.md)、
@@ -93,6 +110,8 @@ Claude Code、Codex、Hermes 这些 AI Agent。
 
 ```
 cmd/davinci/        CLI 入口
+cmd/davinci-cutout/ macOS 主体抠图小工具（Vision；没装 rembg 时「去除背景」用它）
+app/                桌面版：Electron 外壳（main.js）与打包配置
 internal/doc/       文档模型与命令层（撤销历史也在这里）
 internal/render/    服务端渲染进程（Node + CanvasKit）的管理
 internal/server/    Echo + SQLite、WS 推送、资产、字体
@@ -105,11 +124,13 @@ docs/               接口、命令与架构文档
 
 ## 常见问题
 
-- **端口**：默认 7789，被占用时会启动失败。可以手动指定：`./start.sh --port 7790`。
+- **端口**：默认 7789，被占用时自动换一个空闲端口；实际地址写在数据目录的 `server.json` 里，`davinci` 命令会自己找到。
+  一定要用某个端口时指定 `./start.sh --port 7790`（被占用就报错，不会换）。
 - **数据**：项目、素材和上传的字体都放在仓库里的 `data/`（已被 git 忽略），第一次启动时自动创建。
 - **中文字体**：macOS 自带的字体就够用；精简的 Linux 要先装中文字体，否则中文显示不出来，
   比如 `sudo apt install fonts-noto-cjk`。自己的字体可以用 `davinci font add <文件>` 加进来。
-- **去除背景**（可选）：需要另装 [rembg](https://github.com/danielgatis/rembg)，推荐用 BiRefNet 作为 backend。直接跟你的 Agent 说“帮我安装 rembg，并用 BiRefNet 作为 backend”即可。
+- **去除背景**：macOS 上开箱即用（系统自带的主体抠图）。想要头发边缘更细的效果，另装 [rembg](https://github.com/danielgatis/rembg)
+  并用 BiRefNet 作为 backend，装了就自动改用它：直接跟你的 Agent 说“帮我安装 rembg，并用 BiRefNet 作为 backend”即可。
 - **Windows**：`start.sh` 是 bash 脚本，请在 WSL 或 Git Bash 里运行。
 
 ## 许可证

@@ -26,7 +26,7 @@ func newServeCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "启动 davinci 服务（默认 127.0.0.1:7789）",
+		Short: "启动 davinci 服务（默认 127.0.0.1:7789，被占用时换一个空闲端口）",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// The flag shadows the root's persistent --data, and neither one picks
 			// up DAVINCI_DATA — but the store's own error message tells people to
@@ -37,6 +37,9 @@ func newServeCmd() *cobra.Command {
 			}
 			if dir == "" {
 				dir = os.Getenv("DAVINCI_DATA")
+			}
+			if port == 0 {
+				port = explicitPort()
 			}
 			opt := server.Options{Port: port, DataDir: dir, Quiet: gf.quiet, Remote: remote}
 			srv, err := server.NewServer(opt)
@@ -71,7 +74,7 @@ func newServeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().IntVar(&port, "port", server.DefaultPort, "监听端口")
+	cmd.Flags().IntVar(&port, "port", 0, "监听端口（不给就用 7789，被占用时换一个空闲端口；给了就只用这个）")
 	cmd.Flags().StringVar(&data, "data", "", "数据目录（默认：davinci 仓库下的 data/，或 DAVINCI_DATA）")
 	cmd.Flags().BoolVar(&open, "open", false, "启动后打开浏览器")
 	// Kept so existing service files keep working; there is no executor to

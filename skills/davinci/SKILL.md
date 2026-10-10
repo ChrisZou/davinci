@@ -30,7 +30,7 @@ davinci 是一个 AI Native 的本地图层化图片编辑器：**每一个图�
 `b=` 后面是用户正在看的那个画板（画板 id 去掉了 `board_` 前缀，`-b` 直接认）。直接交给 CLI，
 **每条命令都带上 `-p p_xxx -b yyy`**（`davinci -p p_xxx -b yyy layers`、`davinci -p p_xxx -b yyy render -o cur.png` 看图），
 按用户的要求改；链接没带 `b=` 时先 `davinci -p p_xxx boards` 看有几个画板。
-不要用浏览器打开或抓取这个页面。
+不要用浏览器打开或抓取这个页面。桌面版的 `davinci://p_xxx?b=yyy` 链接一样处理。
 
 ## 0. 先确认能用
 
@@ -38,8 +38,9 @@ davinci 是一个 AI Native 的本地图层化图片编辑器：**每一个图�
 davinci projects          # 能列出项目（可能是空的）就说明一切就绪
 ```
 
-如果提示 `command not found`：告诉用户去 davinci 的代码仓库里执行一次 `./start.sh install`
-（会把 `davinci` 装到 PATH 上），装好再继续。不要自己猜路径去找二进制。
+如果提示 `command not found`：用的是 davinci 桌面版，就请用户在 App 菜单里点「davinci → 安装命令行工具…」；
+用的是代码仓库，就请用户在仓库里执行一次 `./start.sh install`（会把 `davinci` 装到 PATH 上）。装好再继续。
+不要自己猜路径去找二进制。
 
 所有命令都可以加 `--json` 拿结构化输出；`-p <项目id或名称>` 指定项目，不加就是**最近
 更新的那个项目**——同时有多个项目时，一律显式带 `-p`。

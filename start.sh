@@ -7,6 +7,8 @@
 #   ./start.sh dev            开发模式：Go 服务 + Vite 热更新，Ctrl-C 一起退出
 #   ./start.sh install        构建，并把 davinci 链接到 $GOPATH/bin（命令行和 AI 用它）
 #   ./start.sh skill          给 AI Agent 装 skill：构建、链接 davinci 命令，再装给 Claude Code / Codex / Hermes
+#   ./start.sh app            打包 macOS 桌面版 → app/dist/mac-arm64/davinci.app（本机用，未签名）
+#   ./start.sh app-dev        开发时直接用 Electron 打开桌面版（用仓库里构建的 davinci）
 #   ./start.sh test           go vet、go test 和前端类型检查
 #   ./start.sh clean          删掉构建产物
 #
@@ -44,6 +46,13 @@ build_go() {
   version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
   go build -ldflags "-s -w -X main.version=$version" -o "$BIN" ./cmd/davinci
   echo "已构建 ${BIN}（${version}）"
+  # macOS 自带的主体抠图：没装 rembg 时「去除背景」用它，桌面版也带着它。
+  if [ "$(uname)" = Darwin ] && command -v swiftc >/dev/null 2>&1; then
+    if [ ! -f bin/davinci-cutout ] || [ cmd/davinci-cutout/main.swift -nt bin/davinci-cutout ]; then
+      swiftc -O cmd/davinci-cutout/main.swift -o bin/davinci-cutout
+      echo "已构建 bin/davinci-cutout"
+    fi
+  fi
 }
 
 build() {
@@ -91,6 +100,18 @@ case "${1:-}" in
     install_cli
     ./skills/install.sh
     ;;
+  app | app-dev)
+    [ "$(uname)" = Darwin ] || { echo "桌面版目前只支持 macOS" >&2; exit 1; }
+    build
+    (cd app && { [ -d node_modules ] || pnpm install --silent; })
+    if [ "$1" = app-dev ]; then
+      (cd app && pnpm exec electron .)
+    else
+      # 不自动找证书签名：签名会弹钥匙串授权，正式发布时再签名、公证。
+      (cd app && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --mac dir)
+      echo "桌面版：$PWD/app/dist/mac-$(uname -m | sed 's/x86_64/x64/')/davinci.app"
+    fi
+    ;;
   test)
     need go "https://go.dev/dl/"
     go vet ./...
@@ -98,11 +119,11 @@ case "${1:-}" in
     (cd web && pnpm exec tsc --noEmit)
     ;;
   clean)
-    rm -rf bin
+    rm -rf bin app/dist
     find web/dist -mindepth 1 ! -name .gitkeep -exec rm -rf {} +
     ;;
   -h | --help | help)
-    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   "" | -*)
     build

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"davinci/internal/bundle"
 	"davinci/internal/doc"
 	"davinci/web"
 )
@@ -30,7 +31,9 @@ import (
 // Sidecar is one Node renderer process, started on demand, stopped when idle.
 type Sidecar struct {
 	dataDir string
-	baseURL string
+	// baseURL is the server's address, asked for when the process starts: the
+	// server only knows its port once it is listening.
+	baseURL func() string
 	logf    func(string, ...any)
 	idle    time.Duration
 
@@ -47,7 +50,7 @@ type Sidecar struct {
 var ErrUnavailable = errors.New("renderer unavailable")
 
 // New prepares a renderer that fetches fonts and images from baseURL.
-func New(dataDir, baseURL string, logf func(string, ...any)) *Sidecar {
+func New(dataDir string, baseURL func() string, logf func(string, ...any)) *Sidecar {
 	s := &Sidecar{dataDir: dataDir, baseURL: baseURL, logf: logf, idle: 10 * time.Minute, done: make(chan struct{})}
 	go s.reap()
 	return s
@@ -194,13 +197,17 @@ func (s *Sidecar) startLocked() error {
 	if s.cmd != nil {
 		return nil
 	}
-	node := os.Getenv("DAVINCI_NODE")
+	// DAVINCI_NODE, else the app's own executable (Electron runs as Node),
+	// else node on PATH.
+	node, env := os.Getenv("DAVINCI_NODE"), os.Environ()
 	if node == "" {
-		p, err := exec.LookPath("node")
-		if err != nil {
+		if app := bundle.Node(); app != "" {
+			node, env = app, append(env, "ELECTRON_RUN_AS_NODE=1")
+		} else if p, err := exec.LookPath("node"); err == nil {
+			node = p
+		} else {
 			return fmt.Errorf("%w: Node.js is not installed", ErrUnavailable)
 		}
-		node = p
 	}
 	script, wasm, err := web.RendererFiles()
 	if err != nil {
@@ -215,7 +222,7 @@ func (s *Sidecar) startLocked() error {
 		return err
 	}
 	cmd := exec.Command(node, filepath.Join(dir, "renderer.cjs"))
-	cmd.Env = append(os.Environ(), "DAVINCI_URL="+s.baseURL, "CANVASKIT_WASM="+filepath.Join(dir, "canvaskit.wasm"))
+	cmd.Env = append(env, "DAVINCI_URL="+s.baseURL(), "CANVASKIT_WASM="+filepath.Join(dir, "canvaskit.wasm"))
 	cmd.Stderr = logWriter{s.logf}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

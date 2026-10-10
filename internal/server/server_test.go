@@ -385,3 +385,54 @@ func TestDefaultDataDir(t *testing.T) {
 		t.Fatalf("default = %q, want a data/ dir that is not directly in home", got)
 	}
 }
+
+// The default port taken (by a davinci the developer runs, or held here) is no
+// reason to fail: the server takes another and says where in server.json. A
+// port asked for is not swapped; a second server on the same data directory is
+// refused; and server.json goes away with the server.
+func TestPortFallbackServerFileAndLock(t *testing.T) {
+	if l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", DefaultPort)); err == nil {
+		defer l.Close()
+	}
+	dir := t.TempDir()
+	srv, err := NewServer(Options{DataDir: dir, Quiet: true})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if srv.Port() == DefaultPort {
+		t.Fatal("took the busy default port")
+	}
+	f, err := ReadServerFile(dir)
+	if err != nil || f.URL != srv.Addr() || f.Boot != srv.BootID() || f.PID != os.Getpid() {
+		t.Fatalf("server.json = %+v, %v; want %s", f, err, srv.Addr())
+	}
+	if resp, err := http.Get(f.URL + "/api/health"); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("health at %s: %v", f.URL, err)
+	}
+
+	if _, err := NewServer(Options{DataDir: dir, Quiet: true}); err == nil || !strings.Contains(err.Error(), f.URL) {
+		t.Fatalf("a second server on the same data directory: %v", err)
+	}
+	strict, err := NewServer(Options{Port: srv.Port(), DataDir: t.TempDir(), Quiet: true})
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	if err := strict.Start(); err == nil {
+		t.Fatal("a port asked for and taken should fail, not be swapped")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(ctx)
+	if _, err := os.Stat(ServerFilePath(dir)); !os.IsNotExist(err) {
+		t.Fatalf("server.json left behind: %v", err)
+	}
+	again, err := NewServer(Options{DataDir: dir, Quiet: true})
+	if err != nil {
+		t.Fatalf("the data directory should be free again: %v", err)
+	}
+	_ = again.Shutdown(ctx)
+}

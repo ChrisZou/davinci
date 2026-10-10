@@ -175,7 +175,7 @@ func init() {
 	})
 
 	define(Spec{
-		Type: "removeBackground", Summary: "去除图片背景（抠图，rembg + BiRefNet）：主体保留、背景透明，图层位置和大小不变；restore 恢复原图",
+		Type: "removeBackground", Summary: "去除图片背景（抠图：装了 rembg 用 BiRefNet，否则用 macOS 自带的主体抠图）：主体保留、背景透明，图层位置和大小不变；restore 恢复原图",
 		Params: []Param{REF,
 			{Name: "model", Type: "string", Desc: "general 通用（物品、插画、Logo）/ portrait 人像（头发边缘更细）", Enum: []string{"general", "portrait"}, Default: "general"},
 			{Name: "restore", Type: "boolean", Desc: "true = 换回去背景之前的原图", Default: false},

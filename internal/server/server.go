@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,14 +22,19 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 )
 
-// DefaultPort is where davinci listens. 7788 is taken by an older local tool.
+// DefaultPort is where davinci listens unless told otherwise (and it is free).
+// 7788 is taken by an older local tool.
 const DefaultPort = 7789
 
 // Server wires the store, the command engines, the renderer and the HTTP
 // routes together. It owns every document: commands are applied here.
 type Server struct {
-	port    int
+	port int
+	// anyPort lets Start take a free port when DefaultPort is taken.
+	anyPort bool
 	dataDir string
+	// lock keeps any other server off this data directory.
+	lock *os.File
 	// boot identifies this process (stamped into the pages it serves, and
 	// reported by /api/health).
 	boot   string
@@ -52,6 +58,8 @@ type Server struct {
 
 // Options configures a Server.
 type Options struct {
+	// Port to listen on. 0 means DefaultPort, or any free port when that one
+	// is taken (not for a remote server, whose proxy expects a fixed port).
 	Port    int
 	DataDir string
 	Quiet   bool
@@ -65,16 +73,24 @@ func NewServer(opt Options) (*Server, error) {
 	if opt.DataDir == "" {
 		opt.DataDir = DefaultDataDir()
 	}
+	anyPort := opt.Port <= 0 && !opt.Remote
 	if opt.Port <= 0 {
 		opt.Port = DefaultPort
 	}
+	lock, err := lockDataDir(opt.DataDir)
+	if err != nil {
+		return nil, err
+	}
 	store, err := OpenStore(opt.DataDir)
 	if err != nil {
+		lock.Close()
 		return nil, err
 	}
 	s := &Server{
 		port:    opt.Port,
+		anyPort: anyPort,
 		dataDir: opt.DataDir,
+		lock:    lock,
 		store:   store,
 		assets:  &AssetStore{dir: filepath.Join(opt.DataDir, "assets"), db: store, remote: opt.Remote},
 		fonts:   NewFontStore(opt.DataDir),
@@ -91,7 +107,7 @@ func NewServer(opt Options) (*Server, error) {
 		s.boot = fmt.Sprintf("boot_%d", time.Now().UnixNano())
 	}
 	s.hub.srv = s
-	s.renderer = render.New(opt.DataDir, s.Addr(), s.logf)
+	s.renderer = render.New(opt.DataDir, s.Addr, s.logf)
 	s.build()
 	return s, nil
 }
@@ -217,29 +233,35 @@ func within(root, target string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// Start begins listening. It returns once the listener is up (or has failed),
-// leaving the server running in the background.
+// Start begins listening and leaves the server running in the background.
+// Where it listens goes into <data>/server.json, which is how the CLI finds
+// it whatever port it ended up on.
 func (s *Server) Start() error {
-	errCh := make(chan error, 1)
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", s.port))
+	if err != nil && s.anyPort {
+		ln, err = net.Listen("tcp", "127.0.0.1:0")
+	}
+	if err != nil {
+		return err
+	}
+	s.port = ln.Addr().(*net.TCPAddr).Port
+	s.srv.Addr = ln.Addr().String()
 	go func() {
-		if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := s.srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			// After Start returns there is nowhere to report this, so log it.
 			s.logf("[davinci] listener stopped: %v", err)
-			errCh <- err
 		}
 	}()
-	select {
-	case err := <-errCh:
-		return err
-	case <-time.After(200 * time.Millisecond):
-		// No immediate failure: assume the port was free and the listener is up.
-		s.logf("[davinci] listening on %s (data: %s)", s.Addr(), s.dataDir)
-		return nil
+	if err := writeServerFile(s.dataDir, ServerFile{URL: s.Addr(), PID: os.Getpid(), Boot: s.boot}); err != nil {
+		s.logf("[davinci] could not write %s: %v", ServerFilePath(s.dataDir), err)
 	}
+	s.logf("[davinci] listening on %s (data: %s)", s.Addr(), s.dataDir)
+	return nil
 }
 
 // Shutdown stops the listener, stops the renderer and closes the database.
 func (s *Server) Shutdown(ctx context.Context) error {
+	removeServerFile(s.dataDir, s.boot)
 	err := s.srv.Shutdown(ctx)
 	select {
 	case <-s.done:
@@ -250,6 +272,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if cerr := s.store.Close(); err == nil {
 		err = cerr
 	}
+	s.lock.Close()
 	return err
 }
 

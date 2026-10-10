@@ -3,24 +3,33 @@ package server
 import (
 	"os"
 	"path/filepath"
+
+	"davinci/internal/bundle"
 )
 
 // DefaultDataDir is where davinci keeps its database, assets and fonts when
 // nothing says otherwise:
 //
 //  1. DAVINCI_DATA, if set;
-//  2. the `data` directory of the davinci checkout the running binary belongs
+//  2. for the davinci app (and the davinci command linked out of it),
+//     ~/Library/Application Support/davinci;
+//  3. the `data` directory of the davinci checkout the running binary belongs
 //     to — <repo>/bin/davinci keeps its data in <repo>/data. Symlinks are
 //     followed, so a `davinci` linked onto PATH still finds its checkout. This
 //     is what makes every agent, run from whatever directory, reach the same
 //     data;
-//  3. `data` under the current directory.
+//  4. `data` under the current directory.
 //
 // Nothing is ever written into the home folder by default. The CLI and the
 // server both call this, so they always agree.
 func DefaultDataDir() string {
 	if v := os.Getenv("DAVINCI_DATA"); v != "" {
 		return v
+	}
+	if bundle.Contents() != "" {
+		if dir, err := os.UserConfigDir(); err == nil {
+			return filepath.Join(dir, "davinci")
+		}
 	}
 	if root := checkoutRoot(); root != "" {
 		return filepath.Join(root, "data")
