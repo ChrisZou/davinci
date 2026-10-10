@@ -59,7 +59,6 @@ interface MenuState {
   target: string | null
 }
 
-const DEV_KEY = 'davinci.devDrawer'
 
 export function Editor({ projectID }: { projectID: string }) {
   const stageRef = useRef<HTMLDivElement>(null)
@@ -79,10 +78,7 @@ export function Editor({ projectID }: { projectID: string }) {
   const [editing, setEditing] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [ready, setReady] = useState(false)
-  const [log, setLog] = useState<string[]>([])
   const [error, setError] = useState('')
-  const [cmdText, setCmdText] = useState('')
-  const [cmdOut, setCmdOut] = useState('')
   const [zoom, setZoom] = useState(100)
   const [, setHistoryTick] = useState(0)
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -93,13 +89,6 @@ export function Editor({ projectID }: { projectID: string }) {
   const [libraryOpen, setLibraryOpen] = useState(false)
   /** The image layer the library is open to replace, when it is. */
   const [replaceFor, setReplaceFor] = useState<string | null>(null)
-  const [devOpen, setDevOpen] = useState(() => {
-    try {
-      return localStorage.getItem(DEV_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
   // Read by the shortcut handler, which is installed once and must not go stale.
   const editingRef = useRef<string | null>(null)
   editingRef.current = editing
@@ -115,9 +104,7 @@ export function Editor({ projectID }: { projectID: string }) {
 
   const addLog = useCallback(
     (line: string) => {
-      setLog((prev) => [...prev.slice(-40), line])
-      // Failures (and confirmations like "copied") matter to the human even with
-      // the developer drawer closed.
+      // Failures and confirmations show as the stage's notice.
       if (line.startsWith('✗')) notify({ kind: 'error', text: line.replace(/^✗\s*/, '') })
       else if (line.startsWith('✓')) notify({ kind: 'info', text: line.replace(/^✓\s*/, '') }, 2500)
     },
@@ -185,14 +172,6 @@ export function Editor({ projectID }: { projectID: string }) {
     sessionRef.current?.editor.setInsetBottom(filmstripInset(stripOpen))
   }, [ready, stripOpen])
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(DEV_KEY, devOpen ? '1' : '0')
-    } catch {
-      // A private window may refuse storage; the drawer just forgets.
-    }
-  }, [devOpen])
-
   // The address names the board on show (?b=<its id without "board_">), so a
   // link handed on — to an agent, say — says which board it means. A link
   // opens on its board; from then on the address follows whichever board is
@@ -220,7 +199,6 @@ export function Editor({ projectID }: { projectID: string }) {
     const s = sessionRef.current
     if (!s) return
     const res = await s.run(cmd)
-    setCmdOut(JSON.stringify(res.ok ? res.data ?? { ok: true } : { error: res.error }, null, 2))
     if (!res.ok && !quiet) addLog(`✗ ${res.error}`)
     return res
   }
@@ -411,29 +389,6 @@ export function Editor({ projectID }: { projectID: string }) {
     }
   }
 
-  const runJSON = async () => {
-    const s = sessionRef.current
-    if (!s) return
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(cmdText)
-    } catch (e: any) {
-      setCmdOut(`JSON 解析失败：${e?.message ?? e}`)
-      return
-    }
-    const cmds = Array.isArray(parsed) ? parsed : [parsed]
-    const results = []
-    for (const c of cmds) results.push(await s.run(c))
-    if (results.some((r) => !r.ok)) addLog(`✗ ${results.find((r) => !r.ok)?.error}`)
-    setCmdOut(
-      JSON.stringify(
-        results.length === 1 ? results[0].ok ? results[0].data ?? { ok: true } : { error: results[0].error } : results.map((r) => (r.ok ? r.data ?? { ok: true } : { error: r.error })),
-        null,
-        2,
-      ),
-    )
-  }
-
   const selection = useMemo(() => (doc ? doc.layers.filter((l) => selected.includes(l.id)) : []), [doc, selected])
   const layer = selection.length === 1 ? selection[0] : undefined
 
@@ -541,10 +496,6 @@ export function Editor({ projectID }: { projectID: string }) {
         {showPanels && !viewOnly && (
           <aside className="card flex w-[252px] shrink-0 flex-col overflow-hidden">
             <LayerPanel rows={rows} doc={doc} selected={selected} onSelect={select} onRun={run} />
-            <DevDrawer open={devOpen} onToggle={() => setDevOpen((v) => !v)} errors={log.filter((l) => l.startsWith('✗')).length}>
-              <Console cmdText={cmdText} setCmdText={setCmdText} out={cmdOut} onRun={runJSON} />
-              <Log lines={log} />
-            </DevDrawer>
           </aside>
         )}
 
@@ -1315,71 +1266,3 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-// --- developer drawer -----------------------------------------------------
-
-/**
- * The raw command box and the log, folded away by default at the foot of the
- * layer card: they are how the "AI Native" claim is tested by hand, not
- * something a cover needs. Errors still surface in the stage's notice.
- */
-function DevDrawer({ open, onToggle, errors, children }: { open: boolean; onToggle: () => void; errors: number; children: ReactNode }) {
-  return (
-    <section className={`flex flex-col border-t border-line ${open ? 'max-h-[50%] min-h-0' : ''}`}>
-      <button className="flex h-10 shrink-0 items-center justify-between px-5 text-xs text-faint hover:text-ink" onClick={onToggle} aria-expanded={open} data-testid="dev-toggle">
-        <span>命令与日志</span>
-        <span className="flex items-center gap-2">
-          {errors > 0 && <span className="rounded-full bg-accent-soft px-1.5 text-accent">{errors}</span>}
-          <Icon d={open ? 'm6 9 6 6 6-6' : 'm9 6 6 6-6 6'} size={13} />
-        </span>
-      </button>
-      {open && <div className="min-h-0 overflow-y-auto">{children}</div>}
-    </section>
-  )
-}
-
-/**
- * A raw command box. It is the same box the CLI uses — anything that works here
- * works from `davinci exec`, which is what makes the "AI Native" claim testable
- * by hand.
- */
-function Console({ cmdText, setCmdText, out, onRun }: { cmdText: string; setCmdText: (s: string) => void; out: string; onRun: () => void }) {
-  return (
-    <section className="flex flex-col gap-2 px-4 pb-3">
-      <textarea
-        className="w-full rounded-[10px] bg-paper px-3 py-2 font-mono text-[11px] text-ink outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
-        rows={3}
-        placeholder='{"type":"addText","text":"标题"}'
-        aria-label="命令 JSON"
-        value={cmdText}
-        onChange={(e) => setCmdText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault()
-            onRun()
-          }
-        }}
-      />
-      <button className="chip bg-ink text-card hover:!bg-ink-2" onClick={onRun}>
-        执行 ⌘↵
-      </button>
-      {out && (
-        <pre className="max-h-32 overflow-auto rounded-[10px] bg-paper p-2.5 font-mono text-[10px] text-ink-2" data-testid="cmd-out">
-          {out}
-        </pre>
-      )}
-    </section>
-  )
-}
-
-function Log({ lines }: { lines: string[] }) {
-  if (!lines.length) return null
-  return (
-    <section className="flex flex-col gap-0.5 px-5 pb-3">
-      {lines.map((l, i) => (
-        <div key={i} className={`font-mono text-[10px] ${l.startsWith('✗') ? 'text-accent' : 'text-faint'}`}>
-          {l}
-        </div>
-      ))}
-    </section>
-  )
-}
