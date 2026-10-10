@@ -4,12 +4,12 @@ description: >
   用 davinci（本地的图层化图片编辑器）做封面和配图、管理素材库。凡是要做 / 改
   小红书封面、B 站封面、视频号竖图、公众号头图、海报、缩略图、带文字的配图，
   或者要往素材库里上传人像 / 背景 / APP Logo、从素材库找图、收藏或参考模板库里的封面、导出 PNG/JPG 时使用。
-  用户发来 davinci.localhost 的链接（如 http://davinci.localhost/editor/p_xxx）时
-  也一律用本 skill：链接就是一个 davinci 项目，用 CLI 处理，不要用浏览器或 WebFetch 去读。
+  用户发来 davinci.localhost 的链接（如 http://davinci.localhost/editor/p_xxx?b=yyy）或 davinci://p_xxx?b=yyy
+  链接时也一律用本 skill：链接就是一个 davinci 项目（b= 是画板），用 CLI 处理，不要用浏览器或 WebFetch 去读。
   Use when the user asks to create or edit a cover image, thumbnail, poster or
   social-media graphic, to upload or search design assets (cut-out portraits,
   backgrounds, app logos), or to export a design as an image, and whenever the
-  user shares a davinci.localhost link. Everything goes
+  user shares a davinci.localhost or davinci:// link. Everything goes
   through the `davinci` CLI: every layer and every edit is a command, and the
   same design is live in the web editor.
 ---

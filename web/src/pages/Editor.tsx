@@ -463,7 +463,7 @@ export function Editor({ projectID }: { projectID: string }) {
       <header className="relative h-[84px] shrink-0">
         {doc && session && (
           <>
-            <div className="island absolute left-5 top-4 flex h-[52px] items-center gap-2.5 pl-2 pr-4">
+            <div className={`island absolute left-5 top-4 flex h-[52px] items-center gap-2.5 pl-2 ${viewOnly ? 'pr-2' : 'pr-1.5'}`}>
               <a
                 href="/"
                 className="icon-btn"
@@ -500,6 +500,7 @@ export function Editor({ projectID }: { projectID: string }) {
                 </a>
               )}
               {!viewOnly && <SaveDot state={saveState} />}
+              <CopyLink projectID={projectID} board={project?.active} onLog={addLog} />
             </div>
 
             {viewOnly ? (
@@ -784,6 +785,30 @@ function ProjectName({
       data-testid="project-name"
     >
       {name}
+    </button>
+  )
+}
+
+/**
+ * Copies a link to this design and the board on show: what to hand an agent so
+ * it knows which design and which board is meant. In the desktop app the
+ * page's own address carries a port that changes from launch to launch, so the
+ * link is the app's davinci:// one (which also opens the app when clicked).
+ */
+function CopyLink({ projectID, board, onLog }: { projectID: string; board?: string; onLog: (line: string) => void }) {
+  const copy = async () => {
+    const b = board ? `?b=${board.replace(/^board_/, '')}` : ''
+    const link = /Electron\//.test(navigator.userAgent) ? `davinci://${projectID}${b}` : `${location.origin}/editor/${projectID}${b}`
+    try {
+      await navigator.clipboard.writeText(link)
+      onLog('✓ 已复制链接：发给 Agent，它就知道是哪个设计稿、哪个画板')
+    } catch {
+      onLog(`✗ 没能复制，手动复制这个链接：${link}`)
+    }
+  }
+  return (
+    <button className="icon-btn" title="复制当前画板的链接（发给 Agent）" aria-label="复制链接" onClick={() => void copy()} data-testid="copy-link">
+      <Icon size={16} d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </button>
   )
 }
