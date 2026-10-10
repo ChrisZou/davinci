@@ -137,17 +137,8 @@ export function Templates() {
         void save(Array.from(e.dataTransfer.files))
       }}
     >
-      <header className="flex h-[84px] shrink-0 items-center gap-4 pl-[calc(32px+var(--tl-inset,0px))] pr-8">
-        <a
-          href="/"
-          onClick={(e) => {
-            e.preventDefault()
-            navigate('/')
-          }}
-          aria-label="回到首页"
-        >
-          <Lockup size={30} />
-        </a>
+      <header className="flex h-[84px] shrink-0 items-center gap-4 px-8">
+        <Lockup size={30} />
         <span className="h-4 w-px bg-line-strong" />
         <h1 className="m-0 font-serif text-2xl font-black text-ink">模板库</h1>
         <span className="text-xs text-faint">收藏喜欢的封面，照着它做新的作品</span>

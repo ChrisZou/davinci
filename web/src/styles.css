@@ -53,15 +53,12 @@ canvas {
 
 /*
  * The macOS desktop app has no title bar: the page runs to the top of the
- * window and the traffic lights sit on it (main.tsx sets .desktop-mac). A
- * strip across the top drags the window; anything clickable is cut out of it.
- * --tl-inset is the room the traffic lights take at the top left.
+ * window (main.tsx sets .desktop-mac). The traffic lights show on the home page
+ * only, in its empty top-left corner. A strip across the top drags the window;
+ * anything clickable is cut out of it.
  */
 .titlebar-drag {
   display: none;
-}
-.desktop-mac {
-  --tl-inset: 72px;
 }
 .desktop-mac .titlebar-drag {
   display: block;

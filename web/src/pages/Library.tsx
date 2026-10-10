@@ -93,7 +93,7 @@ export function Library() {
         void upload(Array.from(e.dataTransfer.files), current)
       }}
     >
-      <header className="flex h-[84px] shrink-0 items-center gap-4 pl-[calc(32px+var(--tl-inset,0px))] pr-8">
+      <header className="flex h-[84px] shrink-0 items-center gap-4 px-8">
         <Lockup size={30} />
         <span className="h-4 w-px bg-line-strong" />
         <h1 className="m-0 font-serif text-2xl font-black text-ink">素材库</h1>

@@ -15,6 +15,7 @@ const path = require('path')
 const repo = path.join(__dirname, '..')
 const resources = app.isPackaged ? process.resourcesPath : repo
 const isWin = process.platform === 'win32'
+const isMac = process.platform === 'darwin'
 const davinciBin = path.join(resources, 'bin', isWin ? 'davinci.exe' : 'davinci')
 const skillDir = path.join(resources, 'skills', 'davinci')
 // 文档、素材、字体都在这里。和 davinci 命令自己算出来的位置一致：App 里的命令用
@@ -118,45 +119,63 @@ function openRoute(route) {
   }
 }
 
-// 红黄绿按钮和页面顶部那排面板垂直居中对齐（面板高 52，离顶 16）。
-const TRAFFIC_LIGHTS = { x: 20, y: 35 }
+// 红黄绿按钮：离顶边和左边一样远。只在首页显示——首页左上角是空的；其他页面左上角
+// 是它们自己的东西（logo 点了回首页），按钮藏起来。
+const TRAFFIC_LIGHTS = { x: 16, y: 16 }
 
-function placeTrafficLights(win) {
-  if (process.platform === 'darwin' && !win.isDestroyed()) win.setWindowButtonPosition(TRAFFIC_LIGHTS)
-}
-
-function createWindow(route = '/') {
-  const win = new BrowserWindow({
+function windowOptions() {
+  return {
     width: 1440,
     height: 920,
     minWidth: 1024,
     minHeight: 680,
     title: 'davinci',
     backgroundColor: '#f1ece6',
-    show: false,
     // Windows 的菜单栏在窗口里：平时收起，按 Alt 出来。
     autoHideMenuBar: isWin,
-    // macOS 不要单独的标题栏：页面铺到窗口顶上，红黄绿按钮浮在左上角，和顶部那排面板对齐。
-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden', trafficLightPosition: TRAFFIC_LIGHTS } : {}),
-  })
+    // macOS 不要单独的标题栏：页面铺到窗口顶上。
+    ...(isMac ? { titleBarStyle: 'hidden', trafficLightPosition: TRAFFIC_LIGHTS } : {}),
+  }
+}
+
+function updateTrafficLights(win) {
+  if (!isMac || win.isDestroyed()) return
+  let home = true
+  try {
+    home = new URL(win.webContents.getURL()).pathname === '/'
+  } catch {}
+  win.setWindowButtonVisibility(home)
+  // 新版 macOS 会在缩放、进出全屏后把按钮放回默认位置，每次都再摆一次。
+  if (home) win.setWindowButtonPosition(TRAFFIC_LIGHTS)
+}
+
+/** 每个窗口（包括从页面里另开的）都一样：外链交给浏览器，按页面显示或藏起红黄绿按钮。 */
+function setupWindow(win) {
   // 本服务的页面（比如「管理素材库 ↗」）在 App 里另开窗口，别的网址交给浏览器。
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(baseURL)) return { action: 'allow' }
+    if (url.startsWith(baseURL)) return { action: 'allow', overrideBrowserWindowOptions: windowOptions() }
     shell.openExternal(url)
     return { action: 'deny' }
   })
+  win.webContents.on('did-create-window', (child) => setupWindow(child))
   win.webContents.on('will-navigate', (e, url) => {
     if (!url.startsWith(baseURL)) {
       e.preventDefault()
       shell.openExternal(url)
     }
   })
+  // 页面内跳转（pushState）也算：首页 ↔ 编辑器 ↔ 素材库。
+  for (const ev of ['did-navigate', 'did-navigate-in-page', 'did-finish-load']) win.webContents.on(ev, () => updateTrafficLights(win))
+  for (const ev of ['resize', 'leave-full-screen']) win.on(ev, () => updateTrafficLights(win))
+}
+
+function createWindow(route = '/') {
+  const win = new BrowserWindow({ ...windowOptions(), show: false })
+  setupWindow(win)
   win.once('ready-to-show', () => {
-    placeTrafficLights(win)
+    updateTrafficLights(win)
     win.show()
   })
-  // macOS 会在缩放、进出全屏后把红黄绿按钮放回默认位置，再摆一次。
-  for (const ev of ['resize', 'leave-full-screen']) win.on(ev, () => placeTrafficLights(win))
   win.loadURL(baseURL + route)
   if (!mainWindow || mainWindow.isDestroyed()) mainWindow = win
   return win
