@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // ServerFile is <data>/server.json: where the server holding that data
@@ -69,7 +68,7 @@ func lockDataDir(dataDir string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := tryLock(f); err != nil {
 		f.Close()
 		where := ""
 		if sf, err := ReadServerFile(dataDir); err == nil {

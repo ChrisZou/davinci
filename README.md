@@ -101,7 +101,14 @@ Claude Code、Codex、Hermes 这些 AI Agent。
 
 开发时用 `./start.sh app-dev` 直接以 Electron 打开（用仓库里构建的 davinci 和 `data/`）。
 
-**发给别人用**：没签名的包在别人电脑上会被系统拦下（提示「已损坏」）。用 Developer ID 证书签名并交给 Apple 公证：
+**Windows**：在 Mac 上执行 `./start.sh win`，打出 `app/dist/release/davinci-<版本>-setup-x64.exe`。
+
+- 装在当前用户下，不用管理员权限；数据在 `%APPDATA%\davinci`。
+- 菜单（按 Alt 显示）「帮助 → 安装命令行工具…」把 `davinci` 加进 PATH，「安装 Agent skill…」装给 Claude Code 等。
+- 去除背景要另装 rembg（Windows 没有系统自带的主体抠图）。
+- 安装包还没签名：安装时 Windows 会提示「Windows 已保护你的电脑」，点「更多信息 → 仍要运行」。
+
+**发给别人用**（macOS）：没签名的包在别人电脑上会被系统拦下（提示「已损坏」）。用 Developer ID 证书签名并交给 Apple 公证：
 
 1. 在 [appleid.apple.com](https://appleid.apple.com) →「登录与安全」→「App 专用密码」生成一个密码（这个 Apple ID 要在开发者团队里）。
 2. 在终端把公证凭证存进钥匙串（会提示输入上一步的密码）：

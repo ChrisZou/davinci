@@ -5,6 +5,7 @@ package bundle
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -21,15 +22,25 @@ func exe() string {
 	return p
 }
 
-// Contents is the Contents directory of the .app this binary was shipped in,
-// or "" when it runs from anywhere else.
+// Contents is where the app this binary was shipped in keeps its files: the
+// .app's Contents directory on macOS, the install directory on Windows (this
+// binary being resources\bin\davinci.exe next to resources\app.asar). "" when
+// it runs from anywhere else.
 func Contents() string {
 	p := exe()
-	i := strings.Index(p, ".app/Contents/")
-	if i < 0 {
-		return ""
+	if i := strings.Index(p, ".app/Contents/"); i >= 0 {
+		return p[:i+len(".app/Contents")]
 	}
-	return p[:i+len(".app/Contents")]
+	if runtime.GOOS == "windows" {
+		bin := filepath.Dir(p)
+		res := filepath.Dir(bin)
+		if strings.EqualFold(filepath.Base(bin), "bin") && strings.EqualFold(filepath.Base(res), "resources") {
+			if _, err := os.Stat(filepath.Join(res, "app.asar")); err == nil {
+				return filepath.Dir(res)
+			}
+		}
+	}
+	return ""
 }
 
 // Node is the app's own executable, which runs a script as Node when
@@ -38,6 +49,9 @@ func Node() string {
 	c := Contents()
 	if c == "" {
 		return ""
+	}
+	if runtime.GOOS == "windows" {
+		return filepath.Join(c, "davinci.exe")
 	}
 	entries, err := os.ReadDir(filepath.Join(c, "MacOS"))
 	if err != nil {
@@ -57,6 +71,9 @@ func Tool(name string) string {
 	p := exe()
 	if p == "" {
 		return ""
+	}
+	if runtime.GOOS == "windows" {
+		name += ".exe"
 	}
 	t := filepath.Join(filepath.Dir(p), name)
 	if info, err := os.Stat(t); err == nil && !info.IsDir() {

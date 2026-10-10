@@ -38,7 +38,8 @@ davinci 是一个 AI Native 的本地图层化图片编辑器：**每一个图�
 davinci projects          # 能列出项目（可能是空的）就说明一切就绪
 ```
 
-如果提示 `command not found`：用的是 davinci 桌面版，就请用户在 App 菜单里点「davinci → 安装命令行工具…」；
+如果提示 `command not found`：用的是 davinci 桌面版，就请用户在 App 菜单里点「davinci → 安装命令行工具…」
+（Windows 在「帮助」菜单里，装好后要新开终端）；
 用的是代码仓库，就请用户在仓库里执行一次 `./start.sh install`（会把 `davinci` 装到 PATH 上）。装好再继续。
 不要自己猜路径去找二进制。
 

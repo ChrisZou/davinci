@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"davinci/internal/server"
@@ -139,7 +138,7 @@ func (c *Client) EnsureServer() error {
 	}
 	cmd := exec.Command(exe, args...)
 	cmd.Env = os.Environ()
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	detach(cmd)
 	if logFile != nil {
 		cmd.Stdout, cmd.Stderr = logFile, logFile
 	}

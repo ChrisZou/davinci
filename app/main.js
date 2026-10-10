@@ -14,10 +14,11 @@ const path = require('path')
 // 打包后，命令、抠图工具和 skill 都在 Resources 里；开发时用仓库里构建好的。
 const repo = path.join(__dirname, '..')
 const resources = app.isPackaged ? process.resourcesPath : repo
-const davinciBin = path.join(resources, 'bin', 'davinci')
+const isWin = process.platform === 'win32'
+const davinciBin = path.join(resources, 'bin', isWin ? 'davinci.exe' : 'davinci')
 const skillDir = path.join(resources, 'skills', 'davinci')
-// 文档、素材、字体都在这里。和 davinci 命令自己算出来的位置一致：
-// App 里的命令用 ~/Library/Application Support/davinci，仓库里的命令用仓库的 data/。
+// 文档、素材、字体都在这里。和 davinci 命令自己算出来的位置一致：App 里的命令用
+// ~/Library/Application Support/davinci（Windows 是 %APPDATA%\davinci），仓库里的命令用仓库的 data/。
 const dataDir = app.isPackaged ? path.join(app.getPath('appData'), 'davinci') : path.join(repo, 'data')
 // Electron 自己的缓存放进数据目录的一个子文件夹，别和文档混在一起。
 app.setPath('userData', path.join(dataDir, '.electron'))
@@ -72,7 +73,8 @@ async function ensureServer() {
   if (running) return running
   fs.mkdirSync(dataDir, { recursive: true })
   const log = fs.openSync(path.join(dataDir, 'serve.log'), 'a')
-  server = spawn(davinciBin, ['serve', '--data', dataDir], { stdio: ['ignore', log, log], env: process.env })
+  // windowsHide：服务是控制台程序，不然 Windows 上会弹出一个命令行窗口。
+  server = spawn(davinciBin, ['serve', '--data', dataDir], { stdio: ['ignore', log, log], env: process.env, windowsHide: true })
   let exited = false
   server.on('exit', () => {
     exited = true
@@ -125,6 +127,8 @@ function createWindow(route = '/') {
     title: 'davinci',
     backgroundColor: '#f1ece6',
     show: false,
+    // Windows 的菜单栏在窗口里：平时收起，按 Alt 出来。
+    autoHideMenuBar: isWin,
   })
   // 本服务的页面（比如「管理素材库 ↗」）在 App 里另开窗口，别的网址交给浏览器。
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -148,16 +152,23 @@ function createWindow(route = '/') {
 
 function run(cmd, args) {
   return new Promise((resolve, reject) =>
-    execFile(cmd, args, (err, stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve(stdout.trim()))),
+    execFile(cmd, args, { windowsHide: true }, (err, stdout, stderr) => (err ? reject(new Error(stderr || err.message)) : resolve(stdout.trim()))),
   )
 }
 
 function linkTarget(p) {
   try {
-    return fs.readlinkSync(p)
+    // Windows 的目录联接读出来带 \\?\ 前缀。
+    return fs.readlinkSync(p).replace(/^\\\\\?\\/, '').replace(/[\\/]$/, '')
   } catch {
     return null
   }
+}
+
+/** 指向一个目录的链接：Windows 用目录联接（不要管理员权限），其他系统用软链接。 */
+function linkDir(target, link, relative) {
+  if (isWin) fs.symlinkSync(target, link, 'junction')
+  else fs.symlinkSync(relative ?? target, link)
 }
 
 function exists(p) {
@@ -182,8 +193,28 @@ async function okToReplace(where, current) {
   return response === 0
 }
 
+/** Windows：把 App 里命令所在的目录加进用户的 PATH（不用管理员权限）。 */
+async function installCLIWindows() {
+  const dir = path.dirname(davinciBin)
+  const q = (v) => `'${v.replace(/'/g, "''")}'`
+  const ps =
+    `$d = ${q(dir)}; $p = [Environment]::GetEnvironmentVariable('Path', 'User'); if (-not $p) { $p = '' }; ` +
+    `if (($p -split ';') -notcontains $d) { [Environment]::SetEnvironmentVariable('Path', (($p.TrimEnd(';') + ';' + $d).TrimStart(';')), 'User') }`
+  try {
+    await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps])
+  } catch (e) {
+    dialog.showErrorBox('没装上 davinci 命令', String(e.message || e))
+    return
+  }
+  await dialog.showMessageBox({
+    message: '装好了 davinci 命令',
+    detail: `已把 ${dir} 加进你的 PATH。新开一个终端（Agent 也要重新打开）后输入 davinci projects 试试。`,
+  })
+}
+
 /** 像 VS Code 的「在 PATH 中安装 code 命令」：/usr/local/bin/davinci → App 里的命令。 */
 async function installCLI() {
+  if (isWin) return installCLIWindows()
   const dest = '/usr/local/bin/davinci'
   const current = linkTarget(dest)
   if (current === davinciBin) {
@@ -232,7 +263,7 @@ async function installSkill() {
     if (exists(claude) && !(await okToReplace(claude, current))) return
     fs.mkdirSync(path.dirname(claude), { recursive: true })
     fs.rmSync(claude, { force: true })
-    fs.symlinkSync(skillDir, claude)
+    linkDir(skillDir, claude)
   }
   const done = ['Claude Code']
   for (const [agent, dir] of [
@@ -244,7 +275,7 @@ async function installSkill() {
     if (exists(link) && linkTarget(link) === null) continue // 用户自己放的，不动
     fs.mkdirSync(path.dirname(link), { recursive: true })
     fs.rmSync(link, { force: true })
-    fs.symlinkSync('../../.claude/skills/davinci', link)
+    linkDir(skillDir, link, '../../.claude/skills/davinci')
     done.push(agent)
   }
   await dialog.showMessageBox({
@@ -256,15 +287,18 @@ async function installSkill() {
 // --- 菜单 -------------------------------------------------------------------
 
 function buildMenu() {
+  const install = [
+    { label: '安装命令行工具…', click: () => void installCLI() },
+    { label: '安装 Agent skill…', click: () => void installSkill() },
+  ]
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
-      {
+      ...(isWin ? [] : [{
         role: 'appMenu',
         submenu: [
           { role: 'about', label: '关于 davinci' },
           { type: 'separator' },
-          { label: '安装命令行工具…', click: () => void installCLI() },
-          { label: '安装 Agent skill…', click: () => void installSkill() },
+          ...install,
           { type: 'separator' },
           { role: 'hide', label: '隐藏 davinci' },
           { role: 'hideOthers', label: '隐藏其他' },
@@ -272,7 +306,7 @@ function buildMenu() {
           { type: 'separator' },
           { role: 'quit', label: '退出 davinci' },
         ],
-      },
+      }]),
       {
         label: '文件',
         submenu: [
@@ -282,7 +316,7 @@ function buildMenu() {
           { type: 'separator' },
           { label: '打开数据文件夹', click: () => shell.openPath(dataDir) },
           { type: 'separator' },
-          { role: 'close', label: '关闭窗口' },
+          isWin ? { role: 'quit', label: '退出' } : { role: 'close', label: '关闭窗口' },
         ],
       },
       // 文本框里的拷贝粘贴靠它；画布上的 ⌘Z、⌘C 由编辑器自己接住（它会 preventDefault）。
@@ -297,7 +331,7 @@ function buildMenu() {
           { role: 'togglefullscreen', label: '全屏' },
         ],
       },
-      { role: 'windowMenu', label: '窗口' },
+      isWin ? { label: '帮助', submenu: [...install, { type: 'separator' }, { role: 'about', label: '关于 davinci' }] } : { role: 'windowMenu', label: '窗口' },
     ]),
   )
 }
@@ -317,6 +351,10 @@ if (!app.requestSingleInstanceLock()) {
     if (link) openRoute(routeOf(link))
     else if (mainWindow && !mainWindow.isDestroyed()) mainWindow.focus()
   })
+
+  // Windows 用 davinci:// 链接启动 App 时，链接在命令行参数里。
+  const startLink = process.argv.find((a) => a.startsWith('davinci://'))
+  if (startLink) pendingRoute = routeOf(startLink)
 
   app.whenReady().then(async () => {
     buildMenu()

@@ -23,14 +23,6 @@
     ],
     "extraResources": [
       {
-        "from": "../bin/davinci",
-        "to": "bin/davinci"
-      },
-      {
-        "from": "../bin/davinci-cutout",
-        "to": "bin/davinci-cutout"
-      },
-      {
         "from": "../skills/davinci",
         "to": "skills/davinci"
       }
@@ -53,7 +45,40 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist"
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extraResources": [
+        {
+          "from": "../bin/davinci",
+          "to": "bin/davinci"
+        },
+        {
+          "from": "../bin/davinci-cutout",
+          "to": "bin/davinci-cutout"
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "extraResources": [
+        {
+          "from": "../bin/windows-amd64/davinci.exe",
+          "to": "bin/davinci.exe"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "davinci",
+      "artifactName": "${productName}-${version}-setup-${arch}.${ext}"
     }
   },
   "devDependencies": {

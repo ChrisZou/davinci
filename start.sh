@@ -11,6 +11,7 @@
 #   ./start.sh app-dev        开发时直接用 Electron 打开桌面版（用仓库里构建的 davinci）
 #   ./start.sh dmg            打包成可安装的 DMG → app/dist/release/（本机构建，未签名）
 #   ./start.sh release        签名 + 公证的 DMG（发给别人用）；先存好公证凭证，见 README「桌面版」
+#   ./start.sh win            打包 Windows 安装包（x64，未签名）→ app/dist/release/
 #   ./start.sh test           go vet、go test 和前端类型检查
 #   ./start.sh clean          删掉构建产物
 #
@@ -102,6 +103,17 @@ case "${1:-}" in
     install_cli
     ./skills/install.sh
     ;;
+  win)
+    build_web
+    need go "https://go.dev/dl/"
+    version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+    # 纯 Go（SQLite 也是），直接交叉编译。
+    GOOS=windows GOARCH=amd64 go build -ldflags "-s -w -X main.version=$version" -o bin/windows-amd64/davinci.exe ./cmd/davinci
+    echo "已构建 bin/windows-amd64/davinci.exe（${version}）"
+    (cd app && { [ -d node_modules ] || pnpm install --silent; })
+    (cd app && pnpm exec electron-builder --win nsis --x64 -c.directories.output=dist/release)
+    ls -lh app/dist/release/*setup*.exe
+    ;;
   release)
     [ "$(uname)" = Darwin ] || { echo "桌面版目前只支持 macOS" >&2; exit 1; }
     # 公证凭证存在钥匙串里（xcrun notarytool store-credentials），这里只用它的名字。
@@ -155,7 +167,7 @@ case "${1:-}" in
     find web/dist -mindepth 1 ! -name .gitkeep -exec rm -rf {} +
     ;;
   -h | --help | help)
-    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   "" | -*)
     build

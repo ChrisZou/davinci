@@ -62,6 +62,17 @@ func systemFontDirs() []string {
 		filepath.Join(home, ".local", "share", "fonts"),
 		"/Library/Fonts",
 	}
+	if runtime.GOOS == "windows" {
+		// Fonts installed for this user only, then the system's (微软雅黑, 等线, 宋体 …).
+		if v := os.Getenv("LOCALAPPDATA"); v != "" {
+			dirs = append(dirs, filepath.Join(v, "Microsoft", "Windows", "Fonts"))
+		}
+		windir := os.Getenv("WINDIR")
+		if windir == "" {
+			windir = `C:\Windows`
+		}
+		return append(dirs, filepath.Join(windir, "Fonts"))
+	}
 	if runtime.GOOS == "darwin" {
 		dirs = append(dirs,
 			"/System/Library/Fonts",

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -88,6 +89,10 @@ func newServeCmd() *cobra.Command {
 // openBrowser opens the local editor in the user's browser. Failures are silent
 // because the server prints the URL anyway.
 func openBrowser(url string) {
+	if runtime.GOOS == "windows" {
+		_ = execRun("rundll32", "url.dll,FileProtocolHandler", url)
+		return
+	}
 	for _, bin := range []string{"open", "xdg-open"} {
 		if _, err := execLookPath(bin); err == nil {
 			_ = execRun(bin, url)
