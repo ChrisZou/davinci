@@ -3,6 +3,7 @@ import { api } from '../api'
 import type { Board, Document, Layer, LayerRow, ProjectDoc } from '../types'
 import { navigate } from '../App'
 import { Session, type SaveState } from '../editor/bridge'
+import { IS_MAC, keys as shortcut } from '../editor/keys'
 import { loadFonts } from '../editor/fonts'
 import {
   applyPaste,
@@ -478,10 +479,10 @@ export function Editor({ projectID }: { projectID: string }) {
                 />
 
                 <div className="island absolute right-5 top-4 flex h-[52px] items-center gap-0.5 pl-1.5 pr-2">
-                  <button className="icon-btn" disabled={!session.canUndo} title="撤销 ⌘Z" aria-label="撤销" onClick={() => void run({ type: 'undo' })}>
+                  <button className="icon-btn" disabled={!session.canUndo} title={shortcut('撤销 ⌘Z')} aria-label="撤销" onClick={() => void run({ type: 'undo' })}>
                     <Icon d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" />
                   </button>
-                  <button className="icon-btn" disabled={!session.canRedo} title="重做 ⇧⌘Z" aria-label="重做" onClick={() => void run({ type: 'redo' })}>
+                  <button className="icon-btn" disabled={!session.canRedo} title={shortcut('重做 ⇧⌘Z')} aria-label="重做" onClick={() => void run({ type: 'redo' })}>
                     <Icon d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" />
                   </button>
                   <ExportMenu doc={doc} name={name} editor={session.editor} selected={selected} onLog={addLog} />
@@ -832,7 +833,7 @@ function ToolDock({
             key={t.tool}
             label={t.label}
             icon={<Icon d={t.icon} />}
-            title="添加图片（也可以拖进画布或 ⌘V 粘贴）"
+            title={shortcut('添加图片（也可以拖进画布或 ⌘V 粘贴）')}
             testId="image-tool"
             items={[
               { label: '从素材库选择', libraryToggle: true, onClick: () => !libraryOpen && onToggleLibrary() },
@@ -979,7 +980,7 @@ function ZoomPill({ zoom, editor, onHelp }: { zoom: number; editor: import('../e
       }}
     >
       <span>{label}</span>
-      <span className="text-xs text-faint">{keys}</span>
+      <span className="text-xs text-faint">{shortcut(keys)}</span>
     </button>
   )
 
@@ -1114,7 +1115,7 @@ function ContextMenu({
     try {
       if (!applyPaste(editor, host, await readClipboard())) onLog('✗ 剪贴板里没有能粘贴的内容')
     } catch (e: any) {
-      onLog(`✗ 读取剪贴板失败：${e?.message ?? e}（可以直接按 ⌘V）`)
+      onLog(shortcut(`✗ 读取剪贴板失败：${e?.message ?? e}（可以直接按 ⌘V）`))
     }
   }
   const z = (type: ZMove) => act(() => host.run(zOrderCommand(editor, ids, type)))
@@ -1181,7 +1182,7 @@ function ContextMenu({
         ) : (
           <button key={e.label} role="menuitem" disabled={e.disabled} className={`menu-item ${e.danger ? 'text-accent' : ''}`} onClick={e.run}>
             <span>{e.label}</span>
-            {e.keys && <span className="text-xs text-faint">{e.keys}</span>}
+            {e.keys && <span className="text-xs text-faint">{shortcut(e.keys)}</span>}
           </button>
         ),
       )}
@@ -1254,7 +1255,7 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
               <dl className="flex flex-col gap-1.5 text-[13px]">
                 {list.map(([k, v]) => (
                   <div key={k} className="flex gap-3">
-                    <dt className="w-32 shrink-0 text-ink">{k}</dt>
+                    <dt className={`${IS_MAC ? 'w-32' : 'w-44'} shrink-0 text-ink`}>{shortcut(k)}</dt>
                     <dd className="text-muted">{v}</dd>
                   </div>
                 ))}

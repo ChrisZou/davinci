@@ -5,6 +5,7 @@ import { presets } from '../editor/presets'
 import { textPresets, type TextPreset } from '../editor/textPresets'
 import { parseStroke, parseShadow } from '../editor/style'
 import { DEFAULT_SHEAR, SHEAR, WARPS, warpShape } from '../editor/warp'
+import { keys } from '../editor/keys'
 import { ColorField, NumField, Section, Segmented, Select, Slider, Switch, Toggle } from './fields'
 
 /**
@@ -583,7 +584,7 @@ function CanvasSection({ doc, onRun, onUpload }: PanelProps) {
         />
       </Section>
       <p className="px-5 py-5 text-xs leading-relaxed text-faint">
-        点选图层即可编辑，按住 ⇧ 或 ⌘ 可多选。图片可以直接拖进画布或 ⌘V 粘贴，按 ? 查看全部快捷键。
+        {keys('点选图层即可编辑，按住 ⇧ 或 ⌘ 可多选。图片可以直接拖进画布或 ⌘V 粘贴，按 ? 查看全部快捷键。')}
       </p>
     </>
   )
@@ -640,7 +641,7 @@ function MultiSection({ selection, onRun, onRunSelect }: PanelProps) {
       <Section title="操作">
         <Grid2>
           <button className="chip" onClick={() => onRunSelect({ type: 'groupLayers', ids })}>
-            编组 <span className="text-faint">⌘G</span>
+            编组 <span className="text-faint">{keys('⌘G')}</span>
           </button>
           {groups.length > 0 ? (
             <button className="chip" onClick={() => onRunSelect({ type: 'batch', commands: groups.map((g) => ({ type: 'ungroupLayers', id: g.id })) })}>
@@ -648,7 +649,7 @@ function MultiSection({ selection, onRun, onRunSelect }: PanelProps) {
             </button>
           ) : (
             <button className="chip" onClick={() => onRunSelect({ type: 'batch', commands: ids.map((id) => ({ type: 'duplicateLayer', id })) })}>
-              复制 <span className="text-faint">⌘D</span>
+              复制 <span className="text-faint">{keys('⌘D')}</span>
             </button>
           )}
         </Grid2>
@@ -705,16 +706,16 @@ function LayerSection(props: PanelProps & { layer: Layer }) {
       {/* Lowest on the left, highest on the right, like the stack itself. */}
       <Section title="层级">
         <div className="grid grid-cols-4 gap-1.5">
-          <button className="chip px-0" disabled={bottom} title="⇧⌘[" onClick={() => onRun({ type: 'sendToBack', id: layer.id })}>
+          <button className="chip px-0" disabled={bottom} title={keys('⇧⌘[')} onClick={() => onRun({ type: 'sendToBack', id: layer.id })}>
             置底
           </button>
-          <button className="chip px-0" disabled={bottom} title="⌘[" onClick={() => onRun({ type: 'sendBackward', id: layer.id })}>
+          <button className="chip px-0" disabled={bottom} title={keys('⌘[')} onClick={() => onRun({ type: 'sendBackward', id: layer.id })}>
             下移
           </button>
-          <button className="chip px-0" disabled={top} title="⌘]" onClick={() => onRun({ type: 'bringForward', id: layer.id })}>
+          <button className="chip px-0" disabled={top} title={keys('⌘]')} onClick={() => onRun({ type: 'bringForward', id: layer.id })}>
             上移
           </button>
-          <button className="chip px-0" disabled={top} title="⇧⌘]" onClick={() => onRun({ type: 'bringToFront', id: layer.id })}>
+          <button className="chip px-0" disabled={top} title={keys('⇧⌘]')} onClick={() => onRun({ type: 'bringToFront', id: layer.id })}>
             置顶
           </button>
         </div>
@@ -728,7 +729,7 @@ function LayerSection(props: PanelProps & { layer: Layer }) {
         <Section title="编组">
           <p className="text-xs leading-relaxed text-muted">这几个图层作为一个整体移动、缩放、旋转。要单独改其中某个，先解散。</p>
           <button className="chip" onClick={() => props.onRunSelect({ type: 'ungroupLayers', id: layer.id })}>
-            解散编组 <span className="text-faint">⇧⌘G</span>
+            解散编组 <span className="text-faint">{keys('⇧⌘G')}</span>
           </button>
         </Section>
       )}
@@ -775,7 +776,7 @@ function LayerSection(props: PanelProps & { layer: Layer }) {
 
       <div className="flex gap-2 px-5 py-5">
         <button className="chip flex-1" onClick={() => props.onRunSelect({ type: 'duplicateLayer', id: layer.id })}>
-          复制 <span className="text-faint">⌘D</span>
+          复制 <span className="text-faint">{keys('⌘D')}</span>
         </button>
         <button className="chip flex-1 text-accent" onClick={() => onRun({ type: 'removeLayer', id: layer.id })}>
           删除 <span className="text-accent/60">⌫</span>

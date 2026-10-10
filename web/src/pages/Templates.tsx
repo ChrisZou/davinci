@@ -3,6 +3,7 @@ import { api, type ProjectSummary, type TagCount } from '../api'
 import { navigate } from '../App'
 import { ConfirmDialog, Modal } from '../components/Dialog'
 import { Lockup } from '../components/Brand'
+import { keys } from '../editor/keys'
 
 /**
  * The template library: projects kept as references rather than works. Each
@@ -164,7 +165,7 @@ export function Templates() {
         <button
           className="btn-primary"
           disabled={uploading > 0}
-          title="也可以直接把图片拖进来，或者 ⌘V 粘贴"
+          title={keys('也可以直接把图片拖进来，或者 ⌘V 粘贴')}
           onClick={() => fileRef.current?.click()}
           data-testid="template-upload"
         >
@@ -209,7 +210,7 @@ export function Templates() {
           {templates === null && <p className="text-sm text-faint">载入中……</p>}
           {templates?.length === 0 && (
             <p className="rounded-2xl border border-dashed border-line-strong px-6 py-14 text-center text-sm leading-relaxed text-muted">
-              {query || tag ? '没有匹配的模板。' : '模板库还是空的。看到喜欢的封面，存下来拖进这里，或者复制图片后按 ⌘V；自己的作品也可以在首页移进来。'}
+              {query || tag ? '没有匹配的模板。' : keys('模板库还是空的。看到喜欢的封面，存下来拖进这里，或者复制图片后按 ⌘V；自己的作品也可以在首页移进来。')}
               <br />
               也可以在 Claude Code 里用 <code className="rounded bg-paper-deep px-1.5 py-0.5 text-xs">davinci tpl add</code> 收藏。
             </p>
