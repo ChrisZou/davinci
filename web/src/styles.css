@@ -66,6 +66,9 @@ canvas {
   inset: 0 0 auto 0;
   height: 52px;
   -webkit-app-region: drag;
+  /* Painted first, so the clickable things painted after it (a header's logo,
+     search box, buttons — not only the positioned islands) cut themselves out. */
+  z-index: -1;
 }
 .desktop-mac :is(button, a, input, textarea, select, label, [role='button'], [role='menu'], [role='dialog'], .island, .menu) {
   -webkit-app-region: no-drag;
