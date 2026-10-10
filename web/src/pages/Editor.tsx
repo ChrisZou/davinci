@@ -770,6 +770,7 @@ function CopyLink({ projectID, board, onLog }: { projectID: string; board?: stri
       </button>
       <span
         role="status"
+        aria-hidden={!copied}
         className={`pointer-events-none absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap rounded-full bg-ink px-3 py-1.5 text-xs font-bold text-card shadow-[var(--shadow-float)] transition-opacity duration-200 ${copied ? 'opacity-100' : 'opacity-0'}`}
         data-testid="copy-link-done"
       >
