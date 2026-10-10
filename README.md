@@ -9,12 +9,9 @@
 
 ## 下载桌面版
 
-最省事的用法：装桌面版 App，不用另装 Go、Node 或 Python。到 [Releases](https://github.com/ChrisZou/davinci/releases/latest) 下载：
+到 [Releases](https://github.com/ChrisZou/davinci/releases/latest) 下载对应操作系统的版本进行安装。
 
-| 系统 | 文件 | 说明 |
-|---|---|---|
-| macOS（Apple 芯片，macOS 14+） | `davinci-<版本>-arm64.dmg` | 已签名并经 Apple 公证。打开后把 davinci 拖进「应用程序」 |
-| Windows（64 位） | `davinci-<版本>-setup-x64.exe` | 双击安装，装在当前用户下，不用管理员权限。安装包还没签名，Windows 提示「Windows 已保护你的电脑」时点「更多信息 → 仍要运行」 |
+注意：Windows版本安装包没有签名，安装过程中会提示「Windows 已保护你的电脑」，点击「更多信息 → 仍要运行」即可。
 
 装好后：
 
@@ -22,8 +19,6 @@
 2. 再点「安装 Agent skill…」，装给 Claude Code、Codex、Hermes。
 3. 新开一个 Agent 会话，说“做一张小红书封面，标题是……”。Agent 改的每一个图层都实时出现在 App 里。
    编辑器左上角的链接按钮会复制当前设计稿和画板的链接，发给 Agent，它就知道你说的是哪一张。
-
-数据放在 `~/Library/Application Support/davinci`（Windows：`%APPDATA%\davinci`）。
 
 ## 从源码运行
 
@@ -102,47 +97,11 @@ Claude Code、Codex、Hermes 这些 AI Agent。
   </tbody>
 </table>
 
-## 打包桌面版
-
-桌面版是 Electron 外壳加同一个 davinci 服务（`app/`），在 Mac 上打包：
-
-| 命令 | 产物 |
-|---|---|
-| `./start.sh app` | `app/dist/mac-arm64/davinci.app`，本机用，未签名 |
-| `./start.sh app-dev` | 不打包，直接用 Electron 打开（用仓库里构建的 davinci 和 `data/`） |
-| `./start.sh dmg` | `app/dist/release/davinci-<版本>-arm64.dmg`，未签名 |
-| `./start.sh release` | 同上，签名并经 Apple 公证，发给别人用 |
-| `./start.sh win` | `app/dist/release/davinci-<版本>-setup-x64.exe`，Windows 安装包，未签名 |
-
-没签名的 Mac 包在别人电脑上会被系统拦下（提示「已损坏」）。`release` 用钥匙串里的 Developer ID 证书签名，再交给 Apple 公证，第一次之前：
-
-1. 在 [appleid.apple.com](https://appleid.apple.com) →「登录与安全」→「App 专用密码」生成一个密码（这个 Apple ID 要在开发者团队里，团队要已同意最新的开发者协议）。
-2. 在终端把公证凭证存进钥匙串（会提示输入上一步的密码）：
-   `xcrun notarytool store-credentials davinci-notary --apple-id <Apple ID> --team-id <团队 ID>`
-3. 之后每次 `./start.sh release` 就行。签名时系统问「codesign 想使用钥匙串中的密钥」，点「始终允许」。
-
-发新版本前改 `app/package.json` 里的 `version`。
-
-## 给 AI 用
+## 给AI用的接口说明
 
 本项目提供了 CLI 和 REST API，使用这两种方式的效果是一样的，具体的命令和接口说明见 [docs/COMMANDS.md](docs/COMMANDS.md)、[docs/API.md](docs/API.md)、
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
-## 目录
-
-```
-cmd/davinci/        CLI 入口
-cmd/davinci-cutout/ macOS 主体抠图小工具（Vision；没装 rembg 时「去除背景」用它）
-app/                桌面版：Electron 外壳（main.js）与打包配置
-internal/doc/       文档模型与命令层（撤销历史也在这里）
-internal/render/    服务端渲染进程（Node + CanvasKit）的管理
-internal/server/    Echo + SQLite、WS 推送、资产、字体
-internal/cli/       cobra 薄封装（HTTP 客户端）
-web/                React 界面 + CanvasKit 画布；web/src/render 是共享渲染器
-docs/               接口、命令与架构文档
-```
-
-数据默认在仓库里的 `data/`（`davinci.db` + `assets/` + `fonts/`，已被 git 忽略）。
 
 ## 常见问题
 
@@ -155,7 +114,6 @@ docs/               接口、命令与架构文档
 - **去除背景**：macOS 上开箱即用（系统自带的主体抠图）。想要头发边缘更细的效果，另装 [rembg](https://github.com/danielgatis/rembg)
   并用 BiRefNet 作为 backend，装了就自动改用它：直接跟你的 Agent 说“帮我安装 rembg，并用 BiRefNet 作为 backend”即可。
   Windows 没有系统自带的主体抠图，要用去除背景就得装 rembg。
-- **Windows**：直接用桌面版最省事；从源码运行时，`start.sh` 是 bash 脚本，请在 WSL 或 Git Bash 里运行。
 
 ## 许可证
 
