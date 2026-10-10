@@ -9,6 +9,7 @@
 #   ./start.sh skill          给 AI Agent 装 skill：构建、链接 davinci 命令，再装给 Claude Code / Codex / Hermes
 #   ./start.sh app            打包 macOS 桌面版 → app/dist/mac-arm64/davinci.app（本机用，未签名）
 #   ./start.sh app-dev        开发时直接用 Electron 打开桌面版（用仓库里构建的 davinci）
+#   ./start.sh dmg            打包成可安装的 DMG → app/dist/release/（本机构建，未签名）
 #   ./start.sh test           go vet、go test 和前端类型检查
 #   ./start.sh clean          删掉构建产物
 #
@@ -100,12 +101,16 @@ case "${1:-}" in
     install_cli
     ./skills/install.sh
     ;;
-  app | app-dev)
+  app | app-dev | dmg)
     [ "$(uname)" = Darwin ] || { echo "桌面版目前只支持 macOS" >&2; exit 1; }
     build
     (cd app && { [ -d node_modules ] || pnpm install --silent; })
     if [ "$1" = app-dev ]; then
       (cd app && pnpm exec electron .)
+    elif [ "$1" = dmg ]; then
+      # 单独的输出目录：不碰 app/dist/mac-*/ 里可能正开着的那份 App。
+      (cd app && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --mac dmg -c.directories.output=dist/release)
+      ls -lh app/dist/release/*.dmg
     else
       # 不自动找证书签名：签名会弹钥匙串授权，正式发布时再签名、公证。
       (cd app && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --mac dir)
@@ -123,7 +128,7 @@ case "${1:-}" in
     find web/dist -mindepth 1 ! -name .gitkeep -exec rm -rf {} +
     ;;
   -h | --help | help)
-    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   "" | -*)
     build
