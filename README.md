@@ -7,7 +7,25 @@
 
 ![每一个图层，AI 都能直接控制](docs/images/every-layer-ai.jpg)
 
-## 快速开始
+## 下载桌面版
+
+最省事的用法：装桌面版 App，不用另装 Go、Node 或 Python。到 [Releases](https://github.com/ChrisZou/davinci/releases/latest) 下载：
+
+| 系统 | 文件 | 说明 |
+|---|---|---|
+| macOS（Apple 芯片，macOS 14+） | `davinci-<版本>-arm64.dmg` | 已签名并经 Apple 公证。打开后把 davinci 拖进「应用程序」 |
+| Windows（64 位） | `davinci-<版本>-setup-x64.exe` | 双击安装，装在当前用户下，不用管理员权限。安装包还没签名，Windows 提示「Windows 已保护你的电脑」时点「更多信息 → 仍要运行」 |
+
+装好后：
+
+1. 菜单里点「安装命令行工具…」（macOS 在「davinci」菜单；Windows 按 Alt 调出菜单，在「帮助」里），把 `davinci` 命令装上，Agent 靠它干活。
+2. 再点「安装 Agent skill…」，装给 Claude Code、Codex、Hermes。
+3. 新开一个 Agent 会话，说“做一张小红书封面，标题是……”。Agent 改的每一个图层都实时出现在 App 里。
+   编辑器左上角的链接按钮会复制当前设计稿和画板的链接，发给 Agent，它就知道你说的是哪一张。
+
+数据放在 `~/Library/Application Support/davinci`（Windows：`%APPDATA%\davinci`）。
+
+## 从源码运行
 
 需要先装好 **Go 1.26+**、**Node 20+** 和 **pnpm**。
 
@@ -84,37 +102,26 @@ Claude Code、Codex、Hermes 这些 AI Agent。
   </tbody>
 </table>
 
-## 桌面版（macOS）
+## 打包桌面版
 
-```bash
-./start.sh app
-```
+桌面版是 Electron 外壳加同一个 davinci 服务（`app/`），在 Mac 上打包：
 
-打包出 `app/dist/mac-arm64/davinci.app`（Electron 外壳 + 同一个 davinci 服务，本机构建，未签名）。双击打开就能用，
-不需要另装 Go、Node 或 Python：
+| 命令 | 产物 |
+|---|---|
+| `./start.sh app` | `app/dist/mac-arm64/davinci.app`，本机用，未签名 |
+| `./start.sh app-dev` | 不打包，直接用 Electron 打开（用仓库里构建的 davinci 和 `data/`） |
+| `./start.sh dmg` | `app/dist/release/davinci-<版本>-arm64.dmg`，未签名 |
+| `./start.sh release` | 同上，签名并经 Apple 公证，发给别人用 |
+| `./start.sh win` | `app/dist/release/davinci-<版本>-setup-x64.exe`，Windows 安装包，未签名 |
 
-- 数据放在 `~/Library/Application Support/davinci`，和仓库里的 `data/` 互不影响。
-- 菜单「davinci → 安装命令行工具…」把 `davinci` 命令装到 `/usr/local/bin`，「安装 Agent skill…」装给
-  Claude Code / Codex / Hermes。之后 Agent 改的每一个图层都实时出现在 App 里。
-- `davinci://p_xxx?b=画板` 这样的链接直接在 App 里打开到对应画板。
-- 去除背景：没装 rembg 时用 macOS 自带的主体抠图（需要 macOS 14+），不用下载模型。
+没签名的 Mac 包在别人电脑上会被系统拦下（提示「已损坏」）。`release` 用钥匙串里的 Developer ID 证书签名，再交给 Apple 公证，第一次之前：
 
-开发时用 `./start.sh app-dev` 直接以 Electron 打开（用仓库里构建的 davinci 和 `data/`）。
-
-**Windows**：在 Mac 上执行 `./start.sh win`，打出 `app/dist/release/davinci-<版本>-setup-x64.exe`。
-
-- 装在当前用户下，不用管理员权限；数据在 `%APPDATA%\davinci`。
-- 菜单（按 Alt 显示）「帮助 → 安装命令行工具…」把 `davinci` 加进 PATH，「安装 Agent skill…」装给 Claude Code 等。
-- 去除背景要另装 rembg（Windows 没有系统自带的主体抠图）。
-- 安装包还没签名：安装时 Windows 会提示「Windows 已保护你的电脑」，点「更多信息 → 仍要运行」。
-
-**发给别人用**（macOS）：没签名的包在别人电脑上会被系统拦下（提示「已损坏」）。用 Developer ID 证书签名并交给 Apple 公证：
-
-1. 在 [appleid.apple.com](https://appleid.apple.com) →「登录与安全」→「App 专用密码」生成一个密码（这个 Apple ID 要在开发者团队里）。
+1. 在 [appleid.apple.com](https://appleid.apple.com) →「登录与安全」→「App 专用密码」生成一个密码（这个 Apple ID 要在开发者团队里，团队要已同意最新的开发者协议）。
 2. 在终端把公证凭证存进钥匙串（会提示输入上一步的密码）：
    `xcrun notarytool store-credentials davinci-notary --apple-id <Apple ID> --team-id <团队 ID>`
-3. `./start.sh release`：签名、公证，输出 `app/dist/release/davinci-<版本>-arm64.dmg`。签名时系统问
-   「codesign 想使用钥匙串中的密钥」，点「始终允许」。
+3. 之后每次 `./start.sh release` 就行。签名时系统问「codesign 想使用钥匙串中的密钥」，点「始终允许」。
+
+发新版本前改 `app/package.json` 里的 `version`。
 
 ## 给 AI 用
 
@@ -141,12 +148,14 @@ docs/               接口、命令与架构文档
 
 - **端口**：默认 7789，被占用时自动换一个空闲端口；实际地址写在数据目录的 `server.json` 里，`davinci` 命令会自己找到。
   一定要用某个端口时指定 `./start.sh --port 7790`（被占用就报错，不会换）。
-- **数据**：项目、素材和上传的字体都放在仓库里的 `data/`（已被 git 忽略），第一次启动时自动创建。
+- **数据**：从源码运行时，项目、素材和上传的字体都放在仓库里的 `data/`（已被 git 忽略），第一次启动时自动创建；
+  桌面版放在 `~/Library/Application Support/davinci`（Windows：`%APPDATA%\davinci`），两边互不影响。
 - **中文字体**：macOS 自带的字体就够用；精简的 Linux 要先装中文字体，否则中文显示不出来，
   比如 `sudo apt install fonts-noto-cjk`。自己的字体可以用 `davinci font add <文件>` 加进来。
 - **去除背景**：macOS 上开箱即用（系统自带的主体抠图）。想要头发边缘更细的效果，另装 [rembg](https://github.com/danielgatis/rembg)
   并用 BiRefNet 作为 backend，装了就自动改用它：直接跟你的 Agent 说“帮我安装 rembg，并用 BiRefNet 作为 backend”即可。
-- **Windows**：`start.sh` 是 bash 脚本，请在 WSL 或 Git Bash 里运行。
+  Windows 没有系统自带的主体抠图，要用去除背景就得装 rembg。
+- **Windows**：直接用桌面版最省事；从源码运行时，`start.sh` 是 bash 脚本，请在 WSL 或 Git Bash 里运行。
 
 ## 许可证
 

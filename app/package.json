@@ -1,7 +1,7 @@
 {
   "name": "davinci-app",
   "productName": "davinci",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "davinci 桌面版：AI Native 的本地图片编辑器",
   "main": "main.js",
