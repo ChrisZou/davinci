@@ -3,6 +3,7 @@ import { api, type CanvasPreset, type ProjectSummary } from '../api'
 import { navigate } from '../App'
 import { ConfirmDialog, Modal } from '../components/Dialog'
 import { Lockup } from '../components/Brand'
+import { Onboarding } from '../components/Onboarding'
 
 /**
  * The home page: a row of canvas sizes to start from (one click creates the
@@ -91,6 +92,7 @@ export function Home() {
 
   return (
     <div className="relative h-full overflow-y-auto bg-paper">
+      <Onboarding />
       {/* Places to go, top right — the same floating island the editor uses. */}
       <nav aria-label="导航" className="absolute right-5 top-4 z-10">
         <a

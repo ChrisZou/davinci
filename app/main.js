@@ -4,7 +4,7 @@
 // 这里只做外壳该做的事：把服务拉起来、开窗口、接住 davinci:// 链接，
 // 以及把 davinci 命令和 Agent skill 装到这台电脑上——AI 正是通过它们操作每一个图层。
 
-const { app, BrowserWindow, Menu, dialog, shell } = require('electron')
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require('electron')
 const { spawn, execFile } = require('child_process')
 const fs = require('fs')
 const http = require('http')
@@ -135,6 +135,8 @@ function windowOptions() {
     autoHideMenuBar: isWin,
     // macOS 不要单独的标题栏：页面铺到窗口顶上。
     ...(isMac ? { titleBarStyle: 'hidden', trafficLightPosition: TRAFFIC_LIGHTS } : {}),
+    // 首页的引导要用的几样（装命令行工具、装 skill）由它交给页面。
+    webPreferences: { preload: path.join(__dirname, 'preload.js') },
   }
 }
 
@@ -226,6 +228,15 @@ async function okToReplace(where, current) {
   return response === 0
 }
 
+// 安装的结果是 { ok, message, detail }（取消了就是 { ok: false }，没有 message）。从菜单装，结果用
+// 对话框告诉人；从首页的引导里装，结果交给页面显示。
+
+function report(result) {
+  if (result.ok) void dialog.showMessageBox({ message: result.message, detail: result.detail })
+  else if (result.message) dialog.showErrorBox(result.message, result.detail ?? '')
+  return result
+}
+
 /** Windows：把 App 里命令所在的目录加进用户的 PATH（不用管理员权限）。 */
 async function installCLIWindows() {
   const dir = path.dirname(davinciBin)
@@ -236,13 +247,9 @@ async function installCLIWindows() {
   try {
     await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps])
   } catch (e) {
-    dialog.showErrorBox('没装上 davinci 命令', String(e.message || e))
-    return
+    return { ok: false, message: '没装上davinci命令', detail: String(e.message || e) }
   }
-  await dialog.showMessageBox({
-    message: '装好了 davinci 命令',
-    detail: `已把 ${dir} 加进你的 PATH。新开一个终端（Agent 也要重新打开）后输入 davinci projects 试试。`,
-  })
+  return { ok: true, message: '装好了davinci命令', detail: '新开一个终端（Agent也要重新打开）才能用。' }
 }
 
 /** 像 VS Code 的「在 PATH 中安装 code 命令」：/usr/local/bin/davinci → App 里的命令。 */
@@ -250,11 +257,8 @@ async function installCLI() {
   if (isWin) return installCLIWindows()
   const dest = '/usr/local/bin/davinci'
   const current = linkTarget(dest)
-  if (current === davinciBin) {
-    await dialog.showMessageBox({ message: 'davinci 命令已经装好了', detail: `${dest} → ${davinciBin}` })
-    return
-  }
-  if (exists(dest) && !(await okToReplace(dest, current))) return
+  if (current === davinciBin) return { ok: true, message: 'davinci命令已经装好了', detail: `${dest} → ${davinciBin}` }
+  if (exists(dest) && !(await okToReplace(dest, current))) return { ok: false }
   try {
     fs.mkdirSync(path.dirname(dest), { recursive: true })
     fs.rmSync(dest, { force: true })
@@ -266,8 +270,9 @@ async function installCLI() {
     try {
       await run('/usr/bin/osascript', ['-e', `do shell script ${JSON.stringify(sh)} with administrator privileges`])
     } catch (e) {
-      dialog.showErrorBox('没装上 davinci 命令', String(e.message || e))
-      return
+      // 在系统的输密码窗口里点了取消：不算出错。
+      if (/User canceled|-128/.test(String(e.message))) return { ok: false }
+      return { ok: false, message: '没装上davinci命令', detail: String(e.message || e) }
     }
   }
   // 终端里的 PATH 可能先找到别的 davinci（比如开发用的那个）。
@@ -277,9 +282,9 @@ async function installCLI() {
   } catch {}
   const detail =
     found && found !== dest
-      ? `${dest} → App 里的命令。\n\n注意：你的终端会先找到 ${found}，Agent 用的会是那一个。`
-      : `${dest} → App 里的命令。在终端里输入 davinci projects 试试。`
-  await dialog.showMessageBox({ message: '装好了 davinci 命令', detail })
+      ? `${dest} → App里的命令。注意：你的终端会先找到 ${found}，Agent用的会是那一个。`
+      : `${dest} → App里的命令。`
+  return { ok: true, message: '装好了davinci命令', detail }
 }
 
 /** 给 Claude Code（以及有的话 Codex、Hermes）装 davinci skill，做法和仓库里的 skills/install.sh 一样。 */
@@ -290,13 +295,16 @@ async function installSkill() {
   if (current !== skillDir) {
     if (exists(claude) && current === null) {
       // 用户自己放的 skill 文件夹：不删，和 skills/install.sh 一样跳过。
-      await dialog.showMessageBox({ message: `${claude} 是一个文件夹，不是链接，没有覆盖它` })
-      return
+      return { ok: false, message: '没有覆盖已有的skill', detail: `${claude} 是一个文件夹，不是链接。` }
     }
-    if (exists(claude) && !(await okToReplace(claude, current))) return
-    fs.mkdirSync(path.dirname(claude), { recursive: true })
-    fs.rmSync(claude, { force: true })
-    linkDir(skillDir, claude)
+    if (exists(claude) && !(await okToReplace(claude, current))) return { ok: false }
+    try {
+      fs.mkdirSync(path.dirname(claude), { recursive: true })
+      fs.rmSync(claude, { force: true })
+      linkDir(skillDir, claude)
+    } catch (e) {
+      return { ok: false, message: '没装上davinci skill', detail: String(e.message || e) }
+    }
   }
   const done = ['Claude Code']
   for (const [agent, dir] of [
@@ -306,23 +314,42 @@ async function installSkill() {
     if (!exists(path.join(home, dir))) continue
     const link = path.join(home, dir, 'skills', 'davinci')
     if (exists(link) && linkTarget(link) === null) continue // 用户自己放的，不动
-    fs.mkdirSync(path.dirname(link), { recursive: true })
-    fs.rmSync(link, { force: true })
-    linkDir(skillDir, link, '../../.claude/skills/davinci')
-    done.push(agent)
+    try {
+      fs.mkdirSync(path.dirname(link), { recursive: true })
+      fs.rmSync(link, { force: true })
+      linkDir(skillDir, link, '../../.claude/skills/davinci')
+      done.push(agent)
+    } catch {}
   }
-  await dialog.showMessageBox({
-    message: `装好了 davinci skill：${done.join('、')}`,
-    detail: '新开一个 Agent 会话，跟它说「做一张小红书封面」就行。Agent 还需要 davinci 命令（菜单里的「安装命令行工具」）。',
-  })
+  return { ok: true, message: `装好了davinci skill：${done.join('、')}`, detail: `已装给${done.join('、')}。` }
 }
+
+/** 首页的引导用：两样是不是已经装好了。 */
+async function setupStatus() {
+  let cli = false
+  if (isWin) {
+    try {
+      const p = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', "[Environment]::GetEnvironmentVariable('Path', 'User')"])
+      const dir = path.dirname(davinciBin).toLowerCase()
+      cli = p.split(';').some((d) => d.trim().replace(/[\\/]$/, '').toLowerCase() === dir)
+    } catch {}
+  } else {
+    cli = linkTarget('/usr/local/bin/davinci') === davinciBin
+  }
+  const skill = linkTarget(path.join(os.homedir(), '.claude', 'skills', 'davinci')) === skillDir
+  return { cli, skill }
+}
+
+ipcMain.handle('setup:status', () => setupStatus())
+ipcMain.handle('setup:cli', () => installCLI())
+ipcMain.handle('setup:skill', () => installSkill())
 
 // --- 菜单 -------------------------------------------------------------------
 
 function buildMenu() {
   const install = [
-    { label: '安装命令行工具…', click: () => void installCLI() },
-    { label: '安装 Agent skill…', click: () => void installSkill() },
+    { label: '安装命令行工具…', click: () => void installCLI().then(report) },
+    { label: '安装 Agent skill…', click: () => void installSkill().then(report) },
   ]
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
