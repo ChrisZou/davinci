@@ -101,6 +101,14 @@ Claude Code、Codex、Hermes 这些 AI Agent。
 
 开发时用 `./start.sh app-dev` 直接以 Electron 打开（用仓库里构建的 davinci 和 `data/`）。
 
+**发给别人用**：没签名的包在别人电脑上会被系统拦下（提示「已损坏」）。用 Developer ID 证书签名并交给 Apple 公证：
+
+1. 在 [appleid.apple.com](https://appleid.apple.com) →「登录与安全」→「App 专用密码」生成一个密码（这个 Apple ID 要在开发者团队里）。
+2. 在终端把公证凭证存进钥匙串（会提示输入上一步的密码）：
+   `xcrun notarytool store-credentials davinci-notary --apple-id <Apple ID> --team-id <团队 ID>`
+3. `./start.sh release`：签名、公证，输出 `app/dist/release/davinci-<版本>-arm64.dmg`。签名时系统问
+   「codesign 想使用钥匙串中的密钥」，点「始终允许」。
+
 ## 给 AI 用
 
 本项目提供了 CLI 和 REST API，使用这两种方式的效果是一样的，具体的命令和接口说明见 [docs/COMMANDS.md](docs/COMMANDS.md)、[docs/API.md](docs/API.md)、

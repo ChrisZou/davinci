@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Hardened Runtime (needed for notarization) forbids writable+executable memory
+  by default; V8 and CanvasKit's WebAssembly need it, in the app and in the
+  renderer davinci runs on the app's own Electron (ELECTRON_RUN_AS_NODE).
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+</dict>
+</plist>

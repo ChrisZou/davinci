@@ -10,6 +10,7 @@
 #   ./start.sh app            打包 macOS 桌面版 → app/dist/mac-arm64/davinci.app（本机用，未签名）
 #   ./start.sh app-dev        开发时直接用 Electron 打开桌面版（用仓库里构建的 davinci）
 #   ./start.sh dmg            打包成可安装的 DMG → app/dist/release/（本机构建，未签名）
+#   ./start.sh release        签名 + 公证的 DMG（发给别人用）；先存好公证凭证，见 README「桌面版」
 #   ./start.sh test           go vet、go test 和前端类型检查
 #   ./start.sh clean          删掉构建产物
 #
@@ -101,6 +102,28 @@ case "${1:-}" in
     install_cli
     ./skills/install.sh
     ;;
+  release)
+    [ "$(uname)" = Darwin ] || { echo "桌面版目前只支持 macOS" >&2; exit 1; }
+    # 公证凭证存在钥匙串里（xcrun notarytool store-credentials），这里只用它的名字。
+    profile="${DAVINCI_NOTARY_PROFILE:-davinci-notary}"
+    if ! xcrun notarytool history --keychain-profile "$profile" >/dev/null 2>&1; then
+      echo "钥匙串里没有公证凭证「${profile}」。先在终端执行：" >&2
+      echo "  xcrun notarytool store-credentials ${profile} --apple-id <Apple ID> --team-id <团队 ID>" >&2
+      exit 1
+    fi
+    build
+    (cd app && { [ -d node_modules ] || pnpm install --silent; })
+    # 签名证书：钥匙串里的 Developer ID Application（或用 CSC_NAME 指定）。签名时系统可能问
+    # 「codesign 想使用钥匙串中的密钥」，点「始终允许」。
+    (cd app && APPLE_KEYCHAIN="$HOME/Library/Keychains/login.keychain-db" APPLE_KEYCHAIN_PROFILE="$profile" \
+      pnpm exec electron-builder --mac dmg -c.directories.output=dist/release)
+    dmg=$(ls -t app/dist/release/*.dmg | head -1)
+    mnt=$(mktemp -d)
+    hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
+    spctl -a -vv -t exec "$mnt/davinci.app" || true
+    hdiutil detach "$mnt" >/dev/null
+    ls -lh "$dmg"
+    ;;
   app | app-dev | dmg)
     [ "$(uname)" = Darwin ] || { echo "桌面版目前只支持 macOS" >&2; exit 1; }
     build
@@ -128,7 +151,7 @@ case "${1:-}" in
     find web/dist -mindepth 1 ! -name .gitkeep -exec rm -rf {} +
     ;;
   -h | --help | help)
-    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
     ;;
   "" | -*)
     build
