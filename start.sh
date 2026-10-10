@@ -115,7 +115,11 @@ case "${1:-}" in
     (cd app && { [ -d node_modules ] || pnpm install --silent; })
     # 签名证书：钥匙串里的 Developer ID Application（或用 CSC_NAME 指定）。签名时系统可能问
     # 「codesign 想使用钥匙串中的密钥」，点「始终允许」。
-    (cd app && APPLE_KEYCHAIN="$HOME/Library/Keychains/login.keychain-db" APPLE_KEYCHAIN_PROFILE="$profile" \
+    # 环境里别的 APPLE_* 公证变量（别的项目留下的）会盖过钥匙串凭证，先清掉。
+    # 不指定 APPLE_KEYCHAIN：凭证在 notarytool 默认找的地方（上面检查用的也是它）。
+    (cd app && env -u APPLE_ID -u APPLE_APP_SPECIFIC_PASSWORD -u APPLE_TEAM_ID \
+      -u APPLE_API_KEY -u APPLE_API_KEY_ID -u APPLE_API_ISSUER -u APPLE_KEYCHAIN \
+      APPLE_KEYCHAIN_PROFILE="$profile" \
       pnpm exec electron-builder --mac dmg -c.directories.output=dist/release)
     dmg=$(ls -t app/dist/release/*.dmg | head -1)
     mnt=$(mktemp -d)
