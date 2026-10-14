@@ -122,7 +122,7 @@ export function Editor({ projectID }: { projectID: string }) {
         if (!alive) return
         setName(p.name)
         setIsTemplate(p.kind === 'template')
-        document.title = `${p.name} · davinci`
+        document.title = `${p.name} · DaVinci`
 
         const session = new Session(projectID, {
           onDocument: (d) => {
@@ -439,7 +439,7 @@ export function Editor({ projectID }: { projectID: string }) {
               ) : (
                 <ProjectName projectID={projectID} name={name} onLog={addLog} onRenamed={(n) => {
                   setName(n)
-                  document.title = `${n} · davinci`
+                  document.title = `${n} · DaVinci`
                 }} />
               )}
               {isTemplate && (

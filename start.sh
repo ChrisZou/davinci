@@ -7,7 +7,7 @@
 #   ./start.sh dev            开发模式：Go 服务 + Vite 热更新，Ctrl-C 一起退出
 #   ./start.sh install        构建，并把 davinci 链接到 $GOPATH/bin（命令行和 AI 用它）
 #   ./start.sh skill          给 AI Agent 装 skill：构建、链接 davinci 命令，再装给 Claude Code / Codex / Hermes
-#   ./start.sh app            打包 macOS 桌面版 → app/dist/mac-arm64/davinci.app（本机用，未签名）
+#   ./start.sh app            打包 macOS 桌面版 → app/dist/mac-arm64/DaVinci.app（本机用，未签名）
 #   ./start.sh app-dev        开发时直接用 Electron 打开桌面版（用仓库里构建的 davinci）
 #   ./start.sh dmg            打包成可安装的 DMG → app/dist/release/（本机构建，未签名）
 #   ./start.sh release        签名 + 公证的 DMG（发给别人用）；先存好公证凭证，见 README「桌面版」
@@ -136,7 +136,7 @@ case "${1:-}" in
     dmg=$(ls -t app/dist/release/*.dmg | head -1)
     mnt=$(mktemp -d)
     hdiutil attach -nobrowse -readonly -mountpoint "$mnt" "$dmg" >/dev/null
-    spctl -a -vv -t exec "$mnt/davinci.app" || true
+    spctl -a -vv -t exec "$mnt/DaVinci.app" || true
     hdiutil detach "$mnt" >/dev/null
     ls -lh "$dmg"
     ;;
@@ -153,7 +153,7 @@ case "${1:-}" in
     else
       # 不自动找证书签名：签名会弹钥匙串授权，正式发布时再签名、公证。
       (cd app && CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --mac dir)
-      echo "桌面版：$PWD/app/dist/mac-$(uname -m | sed 's/x86_64/x64/')/davinci.app"
+      echo "桌面版：$PWD/app/dist/mac-$(uname -m | sed 's/x86_64/x64/')/DaVinci.app"
     fi
     ;;
   test)

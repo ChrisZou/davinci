@@ -32,7 +32,7 @@ export function Templates() {
   const seq = useRef(0)
 
   useEffect(() => {
-    document.title = '模板库 · davinci'
+    document.title = '模板库 · DaVinci'
   }, [])
 
   const loadTemplates = useCallback(async () => {

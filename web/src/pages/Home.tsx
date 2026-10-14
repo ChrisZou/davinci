@@ -37,7 +37,7 @@ export function Home() {
   }, [])
 
   useEffect(() => {
-    document.title = 'davinci'
+    document.title = 'DaVinci'
     void reload()
   }, [reload])
 

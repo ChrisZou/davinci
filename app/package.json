@@ -1,9 +1,9 @@
 {
   "name": "davinci-app",
-  "productName": "davinci",
+  "productName": "DaVinci",
   "version": "1.0.1",
   "private": true,
-  "description": "davinci 桌面版：AI Native 的本地图片编辑器",
+  "description": "DaVinci 桌面版：AI Native 的本地图片编辑器",
   "main": "main.js",
   "scripts": {
     "dev": "electron .",
@@ -12,7 +12,7 @@
   },
   "build": {
     "appId": "com.chriszou.davinci",
-    "productName": "davinci",
+    "productName": "DaVinci",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -78,7 +78,7 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "shortcutName": "davinci",
+      "shortcutName": "DaVinci",
       "artifactName": "${productName}-${version}-setup-${arch}.${ext}"
     }
   },

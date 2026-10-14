@@ -49,7 +49,7 @@ export function Library() {
   }
 
   useEffect(() => {
-    document.title = '素材库 · davinci'
+    document.title = '素材库 · DaVinci'
   }, [])
 
   const current = categories?.find((c) => c.id === category)

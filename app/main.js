@@ -89,7 +89,7 @@ async function ensureServer() {
     if (exited && !readServerFile()) break
     await new Promise((r) => setTimeout(r, 150))
   }
-  throw new Error(`davinci 服务没能启动，日志在 ${path.join(dataDir, 'serve.log')}`)
+  throw new Error(`DaVinci 服务没能启动，日志在 ${path.join(dataDir, 'serve.log')}`)
 }
 
 // --- 窗口与链接 ------------------------------------------------------------------
@@ -129,7 +129,7 @@ function windowOptions() {
     height: 920,
     minWidth: 1024,
     minHeight: 680,
-    title: 'davinci',
+    title: 'DaVinci',
     backgroundColor: '#f1ece6',
     // Windows 的菜单栏在窗口里：平时收起，按 Alt 出来。
     autoHideMenuBar: isWin,
@@ -356,15 +356,15 @@ function buildMenu() {
       ...(isWin ? [] : [{
         role: 'appMenu',
         submenu: [
-          { role: 'about', label: '关于 davinci' },
+          { role: 'about', label: '关于 DaVinci' },
           { type: 'separator' },
           ...install,
           { type: 'separator' },
-          { role: 'hide', label: '隐藏 davinci' },
+          { role: 'hide', label: '隐藏 DaVinci' },
           { role: 'hideOthers', label: '隐藏其他' },
           { role: 'unhide', label: '全部显示' },
           { type: 'separator' },
-          { role: 'quit', label: '退出 davinci' },
+          { role: 'quit', label: '退出 DaVinci' },
         ],
       }]),
       {
@@ -391,7 +391,7 @@ function buildMenu() {
           { role: 'togglefullscreen', label: '全屏' },
         ],
       },
-      isWin ? { label: '帮助', submenu: [...install, { type: 'separator' }, { role: 'about', label: '关于 davinci' }] } : { role: 'windowMenu', label: '窗口' },
+      isWin ? { label: '帮助', submenu: [...install, { type: 'separator' }, { role: 'about', label: '关于 DaVinci' }] } : { role: 'windowMenu', label: '窗口' },
     ]),
   )
 }
@@ -421,7 +421,7 @@ if (!app.requestSingleInstanceLock()) {
     try {
       baseURL = await ensureServer()
     } catch (e) {
-      dialog.showErrorBox('davinci 启动失败', String(e.message || e))
+      dialog.showErrorBox('DaVinci 启动失败', String(e.message || e))
       app.quit()
       return
     }
