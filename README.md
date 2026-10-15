@@ -84,7 +84,7 @@ Claude Code、Codex、Hermes 这些 AI Agent。
     <tr><td>快捷键</td><td>按 ? 查看全部</td></tr>
     <tr><td rowspan="3"><b>导出</b></td><td>格式与倍率</td><td>PNG / JPG / WebP，1× / 2× / 3×；JPG、WebP 可调质量，PNG、WebP 可导出透明背景</td></tr>
     <tr><td>局部导出</td><td>只导出选中的图层；复制 PNG 到剪贴板</td></tr>
-    <tr><td>命令行导出</td><td><code>davinci render</code> 在服务端出图，和画布上看到的一致（两边用同一个渲染器）</td></tr>
+    <tr><td>命令行导出</td><td><code>davinci render</code> 支持面板全部选项：格式、倍率、质量、透明背景、指定图层及剪贴板；<code>--all-boards</code> 导出所有画板到目录或 ZIP（名称规则与界面一致）</td></tr>
     <tr><td rowspan="3"><b>素材库</b></td><td>管理</td><td>分类（人像、背景、APP Logo、装饰元素……可自建）、标签和说明、搜索、批量上传</td></tr>
     <tr><td>在编辑器里用</td><td>打开素材面板点击插入，或直接拖进画布；「换一张图」也能从库里选</td></tr>
     <tr><td>给 AI 用</td><td><code>davinci lib</code> 搜索、插入、上传；AI 可以按「指向右边」「惊讶」这样的描述找人像</td></tr>
@@ -100,6 +100,19 @@ Claude Code、Codex、Hermes 这些 AI Agent。
 
 本项目提供了 CLI 和 REST API，使用这两种方式的效果是一样的，具体的命令和接口说明见 [docs/COMMANDS.md](docs/COMMANDS.md)、[docs/API.md](docs/API.md)、
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+
+```bash
+davinci -p P -b 2 render --format webp --quality 0.8 --scale 3 --transparent -o cover.webp
+davinci -p P -b 1 render --ids 标题,人像 -o selected.png
+davinci -p P render --all-boards --scale 2 -o ./exports
+davinci -p P render --all-boards --format jpg --quality 0.8 -o covers.zip
+davinci -p P -b 1 render --clipboard
+```
+
+默认仍只导出当前或 `-b` 指定的画板；批量不带 `-b` / `--ids` / `--clipboard`。
+`--format` 默认 PNG，不从输出文件名推断；批量 `-o` 以 `.zip` 结尾输出 ZIP，否则输出目录。
+`--clipboard` 始终复制 PNG（Linux 需 `wl-copy` 或 `xclip`）。
+
 
 
 ## 常见问题

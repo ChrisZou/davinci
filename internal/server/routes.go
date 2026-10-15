@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -343,15 +344,50 @@ func (s *Server) handleExport(c echo.Context) error {
 	if ext == "" {
 		ext = "png"
 	}
+	if ext != "png" && ext != "jpg" && ext != "jpeg" && ext != "webp" && ext != "zip" {
+		return badRequest(c, "format must be png, jpg, jpeg, webp or zip")
+	}
+	format := ext
+	if ext == "zip" {
+		format = c.QueryParam("format")
+		if format == "" {
+			format = "png"
+		}
+		if format != "png" && format != "jpg" && format != "jpeg" && format != "webp" {
+			return badRequest(c, "format must be png, jpg, jpeg or webp")
+		}
+	}
 	scale := 1.0
 	if v := strings.TrimSpace(c.QueryParam("scale")); v != "" {
 		f, err := strconv.ParseFloat(v, 64)
-		if err != nil || f <= 0 || f > 8 {
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 || f > 8 {
 			return badRequest(c, "scale must be a number between 0 and 8")
 		}
 		scale = f
 	}
-	export := map[string]any{"type": "export", "format": ext, "multiplier": scale}
+	export := map[string]any{"type": "export", "format": format, "multiplier": scale}
+	for _, key := range []string{"transparent", "allBoards"} {
+		if v := c.QueryParam(key); v != "" {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				return badRequest(c, key+" must be a boolean")
+			}
+			export[key] = b
+		}
+	}
+	if ext == "zip" {
+		export["allBoards"] = true
+	}
+	if v := c.QueryParam("quality"); v != "" {
+		q, err := strconv.ParseFloat(v, 64)
+		if err != nil || math.IsNaN(q) || math.IsInf(q, 0) || q < 0.05 || q > 1 {
+			return badRequest(c, "quality must be between 0.05 and 1")
+		}
+		export["quality"] = q
+	}
+	if ids, ok := c.QueryParams()["ids"]; ok {
+		export["ids"] = ids
+	}
 	// ?board= renders one board of the project; without it, the active one.
 	if b := strings.TrimSpace(c.QueryParam("board")); b != "" {
 		export["board"] = b
@@ -385,7 +421,9 @@ func (s *Server) handleExport(c echo.Context) error {
 		return errJSON(c, err)
 	}
 	ct := "image/png"
-	switch ext {
+	switch out.Format {
+	case "zip":
+		ct = "application/zip"
 	case "jpg", "jpeg":
 		ct = "image/jpeg"
 	case "webp":

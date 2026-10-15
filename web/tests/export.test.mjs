@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { readFileSync } from 'node:fs'
 import { build } from 'esbuild'
 import { unzipSync, strFromU8 } from 'fflate'
 
@@ -7,7 +8,7 @@ import { unzipSync, strFromU8 } from 'fflate'
 const { outputFiles } = await build({
   entryPoints: ['src/editor/export.ts'], bundle: true, write: false, platform: 'node', format: 'esm',
 })
-const { exportName, exportBoards } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
+const { exportName, exportBoards, exportBoardNames } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
 
 test('filenames are portable, bounded and retain Chinese names', () => {
   assert.equal(exportName('封面 / 第一版'), '封面 _ 第一版')
@@ -51,4 +52,13 @@ test('an encoding failure rejects the archive rather than downloading partial re
     return new Blob(['image'])
   }), /image failed/)
   assert.equal(count, 2)
+})
+
+// This exact fixture is also consumed by internal/doc/export_test.go.
+test('browser and CLI filename contract', () => {
+  const fixture = JSON.parse(readFileSync('../testdata/export-names.json', 'utf8'))
+  for (const format of ['png', 'jpg', 'jpeg', 'webp']) {
+    const ext = format === 'jpeg' ? 'jpg' : format
+    assert.deepEqual(exportBoardNames(fixture.names.map(name => ({ name })), format), fixture.stems.map(s => `${s}.${ext}`))
+  }
 })

@@ -83,7 +83,7 @@ davinci -p P -b "B-人像左" render -o b.png             # 每版各自 render�
 ```
 
 - 画板名写出这一版的特点，带上 A/B/C 方便人说"要 B"：`A-大字报`、`B-人像左`，别用默认的"画板 2"。
-- 每条命令都显式带 `-b`，免得排到别的版本上。
+- 单画板命令显式带 `-b`，免得排到别的版本上；批量导出 `render --all-boards` 不带 `-b`。
 - 交付时给**一个**编辑器地址，列出每个画板是哪一版、区别在哪；第一个画板是项目缩略图，
   人挑定之后可以 `board mv <画板> 1` 把选中的那版挪到最前。
 - 用户明确指向某个已有项目（发了它的链接、说"在原来那个上再来一版"）：在**那个项目**里加画板，
@@ -195,7 +195,7 @@ davinci -p P -b 竖版 exec --file cover.json
 davinci -p P -b 2 render -o v.png
 ```
 
-- 不带 `-b` 的命令作用于**当前画板**（人正在看的那个）。项目有多个画板时，一律显式带 `-b`。
+- 不带 `-b` 的命令作用于**当前画板**（人正在看的那个）。项目有多个画板时，单画板操作显式带 `-b`；导出所有画板用 `--all-boards`，不要带 `-b`。
 - 命令 JSON 里也可以直接写 `"board": 2`（单条命令或一个批次都行）。
 - `getProject` 读整个项目（全部画板）；`getDocument` / `davinci layers` 只看一个画板。
 
@@ -207,5 +207,7 @@ davinci -p P -b 2 render -o v.png
 - `addImage` 的 `url` 用素材库给的 `/assets/...`，或本机路径 / http 链接（CLI 会自动上传）。
 - 字体：`davinci fonts` 看可用字体族，写进 `style.fontFamily`；不确定就用默认字体。
 - 文字样式预设：`davinci text presets`（黄底黑字、红底白字、黑描边、荧光笔……）。
-- 导出：`render -o x.png --scale 2` 出两倍图；`--format jpg` 出 JPG。
+- 单画板导出：`render -o x.png --scale 2`；`--format png|jpg|jpeg|webp`、`--quality 0.92`、`--transparent` 对应面板选项；`--ids 标题,人像` 指定图层并裁到外框；`--clipboard` 复制 PNG。
+- 批量交付：`davinci -p P render --all-boards --scale 2 -o ./exports` 每画板一张；`davinci -p P render --all-boards --format jpg --quality 0.8 -o covers.zip` 打包 ZIP。不要同时带 `-b`、`--ids` 或 `--clipboard`；每张按自己的尺寸乘倍率，文件名与界面一致。
+- 不带 `--all-boards` 默认仍只导出当前/指定画板；`--format` 默认 PNG，不从 `-o` 扩展名推断。详细选项、默认输出路径和重名规则见 [导出参考](references/commands.md#历史与导出)。
 - 不要删除或覆盖用户已有的项目；给新的视频做图就 `new` 一个，同一个视频的新版本加画板（见第 1 节）。

@@ -14,6 +14,19 @@ export function exportName(name: string, fallback = 'davinci'): string {
   return safe
 }
 
+/** Names in board order; the Go exporter shares the testdata/export-names.json contract. */
+export function exportBoardNames(boards: Pick<Board, 'name'>[], format = 'png'): string[] {
+  const taken = new Set<string>()
+  const extension = format === 'jpeg' || format === 'jpg' ? 'jpg' : format
+  return boards.map((board, index) => {
+    const base = exportName(board.name, `画板 ${index + 1}`)
+    let stem = base
+    for (let n = 2; taken.has(stem.toLowerCase()); n++) stem = `${base} (${n})`
+    taken.add(stem.toLowerCase())
+    return `${stem}.${extension}`
+  })
+}
+
 /** Render sequentially; already compressed images only need ZIP storage. */
 export async function exportBoards(
   boards: Board[],
@@ -25,18 +38,13 @@ export async function exportBoards(
     if (error) throw error
     parts.push(new Blob([chunk as BlobPart]))
   })
-  const taken = new Set<string>()
-  const extension = options.format === 'jpeg' ? 'jpg' : options.format ?? 'png'
   // Snapshot before awaiting resources so remote edits cannot mix revisions.
   const snapshot = structuredClone(boards)
+  const names = exportBoardNames(snapshot, options.format)
   try {
     for (const [index, board] of snapshot.entries()) {
-      const base = exportName(board.name, `画板 ${index + 1}`)
-      let stem = base
-      for (let n = 2; taken.has(stem.toLowerCase()); n++) stem = `${base} (${n})`
-      taken.add(stem.toLowerCase())
       const blob = await encode(board, { ...options, ids: undefined })
-      const entry = new ZipPassThrough(`${stem}.${extension}`)
+      const entry = new ZipPassThrough(names[index])
       zip.add(entry)
       entry.push(new Uint8Array(await blob.arrayBuffer()), true)
     }

@@ -17,6 +17,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,8 @@ import (
 	"davinci/internal/bundle"
 	"davinci/internal/doc"
 	"davinci/web"
+
+	"github.com/gen2brain/webp"
 )
 
 // Sidecar is one Node renderer process, started on demand, stopped when idle.
@@ -68,10 +71,10 @@ func (s *Sidecar) Measure(layers []*doc.Layer) (map[string]doc.TextSize, error) 
 
 // Render draws a board as an encoded image.
 func (s *Sidecar) Render(b *doc.Board, opts doc.RenderOptions) ([]byte, error) {
-	// CanvasKit's stock build encodes PNG (and WebP) but not JPEG: ask for a
-	// PNG and convert here when a JPEG is wanted.
+	// CanvasKit's stock build only encodes PNG. Like the browser export path,
+	// draw PNG first and use a separate encoder for JPEG/WebP.
 	format := opts.Format
-	if format == "jpeg" || format == "jpg" {
+	if format == "jpeg" || format == "jpg" || format == "webp" {
 		format = "png"
 	}
 	req := map[string]any{
@@ -96,10 +99,34 @@ func (s *Sidecar) Render(b *doc.Board, opts doc.RenderOptions) ([]byte, error) {
 		return nil, err
 	}
 	out, err := base64.StdEncoding.DecodeString(res.Data)
-	if err != nil || (opts.Format != "jpeg" && opts.Format != "jpg") {
-		return out, err
+	if err != nil {
+		return nil, err
 	}
-	return toJPEG(out, opts.Quality, opts.Transparent)
+	switch opts.Format {
+	case "jpeg", "jpg":
+		return toJPEG(out, opts.Quality, opts.Transparent)
+	case "webp":
+		return toWebP(out, opts.Quality)
+	default:
+		return out, nil
+	}
+}
+
+// toWebP keeps alpha and works without a separately installed encoder or CGo.
+func toWebP(pngBytes []byte, quality float64) ([]byte, error) {
+	src, err := png.Decode(bytes.NewReader(pngBytes))
+	if err != nil {
+		return nil, err
+	}
+	q := int(math.Round(quality * 100))
+	if q <= 0 || q > 100 {
+		q = 92
+	}
+	var buf bytes.Buffer
+	if err := webp.Encode(&buf, src, webp.Options{Quality: q, Method: webp.DefaultMethod}); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // toJPEG re-encodes a PNG as a JPEG, flattening transparency onto white.

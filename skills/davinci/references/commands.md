@@ -111,7 +111,26 @@ davinci -p <项目> exec --file cover.json          # 从文件读（长的一�
 ## 历史与导出
 
 - `undo` / `redo`：和人的 ⌘Z 共用一个栈（`davinci undo`）。
-- 导出用 `davinci render -o out.png [--scale 2] [--format jpg|webp]`。
+
+```bash
+davinci -p P -b 2 render --format jpg --quality 0.8 --scale 2 -o cover.jpg
+davinci -p P -b 1 render --format webp --scale 3 --transparent -o cover.webp
+davinci -p P -b 1 render --ids 标题,人像 --transparent -o selected.png
+davinci -p P render --all-boards --scale 2 -o ./exports
+davinci -p P render --all-boards --format webp --quality 0.8 -o covers.zip
+davinci -p P -b 1 render --clipboard
+```
+
+- 范围：默认当前画板，`-b` / `--board` 指定 id、名称或序号；`--all-boards` 导出全部画板，与 `-b`、`--ids`、`--clipboard` 互斥。
+- `--format png|jpg|jpeg|webp` 默认 PNG，不从 `-o` 后缀推断。`--scale` 默认 1，支持面板 1/2/3 倍，也兼容 `0 < scale <= 8`（渲染器最低 0.05）。
+- `--quality` 默认 0.92，接受 0.05–1，包含面板 0.3–1；PNG 忽略。`--transparent` 不画背景，PNG/WebP 保留透明，JPG 透明区域铺白。
+- `--ids` 是图层 id 或名称，逗号分隔且可重复传入；导出裁到图层外框、去掉背景，不读取浏览器临时选区。可先 `layers` 查询。
+- `--clipboard` 始终复制 PNG；不写文件，除非同时指定 `-o out.png`。macOS/Windows 使用系统剪贴板，Linux 需要 Wayland 的 `wl-copy` 或 X11 的 `xclip`。
+- `-o` / `--out`：单画板默认 `davinci-<项目id>.<格式>`；全部画板默认目录 `davinci-<项目id>`。批量时以 `.zip` 结尾（不区分大小写）输出 ZIP，否则作为目录；每个画板一个文件。`--open` 保存后打开文件/目录。
+- 批量按项目顺序导出同一版本，不切换当前画板；各画板尺寸分别乘倍率。目录保留其它文件，覆盖同名图片；拒绝同名符号链接。ZIP 存在时替换。
+- 名称与界面一致：NFC 规范化，非法路径字符和控制字符换成 `_`，去首尾空白、开头的点和尾部点/空格，主体最多 180 个 UTF-8 字节，Windows 保留名加 `_`；空名用 `画板 N`。按顺序、不区分大小写去重，加 ` (2)`、` (3)` 等；JPEG 统一 `.jpg`。例如 `封/面`、`封:面` → `封_面.png`、`封_面 (2).png`。
+- 原始命令：`{"type":"export","allBoards":true,"format":"webp","multiplier":2,"quality":0.8,"transparent":true}`。批量返回 `{dataURL,format:"zip",files:[...]}`，单画板仍返回 `{dataURL,width,height,format}`。参数也在 `davinci schema` 中。
+
 
 ## 项目
 

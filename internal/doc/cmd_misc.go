@@ -62,15 +62,16 @@ func init() {
 	})
 
 	define(Spec{
-		Type: "export", Summary: "导出当前画板为图片，返回 dataURL",
+		Type: "export", Summary: "导出当前画板图片或所有画板 ZIP，返回 dataURL",
 		Params: []Param{
-			{Name: "format", Type: "string", Desc: "png|jpeg|webp", Default: "png", Enum: []string{"png", "jpeg", "webp"}},
+			{Name: "allBoards", Type: "boolean", Desc: "导出所有画板 ZIP；与 board、ids 互斥", Default: false},
+			{Name: "format", Type: "string", Desc: "png|jpg|jpeg|webp", Default: "png", Enum: []string{"png", "jpg", "jpeg", "webp"}},
 			{Name: "multiplier", Type: "number", Desc: "倍率，2 就是两倍图", Default: 1},
-			{Name: "quality", Type: "number", Desc: "jpeg/webp 质量 0-1", Default: 0.92},
+			{Name: "quality", Type: "number", Desc: "jpeg/webp 质量 0.05-1（面板 0.3-1）", Default: 0.92},
 			{Name: "transparent", Type: "boolean", Desc: "不画背景色/背景图（png/webp 得到透明底）", Default: false},
 			{Name: "ids", Type: "array", Desc: "只导出这些图层（id 或名字），画面裁到它们的外框"},
 		},
-		Returns: "{ dataURL, width, height, format }", ReadOnly: true,
+		Returns: "单画板 { dataURL, width, height, format }；allBoards: { dataURL, format: zip, files: string[] }", ReadOnly: true,
 		Run: func(c *Ctx, cmd map[string]any) (any, error) {
 			format := pick(cmd["format"], []string{"png", "jpeg", "jpg", "webp"}, "png")
 			if format == "jpg" {
@@ -81,6 +82,9 @@ func init() {
 				Format:      format,
 				Quality:     clamp(num(cmd["quality"], 0.92), 0.05, 1),
 				Transparent: boolean(cmd["transparent"], false),
+			}
+			if boolean(cmd["allBoards"], false) {
+				return exportAllBoards(c, opts)
 			}
 			if has(cmd, "ids") {
 				ls, err := c.layers(cmd["ids"], 1)

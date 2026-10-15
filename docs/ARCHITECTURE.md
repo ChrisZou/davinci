@@ -73,6 +73,10 @@ davinci 是一个本地图片编辑器：人在浏览器里拖，AI 通过命令
 两边字体都从服务端取（`/api/fonts/face`，按字族/字重/斜体挑文件，TTC 会拆成单个字体），
 所以**屏幕上看到的就是导出的**，没有页面开着时 CLI 也能出图。
 
+CanvasKit 内置编码器只出 PNG。浏览器通过 canvas 编码 JPG/WebP；服务端先绘制 PNG，再用 Go JPEG 编码器或 `gen2brain/webp` 编码 WebP（保留 alpha 和质量设置，无需额外安装编码工具）。
+
+批量导出由 `internal/doc/export.go` 在引擎锁内按画板顺序生成 ZIP，保证同一版本、不切换当前画板；CLI 保存 ZIP 或解包成目录。命名与 `web/src/editor/export.ts` 使用同一份 `testdata/export-names.json` 契约测试，覆盖字符清理、Unicode、截断与重名后缀。
+
 几何和排版沿用了当年 Fabric.js 的规则（行高 1.13、描边计入盒子、左上角为旋转中心……），
 老文档打开后位置分毫不差。
 
@@ -109,7 +113,7 @@ Layer   { id, name, type: 'text'|'image'|'shape'|'group', x, y, width, height,
 
 ```
 internal/doc/        文档模型、几何、命令注册表与 52 条命令、撤销历史
-internal/render/     Node 渲染进程的管理（拉起、请求、PNG→JPEG、空闲回收）
+internal/render/     Node 渲染进程的管理（拉起、请求、PNG→JPEG/WebP、空闲回收）
 internal/server/     Echo 路由、SQLite、每项目 Engine、WS hub、资产、字体（扫描/挑选/拆 TTC）、素材库、模板库
 internal/cli/        cobra 薄壳，全部是 HTTP 客户端
 web/src/render/      共享渲染器（浏览器 + Node）
@@ -128,7 +132,8 @@ web/src/pages|components/  界面
 | 侧 | 依赖 | 为什么 |
 |---|---|---|
 | Go | echo/v4、gorilla/websocket、modernc.org/sqlite（纯 Go）、cobra | 路由、WS、存储、CLI |
-| | golang.org/x/image | JPEG 编码、读图片尺寸 |
+| | golang.org/x/image | 读图片尺寸、WebP 解码 |
+| | github.com/gen2brain/webp | 服务端 WebP 编码（纯 Go 回退，无需 CGo） |
 | web | canvaskit-wasm | Skia 的 wasm 版，浏览器和 Node 共用的绘制引擎 |
 | | react 18 + vite + tailwindcss 4 | 界面 |
 | 运行时 | node（服务端出图/量字用） | 找不到时编辑照常，导出和缩略图报错说明原因；可用 `DAVINCI_NODE` 指定 |

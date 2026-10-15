@@ -1,6 +1,6 @@
 # davinci HTTP API
 
-本地服务，**只绑 `127.0.0.1`**，默认端口 `7789`（被占用时换一个空闲端口，实际地址见数据目录的 `server.json`）。所有响应都是 JSON（导出图片除外），
+本地服务，**只绑 `127.0.0.1`**，默认端口 `7789`（被占用时换一个空闲端口，实际地址见数据目录的 `server.json`）。所有响应都是 JSON（导出图片或 ZIP 除外），
 失败时统一是 `{"ok": false, "error": "人能看懂的原因"}`。
 
 服务端拥有文档：每条命令都由它执行（`internal/doc`）、落库，再推给开着这个项目的编辑器页面。
@@ -57,7 +57,8 @@ curl -s localhost:7789/api/schema | jq '.commands[] | {type, summary}'
 | GET | `/api/projects/:id/thumbnail` | 编辑器最近一次保存的缩略图（没有时 404）；列表页用 `?rev=<revision>` 做缓存键 |
 | POST | `/api/projects/:id/commands` | **AI 的主入口**：执行命令 |
 | GET | `/api/projects/:id/layers` | 图层列表（前 → 后） |
-| GET | `/api/projects/:id/export.png` | 导出图片，`?scale=2`；`.jpg` `.webp` 同理 |
+| GET | `/api/projects/:id/export.zip` | 所有画板 ZIP，`?format=webp&scale=2`；默认 PNG |
+| GET | `/api/projects/:id/export.png` | 导出图片，支持 `scale`、`board`、`quality`、`transparent`、重复的 `ids`；`.jpg` `.jpeg` `.webp` 同理 |
 | GET | `/api/library/categories` | 素材库分类及数量 |
 | POST | `/api/library/categories` | 新建分类：`{name}` |
 | PATCH / DELETE | `/api/library/categories/:id` | 改名 `{name, sort?}` / 删除（分类里还有素材时 409） |
@@ -125,13 +126,24 @@ GET /api/projects/<id>/layers
 
 ## 导出
 
-```
-GET /api/projects/<id>/export.png?scale=2
-→ image/png 二进制
+```text
+GET /api/projects/<id>/export.png?board=2&scale=2&transparent=true&ids=标题&ids=人像
+→ image/png 二进制，指定图层的外框范围
+GET /api/projects/<id>/export.jpg?quality=0.8&scale=3
+→ image/jpeg 二进制，当前画板
+GET /api/projects/<id>/export.zip?format=webp&scale=2&quality=0.8&transparent=true
+→ application/zip 二进制，全部画板，每个画板一张图片
 ```
 
-`scale` 取值 `0 < scale <= 8`。服务端和编辑器画布用的是同一个渲染器，
-所以**导出和屏幕上看到的一致**；没有页面开着也导得出来。
+查询参数：`board` 为画板 id、名称或从 1 开始的序号，缺省当前画板；`scale` 默认 1，`0 < scale <= 8`（渲染器最低 0.05）；`quality` 默认 0.92，范围 0.05–1（仅 JPG/WebP 有效）；`transparent=true` 不画背景色和背景图；`ids` 可重复，按图层 id 或名称筛选并裁到外框。PNG/WebP 支持透明，JPG 将透明区域铺白。未知图层、无效格式和非法数值会返回 400。
+
+`.zip` 自动导出所有画板，`format` 选择 ZIP 内图片格式 `png|jpg|jpeg|webp`（默认 `png`）。图片端点也支持 `allBoards=true`，此时返回的 MIME 同样是 `application/zip`。批量导出与 `board`、`ids` 互斥，按画板顺序导出同一版本，不切换当前画板；名称清理、重名后缀与编辑器一致，详见 [导出命令](COMMANDS.md#历史与导出)。
+
+CLI `davinci render --all-boards -o 目录` 会把同一 ZIP 解包到目录；`-o out.zip` 直接保存 ZIP。`--clipboard` 是 CLI 本机操作，不是服务端剪贴板 API。
+
+命令接口也支持 `{"type":"export","allBoards":true,"format":"png","multiplier":2}`，返回 `{dataURL, format:"zip", files:[...]}`；不指定 `allBoards` 仍返回单画板 `{dataURL, width, height, format}`。完整参数由 `/api/schema` 提供。
+
+服务端和编辑器画布使用同一个渲染器；没有页面开着也能导出。
 
 ## 资产
 

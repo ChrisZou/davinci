@@ -319,14 +319,42 @@ davinci exec '{"type":"moveLayer","id":"标题","x":96,"y":470}'
 | 命令 | 参数 | 说明 |
 |---|---|---|
 | `undo` / `redo` | 无 | **和人的 ⌘Z 共用一个栈**（50 步） |
-| `export` | `format` `multiplier` `quality` `transparent` `ids[]` | `png`\|`jpeg`\|`webp`，倍率 `0.05`–`8`；`quality` 0–1（jpeg/webp）；`transparent` 不画背景；`ids` 只导出这些图层并裁到它们的外框 |
+| `export` | `format` `multiplier` `quality` `transparent` `ids[]` `allBoards` | `png`\|`jpg`\|`jpeg`\|`webp`，倍率 `0.05`–`8`；质量 `0.05`–`1`；`ids` 只导出指定图层并裁到外框；`allBoards: true` 返回所有画板 ZIP，与 `board`、`ids` 互斥 |
 | `batch` | `commands[]` | 多条命令 = 一个撤销步骤；**任何一条失败，整批回滚**，文档回到批次之前 |
 
 ```bash
-davinci render -o out.png --scale 2      # 等价 export + 存盘
-davinci render --format jpg --scale 1
+davinci -p P render -o current.png                           # 默认当前画板，1× PNG
+davinci -p P -b 2 render --format jpg --quality 0.8 --scale 2 -o cover.jpg
+davinci -p P -b 1 render --format webp --scale 3 --transparent -o cover.webp
+davinci -p P -b 1 render --ids 标题,人像 --transparent -o selected.png
+davinci -p P render --all-boards --scale 2 -o ./exports       # 每个画板一个文件
+davinci -p P render --all-boards --format jpg --quality 0.8 -o covers.zip
+davinci -p P -b 1 render --clipboard                         # 复制 PNG 到本机剪贴板
 davinci undo && davinci redo
 ```
+
+| 导出面板 | CLI 参数 | 行为 |
+|---|---|---|
+| 当前画板 / 所有画板 | 默认 / `--all-boards` | `-b` / `--board` 指定单画板；批量与 `--board`、`--ids`、`--clipboard` 互斥 |
+| PNG / JPG / WebP | `--format png\|jpg\|jpeg\|webp` | 默认 PNG，**不根据 `-o` 扩展名猜格式** |
+| 1× / 2× / 3× | `--scale 1\|2\|3` | 默认 1；兼容原有 `0 < scale <= 8`（渲染器最低 0.05） |
+| 质量 | `--quality 0.92` | 默认 0.92；范围 0.05–1，包含面板的 0.3–1；PNG 忽略质量 |
+| 透明背景 | `--transparent` | 不绘制背景色/背景图；PNG/WebP 保留透明，JPG 的透明区域铺白 |
+| 只导出选中图层 | `--ids 标题,人像` | 显式指定 id 或名称，不读取浏览器临时选区；可重复传入，裁到图层外框并省略背景 |
+| 下载 | `-o` / `--out` | 单画板默认 `davinci-<项目id>.<格式>`；批量默认目录 `davinci-<项目id>`，`.zip` 后缀（不区分大小写）输出 ZIP，其余为目录 |
+| 复制到剪贴板 | `--clipboard` | 始终复制 PNG；默认不写文件，同时指定 `-o out.png` 可保存 PNG；macOS/Windows 使用系统能力，Linux 需要 `wl-copy`（Wayland）或 `xclip`（X11） |
+
+`--open` 在保存后打开输出文件或目录。批量按项目画板顺序导出同一版本，每张使用自己的尺寸乘倍率，不切换当前画板。即使项目只有一个画板，也支持 `--all-boards`。
+
+批量目录文件名和界面 ZIP 内名称完全一致：画板名先做 NFC 规范化，将 `<>:"/\\|?*`、控制字符换成 `_`，清理首尾空白、开头的点和结尾的点/空格，UTF-8 名称主体最多 180 字节；Windows 保留名加 `_` 前缀；空名回退 `画板 N`。按顺序、不区分大小写去重，加 ` (2)`、` (3)` 等后缀；JPEG 扩展名统一 `.jpg`。例如 `封/面`、`封:面` 导出为 `封_面.png`、`封_面 (2).png`。目录存在时保留其它文件，覆盖本次同名图片；拒绝写入同名符号链接。ZIP 文件存在时替换。
+
+对应命令 JSON（`davinci schema` / `/api/schema` 同步提供参数）：
+
+```json
+{"type":"export","allBoards":true,"format":"webp","multiplier":2,"quality":0.8,"transparent":true}
+```
+
+批量返回 `{dataURL, format:"zip", files:[...]}`；单画板仍返回 `{dataURL, width, height, format}`。
 
 `batch` 不在 `davinci schema` 的命令表里——它由传输层提供。
 发 HTTP 时给它一个数组或 `{"commands":[…]}`，发 CLI 时……不，CLI 没有列数组的语法，
@@ -406,7 +434,7 @@ CLI 只是 cobra 薄壳，`exec` 是万能兜底——任何命令都有 CLI 哈
 | `davinci text set` / `text style` / `text preset` | `setText` / `setTextStyle` / `applyTextPreset` |
 | `davinci image set` / `image replace` / `image rmbg` | `setImageProps` / `replaceImage` / `removeBackground` |
 | `davinci fonts` / `font add` | `listFonts` / `POST /api/fonts` |
-| `davinci render` | `export` + 存盘 |
+| `davinci render` | `export` + 存盘 / 全画板目录或 ZIP / 本机剪贴板 |
 | `davinci undo` / `redo` | `undo` / `redo` |
 | `davinci watch` | 订阅文档变更（不是命令） |
 | `davinci exec '<JSON>'` / `--file x.json` | 原始命令 / `batch` |

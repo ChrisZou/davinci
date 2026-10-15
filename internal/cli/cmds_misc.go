@@ -3,10 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -198,72 +195,6 @@ func newImportDocCmd() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-func newRenderCmd() *cobra.Command {
-	var (
-		out    string
-		scale  float64
-		format string
-		openIt bool
-	)
-	cmd := &cobra.Command{
-		Use:     "render [-o out.png] [--scale 2] [--format jpg]",
-		Aliases: []string{"export", "render-png"},
-		Short:   "导出图片（由编辑器执行渲染）",
-		Args:    cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := NewClient()
-			if err != nil {
-				return err
-			}
-			id, err := c.ProjectID()
-			if err != nil {
-				return err
-			}
-			path := c.BaseURL + "/api/projects/" + id + "/export." + format
-			q := url.Values{}
-			if scale > 0 {
-				q.Set("scale", strconv.FormatFloat(scale, 'f', -1, 64))
-			}
-			if b := strings.TrimSpace(gf.board); b != "" {
-				q.Set("board", b)
-			}
-			if len(q) > 0 {
-				path += "?" + q.Encode()
-			}
-			resp, err := c.HTTP.Get(path)
-			if err != nil {
-				return fmt.Errorf("渲染请求失败: %w", err)
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode/100 != 2 {
-				return readAPIError(resp)
-			}
-			if out == "" {
-				out = "davinci-" + id + "." + format
-			}
-			f, err := os.Create(out)
-			if err != nil {
-				return err
-			}
-			n, err := f.ReadFrom(resp.Body)
-			f.Close()
-			if err != nil {
-				return err
-			}
-			fmt.Printf("已导出 %s（%s）\n", out, humanBytes(n))
-			if openIt {
-				openBrowser(out)
-			}
-			return nil
-		},
-	}
-	cmd.Flags().StringVarP(&out, "out", "o", "", "输出文件")
-	cmd.Flags().Float64Var(&scale, "scale", 1, "导出倍率，2 就是两倍图")
-	cmd.Flags().StringVar(&format, "format", "png", "png|jpg|webp")
-	cmd.Flags().BoolVar(&openIt, "open", false, "导出后打开")
-	return cmd
 }
 
 func newSchemaCmd() *cobra.Command {

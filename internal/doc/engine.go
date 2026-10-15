@@ -187,6 +187,9 @@ func (e *Engine) apply(cmd map[string]any, nested bool) (any, error) {
 	if typ == "" {
 		return nil, errf(`a command needs a "type" field — see ` + "`davinci schema`")
 	}
+	if typ == "export" && boolean(cmd["allBoards"], false) && (has(cmd, "board") || has(cmd, "ids")) {
+		return nil, errf("allBoards cannot be combined with board or ids")
+	}
 	// Any command may name the board it is for: bring that board up first.
 	if ref, ok := cmd["board"]; ok && ref != nil && str(ref) != "" {
 		b, _ := e.p.FindBoard(str(ref))
