@@ -12,7 +12,7 @@
 #   ./start.sh dmg            打包成可安装的 DMG → app/dist/release/（本机构建，未签名）
 #   ./start.sh release        签名 + 公证的 DMG（发给别人用）；先存好公证凭证，见 README「桌面版」
 #   ./start.sh win            打包 Windows 安装包（x64，未签名）→ app/dist/release/
-#   ./start.sh test           go vet、go test 和前端类型检查
+#   ./start.sh test           go vet、go test、前端类型检查和测试
 #   ./start.sh clean          删掉构建产物
 #
 # 需要：Go 1.26+、Node 20+、pnpm。服务端出图会用到 node。
@@ -161,6 +161,7 @@ case "${1:-}" in
     go vet ./...
     go test ./...
     (cd web && pnpm exec tsc --noEmit)
+    (cd web && pnpm test)
     ;;
   clean)
     rm -rf bin app/dist

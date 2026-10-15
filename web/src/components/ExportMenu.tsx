@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Document } from '../types'
+import type { Document, ProjectDoc } from '../types'
 import type { Editor } from '../editor/Editor'
+import { encodeBoard } from '../editor/ck'
+import { exportBoards, exportName } from '../editor/export'
 import { Segmented, Slider } from './fields'
 
 type Format = 'png' | 'jpeg' | 'webp'
@@ -14,12 +16,14 @@ type Format = 'png' | 'jpeg' | 'webp'
  */
 export function ExportMenu({
   doc,
+  project,
   name,
   editor,
   selected,
   onLog,
 }: {
   doc: Document
+  project: ProjectDoc | null
   name: string
   editor: Editor | undefined
   selected: string[]
@@ -31,6 +35,7 @@ export function ExportMenu({
   const [quality, setQuality] = useState(0.92)
   const [transparent, setTransparent] = useState(false)
   const [onlySelected, setOnlySelected] = useState(false)
+  const [scope, setScope] = useState<'current' | 'all'>('current')
   const [busy, setBusy] = useState('')
   const box = useRef<HTMLDivElement>(null)
 
@@ -44,7 +49,14 @@ export function ExportMenu({
     return () => window.removeEventListener('mousedown', onDown)
   }, [open])
 
-  const useSelection = onlySelected && selected.length > 0
+  const boardCount = project?.boards.length ?? 1
+  useEffect(() => {
+    if (boardCount <= 1) setScope('current')
+  }, [boardCount])
+
+  const allBoards = scope === 'all' && boardCount > 1
+  const canSelect = !allBoards && selected.length > 0
+  const useSelection = onlySelected && canSelect
   const m = Number(scale)
   const canTransparent = format !== 'jpeg'
 
@@ -56,22 +68,34 @@ export function ExportMenu({
     })
 
   const download = async () => {
-    if (!editor) return
+    if (!editor || busy) return
     setBusy('download')
     try {
-      const url = await render(format)
+      const archive = allBoards && project
+        ? await exportBoards(project.boards, { format, scale: m, quality, transparent: canTransparent && transparent }, encodeBoard)
+        : null
+      const url = archive ? URL.createObjectURL(archive) : await render(format)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${name || 'davinci'}${useSelection ? '-选中' : ''}.${format === 'jpeg' ? 'jpg' : format}`
-      a.click()
+      a.download = archive
+        ? `${exportName(name)}.zip`
+        : `${name || 'davinci'}${useSelection ? '-选中' : ''}.${format === 'jpeg' ? 'jpg' : format}`
+      try {
+        a.click()
+      } finally {
+        // Give the browser time to start the download before releasing its URL.
+        if (archive) window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      }
       setOpen(false)
+    } catch (e: any) {
+      onLog(`✗ 导出失败：${e?.message ?? e}`)
     } finally {
       setBusy('')
     }
   }
 
   const copy = async () => {
-    if (!editor) return
+    if (!editor || busy || allBoards) return
     setBusy('copy')
     try {
       // The clipboard only takes PNG, whatever format is picked for download.
@@ -86,7 +110,7 @@ export function ExportMenu({
     }
   }
 
-  const size = useSelection ? '选中范围' : `${Math.round(doc.canvas.width * m)}×${Math.round(doc.canvas.height * m)}`
+  const size = allBoards ? `${boardCount} 张（各画板 ${scale}×）` : useSelection ? '选中范围' : `${Math.round(doc.canvas.width * m)}×${Math.round(doc.canvas.height * m)}`
 
   return (
     <div className="relative" ref={box}>
@@ -100,6 +124,17 @@ export function ExportMenu({
       </button>
       {open && (
         <div className="menu absolute right-0 top-full z-30 mt-3 flex w-72 flex-col gap-4 !p-5" data-testid="export-panel">
+          {boardCount > 1 && (
+            <Segmented
+              label="导出范围"
+              value={scope}
+              options={[
+                { value: 'current', label: '当前画板' },
+                { value: 'all', label: '所有画板' },
+              ]}
+              onChange={setScope}
+            />
+          )}
           <Segmented
             label="格式"
             value={format}
@@ -128,8 +163,8 @@ export function ExportMenu({
               <input type="checkbox" className="h-4 w-4 accent-accent" disabled={!canTransparent} checked={canTransparent && transparent} onChange={(e) => setTransparent(e.target.checked)} />
               透明背景
             </label>
-            <label className={`flex items-center gap-2 ${selected.length ? '' : 'opacity-40'}`}>
-              <input type="checkbox" className="h-4 w-4 accent-accent" disabled={!selected.length} checked={useSelection} onChange={(e) => setOnlySelected(e.target.checked)} />
+            <label className={`flex items-center gap-2 ${canSelect ? '' : 'opacity-40'}`} title={allBoards ? '所有画板会导出每个画板的全部图层' : undefined}>
+              <input type="checkbox" className="h-4 w-4 accent-accent" disabled={!canSelect} checked={useSelection} onChange={(e) => setOnlySelected(e.target.checked)} />
               只导出选中的 {selected.length || ''} 个图层
             </label>
           </div>
@@ -140,17 +175,18 @@ export function ExportMenu({
               disabled={!!busy}
               onClick={download}
             >
-              {busy === 'download' ? '导出中…' : '下载'}
+              {busy === 'download' ? '导出中…' : allBoards ? '下载 ZIP' : '下载'}
             </button>
             <button
               className="btn-ghost flex-1 px-2 disabled:opacity-50"
-              disabled={!!busy}
+              disabled={!!busy || allBoards}
               onClick={copy}
-              title="复制为 PNG，可直接粘贴到小红书、微信等"
+              title={allBoards ? '复制到剪贴板仅支持当前画板' : '复制为 PNG，可直接粘贴到小红书、微信等'}
             >
               {busy === 'copy' ? '复制中…' : '复制到剪贴板'}
             </button>
           </div>
+          {allBoards && <p className="text-xs text-muted">所有画板将打包为 ZIP；复制到剪贴板仅支持当前画板。</p>}
         </div>
       )}
     </div>

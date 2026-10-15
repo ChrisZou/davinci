@@ -485,7 +485,7 @@ export function Editor({ projectID }: { projectID: string }) {
                   <button className="icon-btn" disabled={!session.canRedo} title={shortcut('重做 ⇧⌘Z')} aria-label="重做" onClick={() => void run({ type: 'redo' })}>
                     <Icon d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3" />
                   </button>
-                  <ExportMenu doc={doc} name={name} editor={session.editor} selected={selected} onLog={addLog} />
+                  <ExportMenu doc={doc} project={project} name={name} editor={session.editor} selected={selected} onLog={addLog} />
                 </div>
               </>
             )}
