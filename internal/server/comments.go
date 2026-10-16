@@ -44,12 +44,17 @@ type comments struct {
 	wg       sync.WaitGroup
 	run      func(context.Context, agent.Request) (*agent.Response, error)
 	preview  func(*doc.Board) ([]byte, error)
+	previews *commentPreviews
 	sessions *agent.Sessions
 	warm     func(context.Context, agent.Request) (string, error)
 }
 
 func (s *Server) initComments() error {
 	s.comments.jobs = map[string]*commentJob{}
+	if s.comments.previews != nil {
+		s.comments.previews.close()
+	}
+	s.comments.previews = newCommentPreviews(func(b *doc.Board) ([]byte, error) { return s.comments.preview(b) })
 	if s.comments.sessions != nil {
 		s.comments.sessions.Close()
 	}
@@ -268,8 +273,9 @@ func (s *Server) processComment(ctx context.Context, j *commentJob, b *doc.Board
 	started := time.Now()
 	req, err := s.sessionRequest(c.ProjectID, snapshot)
 	var preview []byte
+	var reused bool
 	if err == nil {
-		preview, err = s.comments.preview(b)
+		preview, reused, err = s.comments.previews.get(ctx, b)
 	}
 	prepared := time.Now()
 	if err == nil && ctx.Err() == nil {
@@ -283,7 +289,7 @@ func (s *Server) processComment(ctx context.Context, j *commentJob, b *doc.Board
 		response, err = s.comments.run(ctx, req)
 		generated := time.Now()
 		defer func() {
-			s.logf("[comments] %s prepare=%s ai=%s apply=%s", c.ID, prepared.Sub(started).Round(time.Millisecond), generated.Sub(prepared).Round(time.Millisecond), time.Since(generated).Round(time.Millisecond))
+			s.logf("[comments] %s prepare=%s ai=%s apply=%s preview_reused=%t", c.ID, prepared.Sub(started).Round(time.Millisecond), generated.Sub(prepared).Round(time.Millisecond), time.Since(generated).Round(time.Millisecond), reused)
 		}()
 		s.comments.mu.Lock()
 		defer s.comments.mu.Unlock()
@@ -478,6 +484,7 @@ func (s *Server) stopComments() {
 	}
 	s.comments.mu.Unlock()
 	s.comments.sessions.Close()
+	s.comments.previews.close()
 	s.comments.wg.Wait()
 }
 

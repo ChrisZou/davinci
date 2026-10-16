@@ -138,7 +138,9 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	if p, _ := h.srv.store.GetProject(projectID); p != nil {
 		rev = p.Revision
 	}
-	_ = c.send(Envelope{Type: "hello", Origin: c.id, Document: e.Snapshot(), Revision: rev, History: historyOf(e)})
+	snapshot := e.Snapshot()
+	_ = c.send(Envelope{Type: "hello", Origin: c.id, Document: snapshot, Revision: rev, History: historyOf(e)})
+	h.srv.scheduleCommentPreview(projectID, snapshot)
 	go h.readLoop(c)
 }
 

@@ -189,6 +189,7 @@ func (s *Server) persist(projectID string, snapshot []byte, e *doc.Engine, origi
 	}
 	s.hub.broadcast(projectID, Envelope{Type: "doc", Document: snapshot, Revision: rev, Origin: origin, Command: cmd, History: historyOf(e)})
 	s.scheduleThumbnail(projectID)
+	s.scheduleCommentPreview(projectID, snapshot)
 	return rev, nil
 }
 

@@ -135,7 +135,7 @@ func TestCommentCancelAndDuplicate(t *testing.T) {
 	h, id, e, c := setupComment(t)
 	before := e.Snapshot()
 	entered := make(chan struct{})
-	h.srv.comments.preview = func(*doc.Board) ([]byte, error) { return nil, nil }
+	h.srv.comments.preview = func(*doc.Board) ([]byte, error) { return []byte("preview"), nil }
 	h.srv.comments.run = func(ctx context.Context, r agent.Request) (*agent.Response, error) {
 		close(entered)
 		<-ctx.Done()

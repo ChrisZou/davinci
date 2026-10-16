@@ -76,6 +76,7 @@ func (s *Server) handleListFonts(c echo.Context) error {
 		if err := s.fonts.Scan(); err != nil {
 			return errJSON(c, err)
 		}
+		s.comments.previews.invalidate()
 	}
 	return c.JSON(http.StatusOK, map[string]any{"ok": true, "fonts": s.fontList()})
 }
@@ -550,6 +551,7 @@ func (s *Server) handleUploadFont(c echo.Context) error {
 	if err := s.fonts.Scan(); err != nil {
 		return errJSON(c, err)
 	}
+	s.comments.previews.invalidate()
 	return c.JSON(http.StatusCreated, map[string]any{
 		"ok":     true,
 		"family": families[0],
