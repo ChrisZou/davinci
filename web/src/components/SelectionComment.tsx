@@ -31,7 +31,12 @@ export function SelectionComment({ ai, board, selected, frame }: {
     document.addEventListener('pointerdown', outside)
     return () => document.removeEventListener('pointerdown', outside)
   }, [open])
-  useEffect(() => { if (result?.status === 'done') setText('') }, [result?.status])
+  useEffect(() => {
+    if (result?.status !== 'done') return
+    setText('')
+    setOpen(false)
+    setSubmitted(null)
+  }, [result?.status])
 
   if (!visible || !frame) return null
   const width = Math.min(open ? 280 : 32, frame.width - 24)
@@ -64,7 +69,7 @@ export function SelectionComment({ ai, board, selected, frame }: {
           maxLength={4000} value={text} disabled={busy} onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); void submit() } }} />
         {ai.error && <p role="alert" className="my-2 text-[11px] leading-5 text-accent">{ai.error}</p>}
-        {result && result.status !== 'running' && <p role="status" className={`my-2 text-[11px] leading-5 ${result.status === 'done' ? 'text-ok' : 'text-accent'}`}>{result.status === 'done' ? '已修改' : result.reply || '已取消'}</p>}
+        {result && result.status !== 'running' && result.status !== 'done' && <p role="status" className="my-2 text-[11px] leading-5 text-accent">{result.reply || '已取消'}</p>}
         {!ai.available && ai.loaded && <p className="my-2 text-[11px] leading-5 text-muted">未检测到 AI。<button type="button" className="text-accent" onClick={() => void ai.detect()}>重新检测</button></p>}
         <div className="mt-2 flex items-center justify-end gap-2">
           {busy && <span role="status" className="text-[10px] text-muted">正在修改</span>}
