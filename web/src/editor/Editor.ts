@@ -24,6 +24,7 @@ import { trackPointer } from './keyboard'
 
 export interface EditorCallbacks {
   onSelection?: (ids: string[]) => void
+  onSelectionFrame?: (frame: SelectionFrame | null) => void
   onEditing?: (id: string | null) => void
   /** The zoom or pan changed (the zoom readout listens). */
   onView?: () => void
@@ -31,6 +32,16 @@ export interface EditorCallbacks {
   onCommit?: (cmd: unknown) => Promise<unknown>
   /** A picture was double-clicked (the page opens the crop dialog). */
   onImageOpen?: (layer: Layer) => void
+}
+
+/** Stage-local screen pixels, including the live drag/resize preview. */
+export interface SelectionFrame {
+  left: number
+  top: number
+  right: number
+  bottom: number
+  width: number
+  height: number
 }
 
 export interface ExportOptions {
@@ -164,6 +175,7 @@ export class Editor {
 
   // interaction
   private selection: string[] = []
+  private selectionFrameKey = ''
   private hover: string | null = null
   private gesture: Gesture | null = null
   private guides: { x?: number; y?: number }[] = []
@@ -776,7 +788,7 @@ export class Editor {
     ctx.clearRect(0, 0, this.overlay.width, this.overlay.height)
     ctx.setTransform(d, 0, 0, d, 0, 0)
     const board = this.viewBoard()
-    if (!board) return
+    if (!board) { this.publishSelectionFrame(null); return }
     const byID = new Map(board.layers.map((l) => [l.id, l]))
 
     const outline = (l: Layer, width: number, colour = ACCENT) => {
@@ -796,6 +808,12 @@ export class Editor {
     }
 
     const sel = this.selection.map((id) => byID.get(id)).filter((l): l is Layer => !!l)
+    if (sel.length && !this.editing && this.gesture?.kind !== 'marquee') {
+      const r = union(sel.map((l) => this.boxOf(l)))
+      const a = this.toScreen({ x: r.left, y: r.top })
+      const b = this.toScreen({ x: r.right, y: r.bottom })
+      this.publishSelectionFrame({ left: a.x, top: a.y, right: b.x, bottom: b.y, width: this.width, height: Math.max(0, this.height - this.insetBottom) })
+    } else this.publishSelectionFrame(null)
     if (sel.length === 1 && !this.editing) {
       const l = sel[0]
       outline(l, 1.5)
@@ -823,6 +841,13 @@ export class Editor {
     }
 
     this.paintGuides(ctx)
+  }
+
+  private publishSelectionFrame(frame: SelectionFrame | null) {
+    const key = JSON.stringify(frame)
+    if (key === this.selectionFrameKey) return
+    this.selectionFrameKey = key
+    this.cb.onSelectionFrame?.(frame)
   }
 
   private knob(ctx: CanvasRenderingContext2D, p: Pt) {

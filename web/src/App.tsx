@@ -34,7 +34,7 @@ export function App() {
   return (
     <>
       <div className="titlebar-drag" aria-hidden />
-      {r.page === 'editor' ? <Editor projectID={r.id} /> : r.page === 'library' ? <Library /> : r.page === 'templates' ? <Templates /> : <Home />}
+      {r.page === 'editor' ? <Editor key={r.id} projectID={r.id} /> : r.page === 'library' ? <Library /> : r.page === 'templates' ? <Templates /> : <Home />}
     </>
   )
 }

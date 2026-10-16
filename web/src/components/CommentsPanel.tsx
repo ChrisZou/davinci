@@ -1,80 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, type AIProvider, type EditComment } from '../api'
+import type { EditComment } from '../api'
+import type { EditComments } from './useEditComments'
 import type { Board } from '../types'
 
 const statusLabel: Record<EditComment['status'], string> = {
   running: '正在修改', done: '已修改', failed: '未完成', cancelled: '已取消', needs_info: '需要补充',
 }
 
-export function CommentsPanel({ projectID, board, selected }: { projectID: string; board: Board; selected: string[] }) {
-  const [comments, setComments] = useState<EditComment[]>([])
-  const [providers, setProviders] = useState<AIProvider[]>([])
-  const [provider, setProvider] = useState(() => { try { return localStorage.getItem('davinci.comment-provider') || 'codex' } catch { return 'codex' } })
+export function CommentsPanel({ ai, board, selected }: { ai: EditComments; board: Board; selected: string[] }) {
+  const { comments, providers, provider, setProvider, error, loaded, sending, cancelling, running, available, detect, cancel } = ai
   const [text, setText] = useState('')
-  const [error, setError] = useState('')
-  const [loaded, setLoaded] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [cancelling, setCancelling] = useState(false)
-  const alive = useRef(true)
-  const busy = useRef(false)
-  const mutation = useRef(0)
   const bottom = useRef<HTMLDivElement>(null)
   const textarea = useRef<HTMLTextAreaElement>(null)
   const current = comments.filter((c) => c.boardId === board.id)
-  const running = comments.find((c) => c.status === 'running')
   const target = selected.length ? selected.map((id) => board.layers.find((l) => l.id === id)?.name || '所选图层').join('、') : '整个画板'
-  const available = providers.find((p) => p.id === provider)?.available
-
-  const detect = async () => {
-    try {
-      const ps = await api.aiProviders()
-      if (!alive.current) return
-      setProviders(ps)
-      setProvider((p) => ps.some((x) => x.id === p && x.available) ? p : ps.find((x) => x.available)?.id || p)
-    } catch (e: any) { if (alive.current) setError(e.message) }
-  }
-  useEffect(() => {
-    alive.current = true
-    let stopped = false
-    let timer: ReturnType<typeof setTimeout>
-    const poll = async () => {
-      const version = mutation.current
-      try {
-        const list = await api.comments(projectID)
-        if (!stopped && !busy.current && version === mutation.current) { setComments(list); setLoaded(true) }
-      } catch (e: any) { if (!stopped) setError(e.message) }
-      if (!stopped) timer = setTimeout(poll, 1500)
-    }
-    void detect()
-    void poll()
-    return () => { stopped = true; alive.current = false; clearTimeout(timer) }
-  }, [projectID])
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest' }) }, [current.length, current.at(-1)?.status])
-
   const submit = async (retry?: EditComment) => {
-    if (busy.current || running) return
-    const message = (retry?.text ?? text).trim()
-    if (!message) return
-    busy.current = true; mutation.current++; setSending(true); setError('')
-    try {
-      const comment = await api.createComment(projectID, {
-        text: message, provider, boardId: retry?.boardId ?? board.id, layerIds: retry?.layerIds ?? selected,
-      })
-      if (!alive.current) return
-      setComments((all) => [...all.filter((c) => c.id !== comment.id), comment])
-      if (!retry) setText('')
-      try { localStorage.setItem('davinci.comment-provider', provider) } catch {}
-    } catch (e: any) { if (alive.current) setError(e.message) }
-    finally { busy.current = false; if (alive.current) setSending(false) }
-  }
-  const cancel = async () => {
-    if (!running || cancelling) return
-    mutation.current++; setCancelling(true); setError('')
-    try {
-      const updated = await api.cancelComment(projectID, running.id)
-      if (alive.current) setComments((all) => all.map((c) => c.id === updated.id ? updated : c))
-    } catch (e: any) { if (alive.current) setError(e.message) }
-    finally { mutation.current++; if (alive.current) setCancelling(false) }
+    if (await ai.submit({ text: retry?.text ?? text, boardId: retry?.boardId ?? board.id, layerIds: retry?.layerIds ?? selected }) && !retry) setText('')
   }
 
   return <div className="flex min-h-0 flex-1 flex-col" data-testid="comments-panel">

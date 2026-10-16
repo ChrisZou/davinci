@@ -23,6 +23,9 @@ import {
 } from '../editor/keyboard'
 import { Properties } from '../components/Properties'
 import { CommentsPanel } from '../components/CommentsPanel'
+import { SelectionComment } from '../components/SelectionComment'
+import { useEditComments } from '../components/useEditComments'
+import type { SelectionFrame } from '../editor/Editor'
 import { LayerPanel } from '../components/LayerPanel'
 import { ExportMenu } from '../components/ExportMenu'
 import { CropDialog } from '../components/CropDialog'
@@ -77,6 +80,8 @@ export function Editor({ projectID }: { projectID: string }) {
   const viewOnly = isTemplate && !editTemplate
   const [rows, setRows] = useState<LayerRow[]>([])
   const [selected, setSelected] = useState<string[]>([])
+  const [selectionFrame, setSelectionFrame] = useState<SelectionFrame | null>(null)
+  const aiComments = useEditComments(projectID)
   const [editing, setEditing] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [ready, setReady] = useState(false)
@@ -133,6 +138,7 @@ export function Editor({ projectID }: { projectID: string }) {
           },
           onProject: setProject,
           onSelection: setSelected,
+          onSelectionFrame: setSelectionFrame,
           onEditing: setEditing,
           onSaveState: setSaveState,
           onLog: addLog,
@@ -545,6 +551,9 @@ export function Editor({ projectID }: { projectID: string }) {
           }}
         >
           {showPanels && session && <ZoomPill zoom={zoom} editor={session.editor} onHelp={() => setHelp(true)} />}
+          {showPanels && project && !viewOnly && !editing && !cropFor && !menu && <SelectionComment
+            key={`${project.active}:${[...selected].sort().join(',')}`} ai={aiComments}
+            board={project.boards.find((b) => b.id === project.active)!} selected={selected} frame={selected.length ? selectionFrame : null} />}
           {showPanels && project && <Filmstrip project={project} open={stripOpen} onOpen={setStripOpen} onRun={(cmd) => void run(cmd)} readOnly={viewOnly} />}
           {dropping && (
             <div className="pointer-events-none absolute inset-4 z-10 flex items-center justify-center rounded-3xl border-2 border-dashed border-accent/60 bg-accent-soft/60 font-serif text-lg font-black text-accent">
@@ -584,7 +593,7 @@ export function Editor({ projectID }: { projectID: string }) {
               <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'properties' ? 'bg-paper text-ink' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'properties'} onClick={() => setRightPanel('properties')}>属性</button>
               <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'comments' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'comments'} onClick={() => setRightPanel('comments')}>评论改图</button>
             </div>
-            {rightPanel === 'comments' && project ? <CommentsPanel key={projectID} projectID={projectID} board={project.boards.find((b) => b.id === project.active)!} selected={selected} /> : <Properties
+            {rightPanel === 'comments' && project ? <CommentsPanel key={projectID} ai={aiComments} board={project.boards.find((b) => b.id === project.active)!} selected={selected} /> : <Properties
               doc={doc}
               layer={layer}
               selection={selection}

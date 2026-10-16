@@ -1,6 +1,6 @@
 import type { Document, Layer, ProjectDoc } from '../types'
 import { toProject } from '../types'
-import { Editor } from './Editor'
+import { Editor, type SelectionFrame } from './Editor'
 
 /**
  * The bridge between an editor page and the davinci server.
@@ -31,6 +31,7 @@ export interface SessionCallbacks {
   /** The project changed: boards added, renamed, switched, or edited. */
   onProject?: (project: ProjectDoc) => void
   onSelection?: (ids: string[]) => void
+  onSelectionFrame?: (frame: SelectionFrame | null) => void
   onEditing?: (id: string | null) => void
   onSaveState?: (state: SaveState) => void
   onLog?: (line: string) => void
@@ -93,6 +94,7 @@ export class Session {
   async open(container: HTMLElement) {
     this.editorInstance = await Editor.create(container, {
       onSelection: (ids) => this.cb.onSelection?.(ids),
+      onSelectionFrame: (frame) => this.cb.onSelectionFrame?.(frame),
       onEditing: (id) => this.cb.onEditing?.(id),
       onView: () => this.cb.onView?.(),
       onCommit: (cmd) => this.run(cmd),
