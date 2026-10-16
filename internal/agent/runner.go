@@ -27,8 +27,9 @@ type Provider struct {
 }
 
 type Request struct {
-	Provider, Prompt string
-	Image            []byte
+	Provider, Prompt                 string
+	ProjectID, Instructions, Context string
+	Image                            []byte
 }
 type Response struct {
 	Summary  string `json:"summary"`

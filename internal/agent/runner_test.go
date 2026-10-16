@@ -20,6 +20,10 @@ func TestAgentHelper(t *testing.T) {
 	if mode == "" {
 		return
 	}
+	if mode == "session" {
+		sessionHelper()
+		return
+	}
 	input, _ := io.ReadAll(os.Stdin)
 	if p := os.Getenv("DAVINCI_TEST_CAPTURE"); p != "" {
 		os.WriteFile(p, input, 0600)

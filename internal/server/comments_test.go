@@ -268,3 +268,31 @@ func TestConcurrentCommentResultsCannotOverwriteEachOther(t *testing.T) {
 		t.Fatal("stored document does not match live canvas")
 	}
 }
+
+func TestWarmSessionPreloadsProjectWithoutEditing(t *testing.T) {
+	h, id, e, _ := setupComment(t)
+	before := e.Snapshot()
+	calls := 0
+	h.srv.comments.warm = func(ctx context.Context, req agent.Request) (string, error) {
+		calls++
+		if req.ProjectID != id || !strings.Contains(req.Context, "评论测试") || !strings.Contains(req.Context, e.Project().Active) || !strings.Contains(req.Instructions, "setTextStyle") {
+			t.Error("missing project context or command instructions")
+		}
+		return "thread-test", nil
+	}
+	code, raw := h.do("POST", "/api/projects/"+id+"/ai/session", map[string]any{})
+	if code != 200 || !bytes.Contains(raw, []byte("thread-test")) || calls != 1 {
+		t.Fatalf("warm: %d %s", code, raw)
+	}
+	if !bytes.Equal(before, e.Snapshot()) {
+		t.Fatal("warming edited the document")
+	}
+	comments, err := h.srv.listComments(id)
+	if err != nil || len(comments) != 0 {
+		t.Fatal("warming created a comment", err)
+	}
+	code, _ = h.do("POST", "/api/projects/missing/ai/session", map[string]any{})
+	if code != 404 || calls != 1 {
+		t.Fatal("missing project warmed", code)
+	}
+}

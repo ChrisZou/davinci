@@ -41,6 +41,15 @@ export function useEditComments(projectID: string) {
     return () => { stopped = true; alive.current = false; clearTimeout(timer) }
   }, [projectID])
 
+  useEffect(() => {
+    if (provider !== 'codex' || !available) return
+    const controller = new AbortController()
+    // Preload silently. A comment can still initialize/recover the session if
+    // warming fails; do not block the editor or add another setup step.
+    void api.prepareAI(projectID, controller.signal).catch(() => {})
+    return () => controller.abort()
+  }, [projectID, provider, available])
+
   const submit = async (input: { text: string; boardId: string; layerIds: string[] }) => {
     if (busy.current || running || !loaded || !available) return false
     const message = input.text.trim()

@@ -95,6 +95,11 @@ async function asJSON<T>(resp: Response): Promise<T> {
 const base = ''
 
 export const api = {
+  async prepareAI(id: string, signal?: AbortSignal) {
+    return asJSON<{ ready: boolean; threadId: string }>(await fetch(`/api/projects/${encodeURIComponent(id)}/ai/session`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal,
+    }))
+  },
   async aiProviders() {
     return (await asJSON<{ providers: AIProvider[] }>(await fetch('/api/ai/providers'))).providers
   },
