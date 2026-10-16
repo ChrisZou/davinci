@@ -209,6 +209,38 @@ func TestCommentAllowedCommandsExist(t *testing.T) {
 	}
 }
 
+func TestCommentsThroughLocalDomain(t *testing.T) {
+	h, id, _, _ := setupComment(t)
+	for _, tc := range []struct {
+		origin, host string
+		status       int
+	}{
+		{"http://davinci.localhost", "davinci.localhost", http.StatusBadRequest},
+		{"http://davinci.localhost:8880", "davinci.localhost:8880", http.StatusBadRequest},
+		{"http://davinci-dev.localhost", "davinci-dev.localhost", http.StatusBadRequest},
+		{"http://davinci-dev.localhost", "davinci.localhost", http.StatusForbidden},
+		{"http://davinci-dev.localhost.evil.example", "davinci-dev.localhost.evil.example", http.StatusForbidden},
+		{"http://davinci.localhost", "other.localhost", http.StatusForbidden},
+		{"http://davinci.localhost.evil.example", "davinci.localhost.evil.example", http.StatusForbidden},
+		{"http://evil.localhost", "evil.localhost", http.StatusForbidden},
+	} {
+		// An empty comment must reach input validation through the local proxy,
+		// without launching a model. Other hosts must stop at the origin guard.
+		req, _ := http.NewRequest("POST", h.url("/api/projects/"+id+"/comments"), strings.NewReader(`{}`))
+		req.Host = tc.host
+		req.Header.Set("Origin", tc.origin)
+		req.Header.Set("Content-Type", "application/json")
+		res, err := h.client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != tc.status {
+			t.Errorf("origin %s, host %s: got %d, want %d", tc.origin, tc.host, res.StatusCode, tc.status)
+		}
+	}
+}
+
 func TestConcurrentCommentResultsCannotOverwriteEachOther(t *testing.T) {
 	h, id, e, c := setupComment(t)
 	before := e.Snapshot()

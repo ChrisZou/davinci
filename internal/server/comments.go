@@ -101,7 +101,9 @@ func (s *Server) commentAccess(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		if origin := c.Request().Header.Get("Origin"); origin != "" {
 			u, err := url.Parse(origin)
-			if err != nil || (origin != s.Addr() && origin != "http://localhost:5173" && origin != "http://127.0.0.1:5173" && !(u.Scheme == "http" && u.Host == c.Request().Host && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1"))) {
+			localPage := err == nil && u.Scheme == "http" && u.Host == c.Request().Host &&
+				(u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "davinci.localhost" || u.Hostname() == "davinci-dev.localhost")
+			if err != nil || (origin != s.Addr() && origin != "http://localhost:5173" && origin != "http://127.0.0.1:5173" && !localPage) {
 				return fail(c, http.StatusForbidden, "请从 DaVinci 内提交评论")
 			}
 		}

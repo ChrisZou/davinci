@@ -192,7 +192,7 @@ CLI 的其他子命令按 `--server` / `DAVINCI_SERVER` / `DAVINCI_PORT` → `se
 ## 评论改图（本机 AI）
 
 仅本地服务可用。评论调用本机已安装并登录的 Codex / Claude Code；无需在 DaVinci 填 API Key。
-浏览器请求须来自本服务或本地 Vite 开发页，POST 使用 `application/json`。
+浏览器请求须来自本服务、本地 Vite 开发页，或保留同源 Host 的 `http://davinci.localhost` / `http://davinci-dev.localhost` 反向代理，POST 使用 `application/json`。
 
 - `GET /api/ai/providers` → `{providers:[{id,name,available}]}`。`available` 只表示找到可执行文件，登录/额度在实际执行时检查。
 - `GET /api/projects/:id/comments` → `{comments:[...]}`，按时间顺序返回最近 200 条。
