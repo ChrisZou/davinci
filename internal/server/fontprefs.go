@@ -117,7 +117,8 @@ func without(list []string, v string) []string {
 // Scripts and uses a cover never needs, by words in the family name.
 var hiddenWords = regexp.MustCompile(`(?i)(PUA|Fallback|LastResort|Emoji|Sangam|Devanagari|Bangla|Gujarati|Gurmukhi|Kannada|Malayalam|Oriya|Odia|Tamil|Telugu|Sinhala|Khmer|\bLao\b|Myanmar|Mongolian|Tibetan|Ethiopic|Hebrew|Arabic|Urdu|Nastaliq|Naskh|Kufi|Kohinoor|Mukta|Cherokee|UCAS|InaiMathi|Kailasa|Georgian|Armenian|Syriac|Thaana|Braille|Dingbats|Wingdings|Webdings|Ornaments|\bSymbols?\b|^STIX)`)
 
-var notoCJK = regexp.MustCompile(` (SC|TC|HK|JP|KR)$`)
+// The region code may be followed by a weight/style suffix (e.g. "Noto Sans SC Black").
+var notoCJK = regexp.MustCompile(`(?i) (SC|TC|HK|JP|KR)( (Thin|Hairline|ExtraLight|Extra Light|UltraLight|Light|Regular|Book|Normal|Medium|SemiBold|Semi Bold|DemiBold|Bold|ExtraBold|Extra Bold|UltraBold|Black|Heavy|ExtraBlack|Italic|Oblique))*$`)
 
 // Arabic, Hebrew, Thai and other script families macOS ships under plain names.
 var hiddenNames = map[string]bool{
