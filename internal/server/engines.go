@@ -47,8 +47,16 @@ func historyOf(e *doc.Engine) *History {
 // engines holds one engine per open project.
 type engines struct {
 	mu     sync.Mutex
+	edits  sync.Map // project id -> *sync.Mutex; covers apply, save and broadcast
 	byID   map[string]*doc.Engine
 	thumbs map[string]*time.Timer
+}
+
+func (s *Server) lockProject(id string) func() {
+	v, _ := s.eng.edits.LoadOrStore(id, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 // engine returns the project's engine, loading the document on first use.
@@ -100,6 +108,16 @@ func (s *Server) Exec(projectID string, cmd json.RawMessage) (*Result, error) {
 // ExecFrom is Exec for a command from an editor page: the change goes out
 // marked with the page's origin, so that page knows the edit was its own.
 func (s *Server) ExecFrom(projectID string, cmd json.RawMessage, origin string) (*Result, error) {
+	return s.exec(projectID, cmd, origin, nil)
+}
+
+func (s *Server) execExpected(projectID string, cmd, expected json.RawMessage) (*Result, error) {
+	return s.exec(projectID, cmd, "", expected)
+}
+
+func (s *Server) exec(projectID string, cmd json.RawMessage, origin string, expected json.RawMessage) (*Result, error) {
+	unlock := s.lockProject(projectID)
+	defer unlock()
 	if len(cmd) == 0 {
 		return nil, errors.New("empty command")
 	}
@@ -107,7 +125,12 @@ func (s *Server) ExecFrom(projectID string, cmd json.RawMessage, origin string) 
 	if err != nil {
 		return nil, err
 	}
-	r := e.Apply(cmd)
+	var r doc.Result
+	if expected != nil {
+		r = e.ApplyIfUnchanged(cmd, expected)
+	} else {
+		r = e.Apply(cmd)
+	}
 	res := &Result{OK: r.OK, Error: r.Error}
 	if r.Data != nil {
 		res.Data, _ = json.Marshal(r.Data)
@@ -141,6 +164,8 @@ func (s *Server) ExecBatch(projectID string, cmds []json.RawMessage) (*Result, e
 
 // ReplaceDocument swaps a project's whole document (an import), undoably.
 func (s *Server) ReplaceDocument(projectID string, raw json.RawMessage) error {
+	unlock := s.lockProject(projectID)
+	defer unlock()
 	d, err := doc.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("not a davinci document: %w", err)

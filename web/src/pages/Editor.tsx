@@ -22,6 +22,7 @@ import {
   type ZMove,
 } from '../editor/keyboard'
 import { Properties } from '../components/Properties'
+import { CommentsPanel } from '../components/CommentsPanel'
 import { LayerPanel } from '../components/LayerPanel'
 import { ExportMenu } from '../components/ExportMenu'
 import { CropDialog } from '../components/CropDialog'
@@ -88,6 +89,7 @@ export function Editor({ projectID }: { projectID: string }) {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [dropping, setDropping] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [rightPanel, setRightPanel] = useState<'properties' | 'comments'>('properties')
   /** The image layer the library is open to replace, when it is. */
   const [replaceFor, setReplaceFor] = useState<string | null>(null)
   // Read by the shortcut handler, which is installed once and must not go stale.
@@ -577,8 +579,12 @@ export function Editor({ projectID }: { projectID: string }) {
         </div>
 
         {showPanels && !viewOnly && (
-          <aside className="card flex w-[280px] shrink-0 flex-col overflow-hidden">
-            <Properties
+          <aside className={`card flex shrink-0 flex-col overflow-hidden ${rightPanel === 'comments' ? 'w-[320px]' : 'w-[280px]'}`}>
+            <div className="flex shrink-0 gap-1 border-b border-line p-2" aria-label="编辑面板">
+              <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'properties' ? 'bg-paper text-ink' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'properties'} onClick={() => setRightPanel('properties')}>属性</button>
+              <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'comments' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'comments'} onClick={() => setRightPanel('comments')}>评论改图</button>
+            </div>
+            {rightPanel === 'comments' && project ? <CommentsPanel key={projectID} projectID={projectID} board={project.boards.find((b) => b.id === project.active)!} selected={selected} /> : <Properties
               doc={doc}
               layer={layer}
               selection={selection}
@@ -591,7 +597,7 @@ export function Editor({ projectID }: { projectID: string }) {
               }}
               onCrop={setCropFor}
               onPreview={(id, key, value) => session?.editor.preview(id, key, value)}
-            />
+            />}
           </aside>
         )}
       </div>

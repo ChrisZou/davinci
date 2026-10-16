@@ -46,7 +46,8 @@ type Server struct {
 	// renderer measures text and draws exports (a Node process, on demand).
 	renderer *render.Sidecar
 
-	quiet bool
+	quiet    bool
+	comments comments
 
 	// fontPrefsMu serialises changes to the favourite / hidden font lists.
 	fontPrefsMu sync.Mutex
@@ -108,6 +109,12 @@ func NewServer(opt Options) (*Server, error) {
 	}
 	s.hub.srv = s
 	s.renderer = render.New(opt.DataDir, s.Addr, s.logf)
+	if err := s.initComments(); err != nil {
+		s.renderer.Close()
+		store.Close()
+		lock.Close()
+		return nil, err
+	}
 	s.build()
 	return s, nil
 }
@@ -268,6 +275,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	default:
 		close(s.done)
 	}
+	s.stopComments()
 	s.renderer.Close()
 	if cerr := s.store.Close(); err == nil {
 		err = cerr

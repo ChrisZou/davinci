@@ -137,3 +137,18 @@ web/src/pages|components/  界面
 | web | canvaskit-wasm | Skia 的 wasm 版，浏览器和 Node 共用的绘制引擎 |
 | | react 18 + vite + tailwindcss 4 | 界面 |
 | 运行时 | node（服务端出图/量字用） | 找不到时编辑照常，导出和缩略图报错说明原因；可用 `DAVINCI_NODE` 指定 |
+
+## 评论驱动的 AI 编辑
+
+`internal/server/comments.go` 保存评论、固定目标画板/图层、调度任务和检查修改；
+`internal/agent` 通过无 shell 的子进程调用本机 Codex / Claude Code，并提供结构化输出适配。
+用户登录和模型配置由各 CLI 管理。请求通过 stdin 传递，预览和输出 schema 放在任务临时目录，结束即删除。
+Codex 使用只读 sandbox；Claude 禁用内置工具、额外 MCP 和 hooks。AI 仅提出命令，由服务端应用。
+CLI 文档：[Codex 非交互模式](https://developers.openai.com/codex/noninteractive)、
+[Claude Code 程序化调用](https://code.claude.com/docs/en/headless)。
+
+工作流：保存 `running` 评论 → 生成画板 PNG → 调用 CLI → 校验命令白名单与素材引用 →
+`Engine.ApplyIfUnchanged` 在同一引擎锁内比较原文档并执行原子批次 → 保存、广播 → 回写评论结果。
+画板切换也放在批次内部，确保错误回滚和一次撤销都恢复完整原状。
+评论单独保存在 `comments` 表，随项目级联删除；服务重启将中断的任务标记为失败，不自动再次调用 AI。
+前端评论面板轮询结果，关闭面板不取消任务，显式取消会终止 CLI 进程树并丢弃返回结果。

@@ -44,6 +44,7 @@ func (s *Server) registerAPI(e *echo.Echo) {
 
 	s.registerLibrary(api)
 	s.registerTemplates(api)
+	s.registerComments(api)
 }
 
 // --- health & metadata ---
@@ -257,6 +258,8 @@ func (s *Server) handleThumbnail(c echo.Context) error {
 }
 
 func (s *Server) handleDeleteProject(c echo.Context) error {
+	unlock := s.lockProject(c.Param("id"))
+	defer unlock()
 	if err := s.store.DeleteProject(c.Param("id")); err != nil {
 		return errJSON(c, err)
 	}

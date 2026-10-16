@@ -64,6 +64,20 @@ export interface TagCount {
 
 export type ProjectKind = 'design' | 'template'
 
+export interface AIProvider { id: string; name: string; available: boolean }
+export interface EditComment {
+  id: string
+  projectId: string
+  boardId: string
+  layerIds: string[]
+  target: string
+  text: string
+  provider: string
+  status: 'running' | 'done' | 'failed' | 'cancelled' | 'needs_info'
+  reply: string
+  createdAt: string
+}
+
 async function asJSON<T>(resp: Response): Promise<T> {
   const text = await resp.text()
   let body: any = null
@@ -81,6 +95,22 @@ async function asJSON<T>(resp: Response): Promise<T> {
 const base = ''
 
 export const api = {
+  async aiProviders() {
+    return (await asJSON<{ providers: AIProvider[] }>(await fetch('/api/ai/providers'))).providers
+  },
+  async comments(id: string) {
+    return (await asJSON<{ comments: EditComment[] }>(await fetch(`/api/projects/${encodeURIComponent(id)}/comments`))).comments
+  },
+  async createComment(id: string, input: { boardId: string; layerIds: string[]; text: string; provider: string }) {
+    return (await asJSON<{ comment: EditComment }>(await fetch(`/api/projects/${encodeURIComponent(id)}/comments`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+    }))).comment
+  },
+  async cancelComment(id: string, commentID: string) {
+    return (await asJSON<{ comment: EditComment }>(await fetch(`/api/projects/${encodeURIComponent(id)}/comments/${encodeURIComponent(commentID)}/cancel`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    }))).comment
+  },
   async health() {
     return asJSON<{ ok: boolean; projects: number; boot: string }>(await fetch(`${base}/api/health`))
   },

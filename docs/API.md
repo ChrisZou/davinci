@@ -188,3 +188,26 @@ CLI 的其他子命令按 `--server` / `DAVINCI_SERVER` / `DAVINCI_PORT` → `se
 都找不到就自己拉起一个。给人看的编辑器地址（`open`、`new`、`serve --open`）在 `davinci.localhost` 指向
 同一个服务时用 `http://davinci.localhost`，否则用 API 地址；`DAVINCI_WEB_URL` 可以直接指定。数据目录里是 `davinci.db`（SQLite）、`assets/`、`fonts/`。
 数据目录里若是更早版本建的库（文档格式不同），启动时会明确报错，换个 `--data` 即可。
+
+## 评论改图（本机 AI）
+
+仅本地服务可用。评论调用本机已安装并登录的 Codex / Claude Code；无需在 DaVinci 填 API Key。
+浏览器请求须来自本服务或本地 Vite 开发页，POST 使用 `application/json`。
+
+- `GET /api/ai/providers` → `{providers:[{id,name,available}]}`。`available` 只表示找到可执行文件，登录/额度在实际执行时检查。
+- `GET /api/projects/:id/comments` → `{comments:[...]}`，按时间顺序返回最近 200 条。
+- `POST /api/projects/:id/comments` → HTTP 202 `{comment:{...}}`。
+  请求：`{boardId,layerIds:[],text,provider:"codex"|"claude"}`；评论 1–4000 字。
+- `POST /api/projects/:id/comments/:comment/cancel`，JSON body `{}` → `{comment:{...}}`。
+
+评论包含 `id,projectId,boardId,layerIds,target,text,provider,status,reply,createdAt`。
+`status`：`running`、`done`、`needs_info`、`failed`、`cancelled`。
+同项目同时只处理一条，全服务最多两条；冲突返回 409。单次最多 5 分钟，不自动重试付费请求。
+失败后重新提交同一评论即可重试，会使用最新画稿。
+
+AI 收到当前画板预览、图层结构、选中图层、可用编辑命令及该画板最近六条评论。
+模型返回的命令经校验后作为一个事务应用，共用原有 WebSocket 更新和撤销历史。
+等待 AI 时文档有变化，会拒绝旧结果；取消或失败不应用修改。评论保存在 SQLite 中，独立于撤销栈；
+撤销修改不会删除评论，也不会把历史“已修改”改为新的任务状态。
+
+支持文字、配色、布局、形状、滤镜、裁剪及复用已导入图片；不含图像生成、换脸或新素材下载。

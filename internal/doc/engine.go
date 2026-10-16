@@ -147,6 +147,21 @@ func (e *Engine) EnsureMeasured() (bool, error) {
 func (e *Engine) Apply(raw []byte) Result {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.applyLocked(raw)
+}
+
+// ApplyIfUnchanged compares and edits under the same lock. A slow AI response
+// must never overwrite an intervening human edit or an imported document.
+func (e *Engine) ApplyIfUnchanged(raw, expected []byte) Result {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !bytes.Equal(e.p.JSON(), expected) {
+		return Result{Error: "画稿已发生变化，请按最新画稿重新执行评论"}
+	}
+	return e.applyLocked(raw)
+}
+
+func (e *Engine) applyLocked(raw []byte) Result {
 	cmd, err := decode(raw)
 	if err != nil {
 		return Result{Error: err.Error()}
