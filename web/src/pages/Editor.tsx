@@ -132,6 +132,8 @@ export function Editor({ projectID }: { projectID: string }) {
         document.title = `${p.name} · DaVinci`
 
         const session = new Session(projectID, {
+          onComment: aiComments.receive,
+          onConnected: aiComments.refresh,
           onDocument: (d) => {
             setDoc(d)
             setRows(session.editor.layerRows())

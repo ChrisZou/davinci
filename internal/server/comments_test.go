@@ -12,6 +12,7 @@ import (
 
 	"davinci/internal/agent"
 	"davinci/internal/doc"
+	"github.com/gorilla/websocket"
 )
 
 func setupComment(t *testing.T) (*harness, string, *doc.Engine, Comment) {
@@ -294,5 +295,44 @@ func TestWarmSessionPreloadsProjectWithoutEditing(t *testing.T) {
 	code, _ = h.do("POST", "/api/projects/missing/ai/session", map[string]any{})
 	if code != 404 || calls != 1 {
 		t.Fatal("missing project warmed", code)
+	}
+}
+
+func TestCommentCompletionTravelsWithDocument(t *testing.T) {
+	h, id, e, c := setupComment(t)
+	ws, _, err := websocket.DefaultDialer.Dial(strings.Replace(h.srv.Addr(), "http:", "ws:", 1)+"/ws?project="+id, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ws.Close()
+	_ = ws.SetReadDeadline(time.Now().Add(3 * time.Second))
+	var env Envelope
+	if err = ws.ReadJSON(&env); err != nil || env.Type != "hello" {
+		t.Fatal(err, env.Type)
+	}
+	c.Status = "running"
+	if err = h.srv.applyComment(&c, &agent.Response{Commands: `[{"type":"setBackground","color":"#ffff00"}]`}, e.Snapshot()); err != nil {
+		t.Fatal(err)
+	}
+	if err = ws.ReadJSON(&env); err != nil {
+		t.Fatal(err)
+	}
+	if env.Type != "doc" || env.Comment == nil || env.Comment.ID != c.ID || env.Comment.Status != "done" || env.Revision == 0 {
+		t.Fatalf("completion missing from document: %+v", env)
+	}
+	p, err := doc.Parse(env.Document)
+	if err != nil || p.ActiveBoard().Canvas.Background != "#ffff00" {
+		t.Fatal("wrong document", err)
+	}
+	list, err := h.srv.listComments(id)
+	if err != nil || len(list) != 1 || list[0].Status != "done" {
+		t.Fatal("completion not persisted", list, err)
+	}
+	// Failure has no document update, but must still reach the composer immediately.
+	c.ID = "failed_comment"
+	h.srv.finishComment(&c, errors.New("test failure"))
+	env = Envelope{}
+	if err = ws.ReadJSON(&env); err != nil || env.Type != "comment" || env.Comment == nil || env.Comment.Status != "failed" || env.Document != nil {
+		t.Fatal(err, env)
 	}
 }

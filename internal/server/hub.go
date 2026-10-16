@@ -28,6 +28,7 @@ import (
 
 // Envelope is the JSON frame used in both directions on /ws.
 type Envelope struct {
+	Comment  *Comment        `json:"comment,omitempty"`
 	Type     string          `json:"type"`
 	ReqID    string          `json:"reqId,omitempty"`
 	OK       bool            `json:"ok,omitempty"`

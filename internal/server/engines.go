@@ -108,14 +108,14 @@ func (s *Server) Exec(projectID string, cmd json.RawMessage) (*Result, error) {
 // ExecFrom is Exec for a command from an editor page: the change goes out
 // marked with the page's origin, so that page knows the edit was its own.
 func (s *Server) ExecFrom(projectID string, cmd json.RawMessage, origin string) (*Result, error) {
-	return s.exec(projectID, cmd, origin, nil)
+	return s.exec(projectID, cmd, origin, nil, nil)
 }
 
-func (s *Server) execExpected(projectID string, cmd, expected json.RawMessage) (*Result, error) {
-	return s.exec(projectID, cmd, "", expected)
+func (s *Server) execExpected(projectID string, cmd, expected json.RawMessage, comment *Comment) (*Result, error) {
+	return s.exec(projectID, cmd, "", expected, comment)
 }
 
-func (s *Server) exec(projectID string, cmd json.RawMessage, origin string, expected json.RawMessage) (*Result, error) {
+func (s *Server) exec(projectID string, cmd json.RawMessage, origin string, expected json.RawMessage, comment *Comment) (*Result, error) {
 	unlock := s.lockProject(projectID)
 	defer unlock()
 	if len(cmd) == 0 {
@@ -139,7 +139,7 @@ func (s *Server) exec(projectID string, cmd json.RawMessage, origin string, expe
 	res.Document = snapshot
 	res.History = historyOf(e)
 	if r.Changed {
-		rev, err := s.persist(projectID, snapshot, e, origin, cmd)
+		rev, err := s.persist(projectID, snapshot, e, origin, cmd, comment)
 		if err != nil {
 			return nil, err
 		}
@@ -175,19 +175,26 @@ func (s *Server) ReplaceDocument(projectID string, raw json.RawMessage) error {
 		return err
 	}
 	e.Replace(d)
-	_, err = s.persist(projectID, e.Snapshot(), e, "", nil)
+	_, err = s.persist(projectID, e.Snapshot(), e, "", nil, nil)
 	return err
 }
 
 // persist saves a document, tells every open page (with the command that made
 // the change and where it came from), and schedules a new tile.
-func (s *Server) persist(projectID string, snapshot []byte, e *doc.Engine, origin string, cmd json.RawMessage) (int64, error) {
+func (s *Server) persist(projectID string, snapshot []byte, e *doc.Engine, origin string, cmd json.RawMessage, comment *Comment) (int64, error) {
 	w, h := canvasSizeOf(snapshot)
 	rev, err := s.store.SaveDocument(projectID, snapshot, w, h)
 	if err != nil {
 		return 0, err
 	}
-	s.hub.broadcast(projectID, Envelope{Type: "doc", Document: snapshot, Revision: rev, Origin: origin, Command: cmd, History: historyOf(e)})
+	// Deliver the completed comment with the document it produced.
+	if comment != nil {
+		comment.Status = "done"
+		if err := s.saveComment(*comment); err != nil {
+			s.logf("[comments] save result: %v", err)
+		}
+	}
+	s.hub.broadcast(projectID, Envelope{Type: "doc", Comment: comment, Document: snapshot, Revision: rev, Origin: origin, Command: cmd, History: historyOf(e)})
 	s.scheduleThumbnail(projectID)
 	s.scheduleCommentPreview(projectID, snapshot)
 	return rev, nil

@@ -1,3 +1,4 @@
+import type { EditComment } from '../api'
 import type { Document, Layer, ProjectDoc } from '../types'
 import { toProject } from '../types'
 import { Editor, type SelectionFrame } from './Editor'
@@ -26,6 +27,8 @@ export interface RunResult {
 }
 
 export interface SessionCallbacks {
+  onComment?: (comment: EditComment) => void
+  onConnected?: () => void
   /** The active board's document changed (the panels read this). */
   onDocument?: (doc: Document) => void
   /** The project changed: boards added, renamed, switched, or edited. */
@@ -46,6 +49,7 @@ export interface SessionCallbacks {
 }
 
 interface Envelope {
+  comment?: EditComment
   type: string
   reqId?: string
   ok?: boolean
@@ -188,6 +192,7 @@ export class Session {
         this.revision = 0
         this.adopt(env)
         this.cb.onSaveState?.('saved')
+        this.cb.onConnected?.()
         this.firstHello?.()
         this.firstHello = undefined
         break
@@ -196,6 +201,8 @@ export class Session {
         if (fresh && env.command && env.origin !== this.origin) this.cb.onRemoteCommand?.(env.command)
         break
       }
+      case 'comment':
+        break
       case 'result':
         this.adopt(env)
         this.pending.get(env.reqId ?? '')?.(env.ok ? { ok: true, data: env.data } : { ok: false, error: env.error || '命令失败' })
@@ -204,6 +211,8 @@ export class Session {
         this.cb.onLog?.(`server: ${env.message ?? 'error'}`)
         break
     }
+    // Adopt the document first; the composer then sees completion in the same event.
+    if (env.comment) this.cb.onComment?.(env.comment)
   }
 
   /** Takes a document from the server when it is newer than ours. */

@@ -31,7 +31,7 @@ export function SelectionComment({ ai, board, selected, frame }: {
     document.addEventListener('pointerdown', outside)
     return () => document.removeEventListener('pointerdown', outside)
   }, [open])
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (result?.status !== 'done') return
     setText('')
     setOpen(false)

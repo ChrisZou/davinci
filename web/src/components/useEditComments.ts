@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type AIProvider, type EditComment } from '../api'
+import { mergeComments } from './commentState'
 
 /** One project-wide queue, shared by the selection composer and comment history. */
 export function useEditComments(projectID: string) {
@@ -12,7 +13,6 @@ export function useEditComments(projectID: string) {
   const [cancelling, setCancelling] = useState(false)
   const alive = useRef(true)
   const busy = useRef(false)
-  const mutation = useRef(0)
   const running = comments.find((c) => c.status === 'running')
   const available = providers.find((p) => p.id === provider)?.available
 
@@ -24,22 +24,23 @@ export function useEditComments(projectID: string) {
       setProvider((p) => ps.some((x) => x.id === p && x.available) ? p : ps.find((x) => x.available)?.id || p)
     } catch (e: any) { if (alive.current) setError(e.message) }
   }
+  const receive = useCallback((comment: EditComment) => {
+    if (alive.current && comment.projectId === projectID) {
+      setComments((all) => mergeComments(all, [comment]))
+    }
+  }, [projectID])
+  const refresh = useCallback(async () => {
+    try {
+      const list = await api.comments(projectID)
+      if (alive.current) { setComments((all) => mergeComments(all, list)); setLoaded(true) }
+    } catch (e: any) { if (alive.current) setError(e.message) }
+  }, [projectID])
   useEffect(() => {
     alive.current = true
-    let stopped = false
-    let timer: ReturnType<typeof setTimeout>
-    const poll = async () => {
-      const version = mutation.current
-      try {
-        const list = await api.comments(projectID)
-        if (!stopped && !busy.current && version === mutation.current) { setComments(list); setLoaded(true) }
-      } catch (e: any) { if (!stopped) setError(e.message) }
-      if (!stopped) timer = setTimeout(poll, 1500)
-    }
     void detect()
-    void poll()
-    return () => { stopped = true; alive.current = false; clearTimeout(timer) }
-  }, [projectID])
+    void refresh()
+    return () => { alive.current = false }
+  }, [projectID, refresh])
 
   useEffect(() => {
     if (provider !== 'codex' || !available) return
@@ -54,13 +55,13 @@ export function useEditComments(projectID: string) {
     if (busy.current || running || !loaded || !available) return false
     const message = input.text.trim()
     if (!message) return false
-    busy.current = true; mutation.current++; setSending(true); setError('')
+    busy.current = true; setSending(true); setError('')
     try {
       const comment = await api.createComment(projectID, {
         ...input, text: message, provider, layerIds: [...input.layerIds],
       })
       if (!alive.current) return
-      setComments((all) => [...all.filter((c) => c.id !== comment.id), comment])
+      receive(comment)
       try { localStorage.setItem('davinci.comment-provider', provider) } catch {}
       return comment
     } catch (e: any) { if (alive.current) setError(e.message) }
@@ -69,15 +70,15 @@ export function useEditComments(projectID: string) {
   }
   const cancel = async () => {
     if (!running || cancelling) return
-    mutation.current++; setCancelling(true); setError('')
+    setCancelling(true); setError('')
     try {
       const updated = await api.cancelComment(projectID, running.id)
-      if (alive.current) setComments((all) => all.map((c) => c.id === updated.id ? updated : c))
+      if (alive.current) receive(updated)
     } catch (e: any) { if (alive.current) setError(e.message) }
-    finally { mutation.current++; if (alive.current) setCancelling(false) }
+    finally { if (alive.current) setCancelling(false) }
   }
 
-  return { comments, providers, provider, setProvider, error, loaded, sending, cancelling, running, available, detect, submit, cancel }
+  return { comments, providers, provider, setProvider, error, loaded, sending, cancelling, running, available, detect, submit, cancel, receive, refresh }
 }
 
 export type EditComments = ReturnType<typeof useEditComments>

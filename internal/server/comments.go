@@ -239,6 +239,7 @@ func (s *Server) handleCreateComment(c echo.Context) error {
 	if err := s.saveComment(comment); err != nil {
 		return err
 	}
+	s.hub.broadcast(comment.ProjectID, Envelope{Type: "comment", Comment: &comment})
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	job := &commentJob{comment: comment, cancel: cancel}
 	s.comments.jobs[id] = job
@@ -260,6 +261,7 @@ func (s *Server) handleCancelComment(c echo.Context) error {
 	if err := s.saveComment(j.comment); err != nil {
 		return err
 	}
+	s.hub.broadcast(j.comment.ProjectID, Envelope{Type: "comment", Comment: &j.comment})
 	return c.JSON(200, map[string]any{"comment": j.comment})
 }
 
@@ -335,6 +337,7 @@ func (s *Server) finishComment(c *Comment, err error) {
 	if err := s.saveComment(*c); err != nil {
 		s.logf("[comments] save result: %v", err)
 	}
+	s.hub.broadcast(c.ProjectID, Envelope{Type: "comment", Comment: c})
 }
 
 // Deliberately excludes history, exports, board management and file imports.
@@ -465,7 +468,7 @@ func (s *Server) applyComment(c *Comment, r *agent.Response, snapshot []byte) er
 	batch := []map[string]any{{"type": "selectBoard", "id": c.BoardID}}
 	batch = append(batch, commands...)
 	raw, _ := json.Marshal(batch)
-	res, err := s.execExpected(c.ProjectID, raw, snapshot)
+	res, err := s.execExpected(c.ProjectID, raw, snapshot, c)
 	if err != nil {
 		return err
 	}
