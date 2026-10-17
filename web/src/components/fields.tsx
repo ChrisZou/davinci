@@ -1,3 +1,4 @@
+import { usePalettes } from './paletteState'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 /**
@@ -120,6 +121,8 @@ export function ColorField({
   /** Colours already used in the document, offered as swatches. */
   palette?: string[]
 }) {
+  const { items: savedPalettes } = usePalettes()
+  const mine = [...new Set((savedPalettes ?? []).flatMap((p) => [p.bg, p.text, p.highlight, p.text2, p.accent]))]
   const none = !value || value === 'transparent' || value === 'none'
   // The colour input only understands #rrggbb, so anything else (transparent, a
   // shorthand, an rgba() shadow) is shown as black and typed into the text box.
@@ -193,6 +196,14 @@ export function ColorField({
               onClick={() => now(c)}
             />
           ))}
+        </div>
+      )}
+      {mine.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[11px] text-muted">我的配色</span>
+          <div className="flex max-h-16 flex-wrap gap-1.5 overflow-y-auto">
+            {mine.map((c) => <button key={c} type="button" title={c} aria-label={`我的配色 ${c}`} className="h-6 w-6 shrink-0 rounded-full border border-line-strong hover:scale-110" style={{ background: c }} onClick={() => now(c)} />)}
+          </div>
         </div>
       )}
     </div>

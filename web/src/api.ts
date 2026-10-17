@@ -94,7 +94,41 @@ async function asJSON<T>(resp: Response): Promise<T> {
 
 const base = ''
 
+export interface PaletteColors {
+  bg: string
+  text: string
+  highlight: string
+  text2: string
+  accent: string
+}
+export interface PaletteDraft extends PaletteColors { name: string }
+export interface Palette extends PaletteDraft { id: string; createdAt: string; updatedAt: string }
+
 export const api = {
+  async palettes() {
+    return (await asJSON<{ palettes: Palette[] }>(await fetch('/api/palettes'))).palettes
+  },
+  async palette(id: string) {
+    return (await asJSON<{ palette: Palette }>(await fetch(`/api/palettes/${encodeURIComponent(id)}`))).palette
+  },
+  async analyzePalette(file: File) {
+    const form = new FormData()
+    form.append('file', file)
+    return (await asJSON<{ palette: PaletteDraft }>(await fetch('/api/palettes/analyze', { method: 'POST', body: form }))).palette
+  },
+  async savePalette(draft: PaletteDraft, id?: string) {
+    return (await asJSON<{ palette: Palette }>(await fetch(id ? `/api/palettes/${encodeURIComponent(id)}` : '/api/palettes', {
+      method: id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft),
+    }))).palette
+  },
+  async deletePalette(id: string) {
+    await asJSON(await fetch(`/api/palettes/${encodeURIComponent(id)}`, { method: 'DELETE' }))
+  },
+  async applyPalette(project: string, id: string, board?: string) {
+    return asJSON(await fetch(`/api/projects/${encodeURIComponent(project)}/palettes/${encodeURIComponent(id)}/apply`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ board }),
+    }))
+  },
   async prepareAI(id: string, signal?: AbortSignal) {
     return asJSON<{ ready: boolean; threadId: string }>(await fetch(`/api/projects/${encodeURIComponent(id)}/ai/session`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal,

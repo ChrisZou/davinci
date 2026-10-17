@@ -30,6 +30,7 @@ import { LayerPanel } from '../components/LayerPanel'
 import { ExportMenu } from '../components/ExportMenu'
 import { CropDialog } from '../components/CropDialog'
 import { Modal, modalOpen } from '../components/Dialog'
+import { PalettePanel } from '../components/PalettePanel'
 import { LibraryPanel } from '../components/LibraryPanel'
 import { Mark } from '../components/Brand'
 import { Filmstrip, filmstripInset, useFilmstripOpen } from '../components/Filmstrip'
@@ -94,6 +95,7 @@ export function Editor({ projectID }: { projectID: string }) {
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [dropping, setDropping] = useState(false)
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const [rightPanel, setRightPanel] = useState<'properties' | 'comments'>('properties')
   /** The image layer the library is open to replace, when it is. */
   const [replaceFor, setReplaceFor] = useState<string | null>(null)
@@ -485,8 +487,12 @@ export function Editor({ projectID }: { projectID: string }) {
                   onLine={(k) => void addLine(k)}
                   onFiles={(files) => void addImageFiles(files)}
                   libraryOpen={libraryOpen}
-                  onToggleLibrary={() => setLibraryOpen((v) => !v)}
-                />
+                  onToggleLibrary={() => { setPaletteOpen(false); setLibraryOpen((v) => !v) }}
+                >
+                  <button className="icon-btn" data-palette-toggle aria-label="配色" title="配色" aria-pressed={paletteOpen} onClick={() => { setLibraryOpen(false); setReplaceFor(null); setPaletteOpen((v) => !v) }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><circle cx="8" cy="9" r="1.5" /><circle cx="15" cy="8" r="1.5" /><circle cx="7" cy="15" r="1.5" /><path d="M20 16h-5l-2 5" /></svg>
+                  </button>
+                </ToolDock>
 
                 <div className="island absolute right-5 top-4 flex h-[52px] items-center gap-0.5 pl-1.5 pr-2">
                   <button className="icon-btn" disabled={!session.canUndo} title={shortcut('撤销 ⌘Z')} aria-label="撤销" onClick={() => void run({ type: 'undo' })}>
@@ -603,6 +609,7 @@ export function Editor({ projectID }: { projectID: string }) {
               onRunSelect={(cmd) => void runAndSelect(host, cmd)}
               onUpload={upload}
               onPickFromLibrary={(l) => {
+                setPaletteOpen(false)
                 setLibraryOpen(false)
                 setReplaceFor(l.id)
               }}
@@ -626,6 +633,10 @@ export function Editor({ projectID }: { projectID: string }) {
       ) : (
         libraryOpen && showPanels && <LibraryPanel onInsert={(it) => void insertLibraryItem(it)} onClose={() => setLibraryOpen(false)} />
       )}
+      {paletteOpen && showPanels && !viewOnly && <PalettePanel project={projectID} board={project?.active} onClose={() => setPaletteOpen(false)} onApply={async (id) => {
+        const result = await run({ type: 'applyPalette', id, board: project?.active })
+        if (!result?.ok) throw new Error(result?.error ?? '应用失败')
+      }} />}
       {menu && session && (
         <ContextMenu menu={menu} editor={session.editor} doc={doc} host={host} onCrop={setCropFor} onLog={addLog} onClose={() => setMenu(null)} />
       )}
@@ -660,6 +671,7 @@ function describeRemote(raw: unknown, doc: Document | null): string {
   if (cmd?.type === 'batch') return `命令行刚做了 ${Array.isArray(cmd.commands) ? cmd.commands.length : ''} 步修改`
   const added: Record<string, string> = { addText: '文字', addImage: '图片', addShape: '形状', insertLayers: '图层' }
   if (added[cmd?.type]) return `命令行刚添加了${added[cmd.type]}`
+  if (cmd?.type === 'applyPalette') return '命令行刚应用了配色'
   if (cmd?.type === 'removeLayer') return `命令行刚删除了「${cmd.id}」`
   if (cmd?.id) return `命令行刚改了「${nameOf(cmd.id)}」`
   if (Array.isArray(cmd?.ids)) return `命令行刚改了 ${cmd.ids.length} 个图层`

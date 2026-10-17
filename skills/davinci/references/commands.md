@@ -141,3 +141,30 @@ davinci open <项目>                       # 编辑器地址 http://davinci.loc
 davinci doc -p <项目>                     # 整份文档 JSON
 davinci watch -p <项目>                   # 实时打印人在编辑器里的改动
 ```
+
+## 全局配色
+
+**选择颜色时优先使用已保存配色，先 `davinci palette list`。**
+
+```bash
+davinci palette list --json
+davinci palette list -q 暖色
+davinci palette show <id>
+davinci palette add --from-image ./参考图.png --name 暖色 --dry-run
+davinci palette add --from-image ./参考图.png --name 暖色 --text '#161616'
+davinci palette update <id> --name 新名字 --bg '#fff2df' --text '#161616' \
+  --highlight '#e85830' --text2 '#675649' --accent '#25818a'
+davinci palette apply <id> -p P --board 2
+davinci palette delete <id>
+```
+
+配色跨项目共享，恰好五色 `bg/text/highlight/text2/accent`（背景/主文字/高亮/次文字/点缀）。
+名称 1–120 字，色值 `#RRGGBB`。`add` 的五色覆盖参数可用于保存前微调，`--dry-run` 仅打印草稿。
+图片支持 PNG/JPEG/GIF 首帧/WebP，≤20 MB / 2000 万像素。所有子命令支持 `--json`。
+
+应用命令：`{"type":"applyPalette","id":"pal_xxx","board":"2"}`。背景及全画板矩形→bg；
+最大字号文字及命名主标题→text；其余文字→text2；形状填充/描边交替使用 highlight/accent，
+递归处理编组，保留透明填充、描边宽度和图片。一条命令、一次 undo，跨 UI/CLI 共用历史。
+修改或删除配色不影响已应用画板；应用后 render 检查，背景图会继续保留。
+单独采用其中某个色值时，用原有 `setBackground` / `setTextStyle` / `setShapeProps` 命令。
+REST 管理接口见 `davinci schema` 的 `endpoints` 字段。

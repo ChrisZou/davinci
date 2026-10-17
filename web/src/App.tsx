@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react'
 import { Home } from './pages/Home'
 import { Editor } from './pages/Editor'
+import { Palettes } from './pages/Palettes'
 import { Library } from './pages/Library'
 import { Templates } from './pages/Templates'
 
 /**
  * Routes, driven by the pathname so the Go server's `/editor/<id>` links
  * work directly: `/` is the project list, `/editor/<id>` is a canvas,
- * `/library` the material library and `/templates` the template library.
+ * `/library` the material library, `/templates` the template library, and
+ * `/palettes/:id?` the global colour library and details.
  */
-function routeOf(): { page: 'home' | 'editor' | 'library' | 'templates'; id: string } {
+function routeOf(): { page: 'home' | 'editor' | 'library' | 'templates' | 'palettes'; id: string } {
+  const palette = location.pathname.match(/^\/palettes(?:\/([^/?#]+))?\/?$/)
+  if (palette) return { page: 'palettes', id: palette[1] ? decodeURIComponent(palette[1]) : '' }
   const m = location.pathname.match(/^\/editor\/([^/?#]+)/)
   if (m) return { page: 'editor', id: decodeURIComponent(m[1]) }
   if (/^\/library\/?$/.test(location.pathname)) return { page: 'library', id: '' }
@@ -34,7 +38,7 @@ export function App() {
   return (
     <>
       <div className="titlebar-drag" aria-hidden />
-      {r.page === 'editor' ? <Editor key={r.id} projectID={r.id} /> : r.page === 'library' ? <Library /> : r.page === 'templates' ? <Templates /> : <Home />}
+      {r.page === 'editor' ? <Editor key={r.id} projectID={r.id} /> : r.page === 'palettes' ? <Palettes id={r.id} /> : r.page === 'library' ? <Library /> : r.page === 'templates' ? <Templates /> : <Home />}
     </>
   )
 }

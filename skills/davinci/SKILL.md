@@ -1,7 +1,7 @@
 ---
 name: davinci
 description: >
-  用 davinci（本地的图层化图片编辑器）做封面和配图、管理素材库。凡是要做 / 改
+  用 davinci（本地的图层化图片编辑器）做封面和配图、管理素材库和全局配色。凡是要做 / 改
   小红书封面、B 站封面、视频号竖图、公众号头图、海报、缩略图、带文字的配图，
   或者要往素材库里上传人像 / 背景 / APP Logo、从素材库找图、收藏或参考模板库里的封面、导出 PNG/JPG 时使用。
   用户发来 davinci.localhost 的链接（如 http://davinci.localhost/editor/p_xxx?b=yyy）或 davinci://p_xxx?b=yyy
@@ -53,12 +53,13 @@ davinci projects          # 能列出项目（可能是空的）就说明一切�
 2. **找素材**（需要人像、Logo、背景时）：`davinci lib ls -c 人像 -q "指向左上 微笑"`，
    挑中后 `davinci lib show <id>` 读它的说明和标注——人像的标注会告诉你人物该放哪、
    标题该放哪（`placement`、`p_strategy`），照着摆。
-3. **一次排完**：把整张图写成一个 JSON 命令数组，`davinci -p <项目> exec --file cover.json`。
+3. **先选配色**：`davinci palette list --json`，优先用已保存配色；`palette show <id>` 读取五个角色色，带入排版命令。
+4. **一次排完**：把整张图写成一个 JSON 命令数组，`davinci -p <项目> exec --file cover.json`。
    一批命令 = 一个撤销步骤；任何一条失败整批回滚，改好那条重发即可。
-4. **看结果**：`davinci -p <项目> render -o cover.png`，然后**用你能看图的方式打开这张 PNG 看一眼**。
+5. **看结果**：`davinci -p <项目> render -o cover.png`，然后**用你能看图的方式打开这张 PNG 看一眼**。
    文字压到人脸、字太小、对比度不够、元素出界——看到就改（见第 3 节），再 render 再看。
    没看过渲染结果之前，不要说"做好了"。
-5. **把编辑器地址给用户**：`davinci open <项目>` 打印（并尝试打开）编辑器地址，把地址原样给用户；
+6. **把编辑器地址给用户**：`davinci open <项目>` 打印（并尝试打开）编辑器地址，把地址原样给用户；
    要指到某个画板就加 `-b <画板>`，地址里会带上 `?b=<画板id>`，打开就停在那个画板。
    本机的编辑器地址是 `http://davinci.localhost/editor/<项目id>`（不带端口）；别自己拼 `127.0.0.1:7789`，
    以 CLI 打印的为准（没配本地域名的机器上它会给出能用的地址）。
@@ -134,6 +135,25 @@ davinci lib update <id> --tags 指向,推荐 --name "新名字"         # 改信
 - 名称、标签、说明写中文、写"这张图是什么、适合干什么"——后面搜索全靠它们。
 - `--source <唯一标识>` 可让重复导入只更新不重复（批量同步外部素材时用）。
 - 删除（`lib rm`）、删分类属于破坏性操作，用户明确要求才做。
+
+## 2.4 配色
+
+**选择颜色时优先使用已保存的配色，先 `davinci palette list`。** 全局配色跨项目共享，
+每组恰好五色：`bg` 背景、`text` 主文字、`highlight` 高亮、`text2` 次文字、`accent` 点缀。
+
+```bash
+davinci palette list --json
+davinci palette show <id>
+davinci palette add --from-image ./参考图.png --name 暖色 --dry-run  # 只解析
+davinci palette add --from-image ./参考图.png --name 暖色          # 保存
+davinci palette update <id> --text '#181818' --accent '#25818a'
+davinci palette apply <id> -p <项目> --board <画板>                # 一次 undo 可撤销全部
+```
+
+`add` 也支持五个颜色覆盖参数，保存前微调；解析支持 PNG/JPEG/GIF 首帧/WebP（≤20 MB / 2000 万像素）。
+角色色用六位 hex。`apply` 映射背景、主次文字和形状，编组内图层也参与，保留图片和布局。
+背景图仍可能遮住背景色，应用后必须 render 检查。修改或删除全局配色不改变已应用的画板。
+`palette delete <id>` 只在用户明确要求删除时使用。完整参数见 [命令速查](references/commands.md#全局配色)。
 
 ## 2.5 模板库（照着做）
 

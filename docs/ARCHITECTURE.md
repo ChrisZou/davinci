@@ -152,3 +152,19 @@ CLI 文档：[Codex 非交互模式](https://developers.openai.com/codex/noninte
 画板切换也放在批次内部，确保错误回滚和一次撤销都恢复完整原状。
 评论单独保存在 `comments` 表，随项目级联删除；服务重启将中断的任务标记为失败，不自动再次调用 AI。
 前端评论面板轮询结果，关闭面板不取消任务，显式取消会终止 CLI 进程树并丢弃返回结果。
+
+## 全局配色
+
+- `internal/server/palettes.go`：`palettes` 表与 CRUD，和素材库同用 `davinci.db`，不关联 project id；
+  路由定义同时生成 `/api/schema.endpoints`。五色为固定列，写入前完整校验，PATCH 只更新传入字段。
+- `internal/server/palette_extract.go`：纯 Go 解码，先检查字节/像素上限，再最多 128×128 采样、
+  alpha 加权 5-bit 颜色直方图、确定性加权 k-means（最多 8 类、16 轮），根据面积、饱和度、
+  相对亮度对比度与颜色距离分配角色；不足时派生。解析不持久化原图或草稿。
+- `internal/doc/cmd_palette.go`：固定五色结构、校验和 `applyPalette` 命令，通过可选服务接口读取配色；
+  映射在引擎锁内执行，递归处理编组。该命令在自身事务内解析并切换目标画板，确保失败和 undo
+  都能恢复原活动画板。使用原有保存、广播、修订和历史机制，不增加第二套撤销栈。
+- `internal/cli/cmds_palette.go`：HTTP 薄客户端；上传解析与保存分开，dry-run 无写入。
+- `web/src/pages/Palettes.tsx`、`PalettePanel.tsx`、`PaletteParts.tsx`：独立页、编辑器抽屉共用卡片、
+  mock 预览和详情编辑。`/palettes/:id` 可直达详情；从编辑器打开携带 project/board 参数。
+  `paletteState.ts` 合并 ColorField 的列表请求，同页保存后与窗口重新聚焦时刷新；
+  属性面板第二行展示「我的配色」。颜色仅在应用时复制入文档，不自动绑定后续全局改动。

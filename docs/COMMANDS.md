@@ -487,3 +487,46 @@ davinci watch           # 另一个终端；人一拖动，这里就打印变更
 davinci image set 背景 --radius 0 --brightness .1 --contrast .12 --saturation -.2
 davinci render -o out.png --scale 2
 ```
+
+## 配色：`davinci palette`
+
+选择颜色时先 `davinci palette list`，优先使用已保存的配色。配色是全局资源，不属于任何项目。
+
+```bash
+davinci palette list --json
+davinci palette list -q 暖色
+davinci palette show pal_xxx
+davinci palette add --from-image ./cover.png --name 暖色 --dry-run  # 只解析，不保存
+davinci palette add --from-image ./cover.png --name 暖色 --text '#181818'  # 保存前微调
+davinci palette update pal_xxx --name 暖色新版 --bg '#fff4e0' --text '#181818' \
+  --highlight '#e85830' --text2 '#6a574a' --accent '#247b83'
+davinci palette apply pal_xxx -p P --board 2
+davinci -p P undo
+davinci palette delete pal_xxx
+```
+
+所有子命令遵循 `--json` 输出约定。`list` 返回 `{palettes:[...]}`；`show/add/update` 返回配色对象，
+`add --dry-run` 返回没有 id/时间的草稿；`delete` 返回 `{ok,id}`；`apply` 返回标准命令结果。
+新增只支持图片解析，`add` 可用和 `update` 一样的五个颜色参数覆盖建议值，再预览或保存。
+支持 PNG/JPEG/GIF 首帧/WebP，20 MB、2000 万像素以内。名称 1–120 字，五个角色均为六位 hex。
+
+`apply` 等价于 `{"type":"applyPalette","id":"pal_xxx","board":"2"}`，由服务端执行一个命令，
+和人的编辑共用撤销栈。`-p/--project` 接受项目 id 或名称，默认最近更新的作品；
+`-b/--board` 接受画板 id、名称或序号，默认该项目当前画板。
+
+映射规则：
+
+- 画布背景色和根层级铺满画板的未旋转矩形填充 → `bg`。
+- 字号最大的文字（含并列最大）以及名为「标题」「主标题」「title」「headline」的文字 → `text`；其余 → `text2`。
+- 递归遍历编组内的形状，填充/描边按 `highlight/accent`、`accent/highlight` 交替，保留描边宽度。
+- 透明或无填充的形状继续无填充，直线只改已有描边；图片、背景图片、布局、可见性和锁定状态不变。隐藏及锁定图层的颜色同样参与映射。
+
+应用是颜色值拷贝，没有持续绑定；修改/删除全局配色不影响已应用的设计。
+背景图仍可能遮住背景色，启发式也不理解图片语义，应用后应 render 看图。
+一次 undo 恢复全部颜色及应用前的活动画板，redo 恢复应用结果；无变化的重复应用不增加历史步骤。
+
+UI 对照：`/palettes` 卡片网格与详情、新增草稿对应 list/show/add/update/delete；
+编辑器配色面板和详情的「应用到当前画板」对应 apply；属性里的「我的配色」单色选择对应原有文字/形状/背景颜色命令。
+独立配色页的项目选择框默认最近更新的作品，从编辑器打开管理页会携带项目和画板上下文。
+
+复制单个 hex 的 CLI 等价操作（macOS）：`davinci palette show pal_xxx --json | jq -r .bg | pbcopy`；Linux 可接 `wl-copy` / `xclip`，Windows 可接 `Set-Clipboard`。

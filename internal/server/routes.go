@@ -43,6 +43,7 @@ func (s *Server) registerAPI(e *echo.Echo) {
 	api.GET("/projects/:id/export.:ext", s.handleExport)
 
 	s.registerLibrary(api)
+	s.registerPalettes(api)
 	s.registerTemplates(api)
 	s.registerComments(api)
 }
@@ -64,7 +65,13 @@ func (s *Server) handleHealth(c echo.Context) error {
 }
 
 func (s *Server) handleSchema(c echo.Context) error {
-	return c.JSON(http.StatusOK, doc.Schema())
+	schema := doc.Schema()
+	routes := append([]paletteRoute(nil), paletteRoutes...)
+	for i := range routes {
+		routes[i].Path = "/api" + routes[i].Path
+	}
+	schema["endpoints"] = routes
+	return c.JSON(http.StatusOK, schema)
 }
 
 func (s *Server) handleCanvasPresets(c echo.Context) error {

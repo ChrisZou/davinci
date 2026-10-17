@@ -211,3 +211,32 @@ AI 收到当前画板预览、图层结构、选中图层、可用编辑命令�
 撤销修改不会删除评论，也不会把历史“已修改”改为新的任务状态。
 
 支持文字、配色、布局、形状、滤镜、裁剪及复用已导入图片；不含图像生成、换脸或新素材下载。
+
+## 全局配色
+
+配色独立于项目，存于同一 SQLite 的 `palettes` 表。五个角色为 `bg` 背景、`text` 主文字、
+`highlight` 高亮、`text2` 次文字、`accent` 点缀，全部必填，色值采用 `#RRGGBB`，存储时转小写。
+名称为 1–120 个字。修改、删除配色不会追溯修改已经应用的画板。
+
+| 方法 | 路径 | 请求 / 返回 |
+|---|---|---|
+| GET | `/api/palettes` | `{ok,palettes:[...]}`，创建时间倒序 |
+| GET | `/api/palettes/:id` | `{ok,palette:{id,name,bg,text,highlight,text2,accent,createdAt,updatedAt}}` |
+| POST | `/api/palettes/analyze` | multipart `file` + 可选 `name`；返回 `{ok,palette:{name,bg,text,highlight,text2,accent}}`，不写数据库或资产文件 |
+| POST | `/api/palettes` | JSON `{name,bg,text,highlight,text2,accent}`；201 `{ok,palette}` |
+| PATCH | `/api/palettes/:id` | JSON `{name?,bg?,text?,highlight?,text2?,accent?}`；必须至少一个字段，200 `{ok,palette}` |
+| DELETE | `/api/palettes/:id` | 200 `{ok:true}` |
+| POST | `/api/projects/:id/palettes/:palette/apply` | JSON `{board?:string}`，省略 `board` 时用该项目的当前画板；返回标准命令结果 `{ok,data,document,revision,history}` |
+
+解析支持 PNG、JPEG、GIF（首帧）、WebP，最大 20 MB / 2000 万像素。完全透明、损坏或不支持的图片返回 400。
+解析使用纯 Go 缩略采样、加权聚类和角色启发式；颜色不足时派生可读的文字色与强调色。
+非法名称、缺色、非六位 hex、未知字段返回 400；不存在的配色返回 404。
+
+`/api/schema` 的 `endpoints` 字段由配色路由注册表生成，包含这些 REST 路径、请求和返回说明；
+`commands` 中的 `applyPalette` 由文档命令注册表生成。CLI 和编辑器可直接执行：
+
+```json
+{"type":"applyPalette","id":"pal_xxx","board":"2"}
+```
+
+应用规则、图片保留行为和撤销约定见 [配色命令](COMMANDS.md#配色davinci-palette)。

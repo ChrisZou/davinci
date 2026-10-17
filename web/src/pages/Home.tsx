@@ -94,7 +94,7 @@ export function Home() {
     <div className="relative h-full overflow-y-auto bg-paper">
       <Onboarding />
       {/* Places to go, top right — the same floating island the editor uses. */}
-      <nav aria-label="导航" className="absolute right-5 top-4 z-10">
+      <nav aria-label="导航" className="absolute right-5 top-4 z-10 flex gap-2">
         <a
           href="/library"
           className="island flex h-[52px] items-center gap-2 px-5 text-[13px] font-bold text-ink hover:text-accent"
@@ -109,6 +109,7 @@ export function Home() {
           </svg>
           素材库
         </a>
+        <a href="/palettes" className="island flex h-[52px] items-center gap-2 px-5 text-[13px] font-bold text-ink hover:text-accent" onClick={(e) => { e.preventDefault(); navigate('/palettes') }} data-testid="palettes-link">配色</a>
       </nav>
       <div className="mx-auto flex max-w-[1240px] flex-col items-center gap-12 px-10 pb-16 pt-12">
         <section className="flex flex-col items-center gap-6">

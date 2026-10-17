@@ -206,7 +206,9 @@ func (e *Engine) apply(cmd map[string]any, nested bool) (any, error) {
 		return nil, errf("allBoards cannot be combined with board or ids")
 	}
 	// Any command may name the board it is for: bring that board up first.
-	if ref, ok := cmd["board"]; ok && ref != nil && str(ref) != "" {
+	// applyPalette resolves its target inside its history transaction so undo
+	// restores the previous active board as well as every colour.
+	if ref, ok := cmd["board"]; typ != "applyPalette" && ok && ref != nil && str(ref) != "" {
 		b, _ := e.p.FindBoard(str(ref))
 		if b == nil {
 			return nil, errf(`no board "%s" — boards: %s`, str(ref), e.boardList())
