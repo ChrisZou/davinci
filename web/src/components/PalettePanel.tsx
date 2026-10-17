@@ -23,7 +23,7 @@ export function PalettePanel({ onApply, onClose, project, board }: {
         <a href={`/palettes?${new URLSearchParams({ project, ...(board ? { board } : {}) })}`} target="_blank" rel="noreferrer" className="text-xs text-muted hover:text-accent">管理配色 ↗</a>
         <button className="icon-btn h-8 w-8" title="关闭" aria-label="关闭配色" onClick={onClose}>×</button>
       </div>
-      <PaletteBrowser compact onApply={onApply} />
+      <PaletteBrowser compact onApply={onApply} detailQuery={`?${new URLSearchParams({ project, ...(board ? { board } : {}) })}`} />
     </div>
   )
 }

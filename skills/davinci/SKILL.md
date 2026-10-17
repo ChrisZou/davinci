@@ -147,11 +147,19 @@ davinci lib update <id> --tags 指向,推荐 --name "新名字"         # 改信
 ```bash
 davinci palette list --json
 davinci palette show <id或名称>
+davinci palette update 暖色 --image ./新原图.png             # 只替换原图，保留颜色
+davinci palette update 暖色 --image ./新原图.png --reextract # 同时重新提色
 davinci palette add --from-image ./参考图.png --name 暖色 --dry-run  # 只解析
 davinci palette add --from-image ./参考图.png --name 暖色          # 保存
 davinci palette update <id或名称> --text '#181818' --accent '#25818a'
 davinci palette apply <id或名称> -p <项目> --board <画板>                # 一次 undo 可撤销全部
 ```
+
+从图片新增时同时保存原图（即使传入 `--bg` 等覆盖参数），复用素材库按内容哈希存储；`--dry-run` 不保存配色或图片。
+配色对象的 `imageUrl` 为 `/assets/<hash>.<ext>`，无原图时为空字符串；`show` 文本输出完整原图 URL，`--json` 保留该字段。
+`update --image <path>` 只替换原图；加 `--reextract` 重新提色，显式传入的角色色仍优先，名称保持不变。
+
+UI：`/palettes` 浏览网格，`/palettes/:id` 完整详情页，显示原图、角色色与实时示例设计；上传/换图和重新提色均先预览再保存。编辑器紧凑面板的「查看详情」沿用 `?project=<id>&board=<id>` 应用上下文。
 
 `add` 也支持五个颜色覆盖参数，保存前微调；解析支持 PNG/JPEG/GIF 首帧/WebP（≤20 MB / 2000 万像素）。
 角色色用六位 hex。`apply` 映射背景、主次文字和形状，编组内图层也参与，保留图片和布局。

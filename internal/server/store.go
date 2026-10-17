@@ -166,6 +166,15 @@ func (s *Store) initSchema() error {
 	if err := s.addProjectColumns(); err != nil {
 		return err
 	}
+	cols, err := s.tableColumns("palettes")
+	if err != nil {
+		return err
+	}
+	if !cols["image_url"] {
+		if _, err := s.db.Exec(`ALTER TABLE palettes ADD COLUMN image_url TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+	}
 	return s.initLibrary()
 }
 

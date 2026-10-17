@@ -9,7 +9,7 @@ import { Templates } from './pages/Templates'
  * Routes, driven by the pathname so the Go server's `/editor/<id>` links
  * work directly: `/` is the project list, `/editor/<id>` is a canvas,
  * `/library` the material library, `/templates` the template library, and
- * `/palettes/:id?` the global colour library and details.
+ * `/palettes` the colour grid, `/palettes/:id` a full detail page.
  */
 function routeOf(): { page: 'home' | 'editor' | 'library' | 'templates' | 'palettes'; id: string } {
   const palette = location.pathname.match(/^\/palettes(?:\/([^/?#]+))?\/?$/)

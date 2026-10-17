@@ -153,6 +153,8 @@ davinci watch -p <项目>                   # 实时打印人在编辑器里的�
 davinci palette list --json
 davinci palette list -q 暖色
 davinci palette show <id或名称>
+davinci palette update 暖色 --image ./新原图.png             # 只替换原图，保留颜色
+davinci palette update 暖色 --image ./新原图.png --reextract # 同时重新提色
 davinci palette add --from-image ./参考图.png --name 暖色 --dry-run
 davinci palette add --from-image ./参考图.png --name 暖色 --text '#161616'
 davinci palette update <id或名称> --name 新名字 --bg '#fff2df' --text '#161616' \
@@ -160,6 +162,12 @@ davinci palette update <id或名称> --name 新名字 --bg '#fff2df' --text '#16
 davinci palette apply <id或名称> -p P --board 2
 davinci palette delete <id或名称>
 ```
+
+从图片新增时同时保存原图（即使传入 `--bg` 等覆盖参数），复用素材库按内容哈希存储；`--dry-run` 不保存配色或图片。
+配色对象的 `imageUrl` 为 `/assets/<hash>.<ext>`，无原图时为空字符串；`show` 文本输出完整原图 URL，`--json` 保留该字段。
+`update --image <path>` 只替换原图；加 `--reextract` 重新提色，显式传入的角色色仍优先，名称保持不变。
+
+UI：`/palettes` 浏览网格，`/palettes/:id` 完整详情页，显示原图、角色色与实时示例设计；上传/换图和重新提色均先预览再保存。编辑器紧凑面板的「查看详情」沿用 `?project=<id>&board=<id>` 应用上下文。
 
 配色跨项目共享，恰好五色 `bg/text/highlight/text2/accent`（背景/主文字/高亮/次文字/点缀）。
 名称 1–120 字，色值 `#RRGGBB`。`add` 的五色覆盖参数可用于保存前微调，`--dry-run` 仅打印草稿。

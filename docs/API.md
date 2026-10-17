@@ -221,12 +221,33 @@ AI 收到当前画板预览、图层结构、选中图层、可用编辑命令�
 | 方法 | 路径 | 请求 / 返回 |
 |---|---|---|
 | GET | `/api/palettes` | `{ok,palettes:[...]}`，创建时间倒序 |
-| GET | `/api/palettes/:id` | `{ok,palette:{id,name,bg,text,highlight,text2,accent,createdAt,updatedAt}}` |
-| POST | `/api/palettes/analyze` | multipart `file` + 可选 `name`；返回 `{ok,palette:{name,bg,text,highlight,text2,accent}}`，不写数据库或资产文件 |
-| POST | `/api/palettes` | JSON `{name,bg,text,highlight,text2,accent}`；201 `{ok,palette}` |
-| PATCH | `/api/palettes/:id` | JSON `{name?,bg?,text?,highlight?,text2?,accent?}`；必须至少一个字段，200 `{ok,palette}` |
+| GET | `/api/palettes/:id` | `{ok,palette:{id,name,bg,text,highlight,text2,accent,imageUrl,createdAt,updatedAt}}` |
+| POST | `/api/palettes/analyze` | multipart `file` + 可选 `name`；返回 `{ok,palette:{name,bg,text,highlight,text2,accent,imageUrl}}`，不写数据库或资产文件 |
+| POST | `/api/palettes` | JSON `{name,bg,text,highlight,text2,accent,imageUrl?}`，或 multipart `palette`（同结构 JSON 字符串）+ `file`（原图）；201 `{ok,palette}` |
+| PATCH | `/api/palettes/:id` | JSON `{name?,bg?,text?,highlight?,text2?,accent?,imageUrl?}`，或 multipart `palette`（同结构，可为 `{}`）+ `file`（替换原图）；必须至少一个字段或文件，200 `{ok,palette}` |
 | DELETE | `/api/palettes/:id` | 200 `{ok:true}` |
 | POST | `/api/projects/:id/palettes/:palette/apply` | JSON `{board?:string}`，省略 `board` 时用该项目的当前画板；返回标准命令结果 `{ok,data,document,revision,history}` |
+
+保存后的配色包含 `imageUrl`，无原图为 `""`。原图复用 `AssetStore.SaveBytes`，按内容 SHA-1
+存入素材目录，`GET /assets/<hash>.<ext>` 直接返回未重编码的原始图片字节。
+新上传根据图片内容识别扩展名；若素材库已有同图，优先复用其图片引用。替换或删除配色不会删除素材文件，避免破坏其他引用。
+JSON 的 `imageUrl` 仅接受已存在的图片素材 URL（或 `""` 清除关联），不读取客户端本地路径或远程 URL。
+旧配色表自动增加 `image_url` 列，现有配色不受影响。
+
+multipart 保存不会重新提色：颜色以 `palette` 为准。需要重新提色时先调用 `/api/palettes/analyze`，
+预览/覆盖返回的颜色，再把颜色和原图一起保存；分析阶段不落盘，对应 CLI `add --dry-run`。
+CLI `update --image <path>` 默认仅替换原图，`--reextract` 会先分析并保留显式颜色覆盖。
+网页 `/palettes/:id?project=<项目>&board=<画板>` 为完整详情页；原图和三个示例随草稿预览。
+
+```bash
+# 服务地址与配色 id 按实际环境替换；只换图，保留颜色
+curl -X PATCH "$SERVER/api/palettes/$ID" \
+  -F 'palette={}' -F 'file=@./original.png'
+# 新增配色与原图；JSON 可在分析后编辑
+curl "$SERVER/api/palettes" \
+  -F 'palette={"name":"暖色","bg":"#fff4e0","text":"#181818","highlight":"#e85830","text2":"#6a574a","accent":"#247b83"}' \
+  -F 'file=@./original.png'
+```
 
 解析支持 PNG、JPEG、GIF（首帧）、WebP，最大 20 MB / 2000 万像素。完全透明、损坏或不支持的图片返回 400。
 解析使用纯 Go 缩略采样、加权聚类和角色启发式；颜色不足时派生可读的文字色与强调色。

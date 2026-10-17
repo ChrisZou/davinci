@@ -9,8 +9,11 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -258,5 +261,180 @@ func TestPaletteStorageReopen(t *testing.T) {
 	got, err := s.Palette(p.ID)
 	if err != nil || !reflect.DeepEqual(got, p) {
 		t.Fatal(got, err)
+	}
+}
+
+func (h *harness) paletteUpload(method, path string, metadata any, raw []byte) (int, []byte) {
+	h.t.Helper()
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	meta, _ := json.Marshal(metadata)
+	mw.WriteField("palette", string(meta))
+	file, _ := mw.CreateFormFile("file", "misleading-name.jpg")
+	file.Write(raw)
+	mw.Close()
+	req, _ := http.NewRequest(method, h.url(path), &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := h.client.Do(req)
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, body
+}
+
+func TestPaletteOriginalImage(t *testing.T) {
+	h := start(t)
+	raw := paletteImage(t, []color.NRGBA{{230, 240, 250, 255}})
+	colors, _ := ExtractPalette(raw)
+	draft := PaletteDraft{Name: "原图", PaletteColors: colors}
+	draft.BG = "#123456" // explicit overrides must not lose the original
+	count := func(want int) {
+		t.Helper()
+		files, err := os.ReadDir(filepath.Join(h.srv.DataDir(), "assets"))
+		if err != nil || len(files) != want {
+			t.Fatalf("assets: %d, want %d: %v", len(files), want, err)
+		}
+	}
+	// Invalid metadata or images must not create files or palette records.
+	for _, data := range []struct {
+		metadata any
+		image    []byte
+	}{
+		{map[string]string{"name": "bad"}, raw},
+		{draft, []byte("not an image")},
+	} {
+		status, body := h.paletteUpload("POST", "/api/palettes", data.metadata, data.image)
+		if status != 400 {
+			t.Fatal(status, string(body))
+		}
+		count(0)
+	}
+	status, body := h.paletteUpload("POST", "/api/palettes", draft, raw)
+	var out struct {
+		Palette Palette `json:"palette"`
+	}
+	json.Unmarshal(body, &out)
+	p := out.Palette
+	if status != 201 || p.BG != draft.BG || p.ImageURL != "/assets/"+sha1Hex(raw)+".png" {
+		t.Fatal(status, string(body))
+	}
+	count(1)
+	status, body = h.do("GET", p.ImageURL, nil)
+	if status != 200 || !bytes.Equal(raw, body) {
+		t.Fatal("original bytes changed", status)
+	}
+	for _, path := range []string{"/api/palettes", "/api/palettes/" + p.ID} {
+		status, body = h.do("GET", path, nil)
+		if status != 200 || !bytes.Contains(body, []byte(p.ImageURL)) {
+			t.Fatal("imageUrl missing", string(body))
+		}
+	}
+	// Identical uploads deduplicate; replacing a shared image does not delete it.
+	status, body = h.paletteUpload("POST", "/api/palettes", draft, raw)
+	if status != 201 {
+		t.Fatal(status, string(body))
+	}
+	count(1)
+	replacement := paletteImage(t, []color.NRGBA{{20, 50, 80, 255}})
+	status, body = h.paletteUpload("PATCH", "/api/palettes/"+p.ID, map[string]string{}, replacement)
+	json.Unmarshal(body, &out)
+	if status != 200 || out.Palette.ImageURL == p.ImageURL || out.Palette.PaletteColors != p.PaletteColors || out.Palette.Name != p.Name {
+		t.Fatal(status, string(body))
+	}
+	count(2)
+	status, body = h.do("GET", out.Palette.ImageURL, nil)
+	if status != 200 || !bytes.Equal(body, replacement) {
+		t.Fatal("replacement bytes", status)
+	}
+	status, body = h.do("GET", p.ImageURL, nil)
+	if status != 200 || !bytes.Equal(body, raw) {
+		t.Fatal("shared original deleted")
+	}
+	for _, patch := range []map[string]string{{"imageUrl": "https://example.com/x.png"}, {"imageUrl": "/assets/../../x.png"}, {"imageUrl": "/assets/" + strings.Repeat("0", 40) + ".png"}} {
+		status, _ = h.do("PATCH", "/api/palettes/"+p.ID, patch)
+		if status != 400 {
+			t.Fatal("invalid image reference accepted", patch)
+		}
+	}
+	unique := paletteImage(t, []color.NRGBA{{120, 50, 80, 255}})
+	status, _ = h.paletteUpload("PATCH", "/api/palettes/"+p.ID, map[string]string{"bg": "bad"}, unique)
+	if status != 400 {
+		t.Fatal(status)
+	}
+	count(2)
+	status, _ = h.paletteUpload("PATCH", "/api/palettes/missing", map[string]string{}, unique)
+	if status != 404 {
+		t.Fatal(status)
+	}
+	count(2)
+	_, body = h.do("GET", "/api/schema", nil)
+	if !bytes.Contains(body, []byte("imageUrl")) || !bytes.Contains(body, []byte("multipart")) {
+		t.Fatal("schema missing images")
+	}
+}
+
+func TestPaletteImageMigration(t *testing.T) {
+	dir := t.TempDir()
+	store, err := OpenStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.db.Exec(`DROP TABLE palettes;
+	CREATE TABLE palettes (id TEXT PRIMARY KEY, name TEXT NOT NULL, bg TEXT NOT NULL, text TEXT NOT NULL, highlight TEXT NOT NULL, text2 TEXT NOT NULL, accent TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
+	INSERT INTO palettes VALUES ('pal_old','旧配色','#ffffff','#000000','#ff0000','#777777','#00ff00',1,1);`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.Close()
+	for i := 0; i < 2; i++ {
+		store, err = OpenStore(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, err := store.Palette("pal_old")
+		if err != nil || p.ImageURL != "" || p.Name != "旧配色" {
+			t.Fatal(p, err)
+		}
+		store.Close()
+	}
+}
+
+func TestPaletteReusesLibraryOriginal(t *testing.T) {
+	for _, ext := range []string{"jpg", "bin"} {
+		t.Run(ext, func(t *testing.T) {
+			h := start(t)
+			raw := paletteImage(t, []color.NRGBA{{120, 150, 180, 255}})
+			if ext == "jpg" {
+				img, _, _ := image.Decode(bytes.NewReader(raw))
+				var jpegBytes bytes.Buffer
+				if err := jpeg.Encode(&jpegBytes, img, nil); err != nil {
+					t.Fatal(err)
+				}
+				raw = jpegBytes.Bytes()
+			}
+			asset, err := h.srv.assets.SaveBytes(raw, ext)
+			if err != nil {
+				t.Fatal(err)
+			}
+			colors, _ := ExtractPalette(raw)
+			draft := PaletteDraft{Name: "素材原图", PaletteColors: colors}
+			status, body := h.paletteUpload("POST", "/api/palettes", draft, raw)
+			var out struct {
+				Palette Palette `json:"palette"`
+			}
+			json.Unmarshal(body, &out)
+			if status != 201 {
+				t.Fatal(status, string(body))
+			}
+			if ext == "jpg" && out.Palette.ImageURL != "/assets/"+asset.SHA+".jpg" {
+				t.Fatal("existing image reference not reused", out)
+			}
+			status, body = h.do("GET", out.Palette.ImageURL, nil)
+			if status != 200 || !bytes.Equal(body, raw) {
+				t.Fatal("original not available")
+			}
+		})
 	}
 }

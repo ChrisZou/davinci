@@ -149,3 +149,88 @@ test('new palette detail shows the source thumbnail beside the editable cover pr
   const savedHTML = renderToStaticMarkup(React.createElement(PaletteDetail, { ...props, id: saved.id }))
   assert.ok(!savedHTML.includes('alt="配色原图"'))
 })
+
+const { PaletteExamples, highlightStyle } = await bundled('src/components/PaletteExamples.tsx')
+test('examples render three proportional layouts and highlight only key words', () => {
+  const html = renderToStaticMarkup(React.createElement(PaletteExamples, { palette: draft }))
+  assert.equal((html.match(/<figure/g) ?? []).length, 3)
+  for (const label of ['16:9 幻灯片', '3:4 竖版封面', '1:1 社交卡片']) assert.ok(html.includes(label))
+  assert.match(html, /<h3>让<mark[^>]*>灵感<\/mark>成为日常<\/h3>/)
+  for (const role of ['bg', 'text', 'text2', 'highlight', 'accent']) assert.ok(html.includes(draft[role]))
+  assert.equal(highlightStyle(draft).backgroundColor, draft.highlight)
+  const lowContrast = { ...draft, highlight: draft.text }
+  assert.equal(highlightStyle(lowContrast).backgroundColor, 'transparent')
+  assert.equal(highlightStyle(lowContrast).textDecorationColor, lowContrast.highlight)
+  assert.equal(highlightStyle(lowContrast).color, lowContrast.text)
+  assert.equal(lowContrast.highlight, draft.text, 'never rewrite supplied colours')
+})
+
+test('full detail displays original and examples; compact detail keeps contextual link', () => {
+  const props = { initial: { ...saved, imageUrl: '/assets/original.png' }, id: saved.id, onClose() {}, onSaved() {} }
+  const html = renderToStaticMarkup(React.createElement(PaletteDetail, { ...props, full: true }))
+  assert.ok(html.includes('palette-detail-full'))
+  assert.ok(html.includes('palette-original'))
+  assert.ok(html.includes('src="/assets/original.png"'))
+  assert.ok(html.includes('object-contain'))
+  assert.ok(html.includes('更换原图'))
+  assert.ok(html.includes('按原图重新提色'))
+  assert.ok(html.includes('示例设计'))
+  assert.ok(!html.includes('关闭配色详情'))
+  const empty = renderToStaticMarkup(React.createElement(PaletteDetail, { ...props, initial: draft, full: true }))
+  assert.ok(empty.includes('暂无原图'))
+  assert.ok(empty.includes('上传原图'))
+  const compact = renderToStaticMarkup(React.createElement(PaletteDetail, { ...props, detailHref: '/palettes/pal_one?project=p_one&board=board_two' }))
+  assert.ok(compact.includes('查看详情'))
+  assert.ok(compact.includes('/palettes/pal_one?project=p_one&amp;board=board_two'))
+  assert.ok(!compact.includes('示例设计'))
+})
+
+test('saving with a source image sends original bytes alongside colour overrides', async () => {
+  const original = globalThis.fetch
+  const requests = []
+  globalThis.fetch = async (path, init) => {
+    requests.push({ path, ...init })
+    return new Response(JSON.stringify({ palette: { ...saved, imageUrl: '/assets/hash.png' } }))
+  }
+  try {
+    const image = new Blob(['original bytes'], { type: 'image/png' })
+    const updated = { ...draft, bg: '#123456' }
+    const added = await api.savePalette(updated, undefined, image)
+    await api.savePalette(updated, saved.id, image)
+    assert.equal(added.imageUrl, '/assets/hash.png')
+    for (const request of requests) {
+      assert.ok(request.body instanceof FormData)
+      assert.deepEqual(JSON.parse(request.body.get('palette')), updated)
+      assert.equal(await request.body.get('file').text(), 'original bytes')
+      assert.equal(request.headers, undefined, 'browser provides multipart boundary')
+    }
+    assert.equal(requests[0].method, 'POST')
+    assert.equal(requests[1].method, 'PATCH')
+  } finally { globalThis.fetch = original }
+})
+
+test('editing a role updates examples before saving; replacing an image preserves colours', async () => {
+  const state = []
+  let cursor = 0
+  const { PaletteDetail: Detail } = await bundled('src/components/PaletteParts.tsx', {
+    ...React, useEffect() {}, useRef(value) { return { current: value } },
+    useState(initial) {
+      const index = cursor++
+      if (!(index in state)) state[index] = typeof initial === 'function' ? initial() : initial
+      return [state[index], (value) => { state[index] = typeof value === 'function' ? value(state[index]) : value }]
+    },
+  })
+  const nodes = (node) => !node || typeof node !== 'object' ? [] : [node, ...React.Children.toArray(node.props?.children).flatMap(nodes)]
+  const render = () => { cursor = 0; return nodes(Detail({ initial: draft, id: saved.id, full: true, onSaved() {}, onClose() {} })) }
+  let tree = render()
+  tree.find((n) => n.props['aria-label'] === '高亮色（色值）').props.onChange({ target: { value: '#224466' } })
+  tree = render()
+  const example = tree.find((n) => n.type.name === 'PaletteExamples')
+  assert.equal(example.props.palette.highlight, '#224466')
+  assert.ok(renderToStaticMarkup(React.createElement(PaletteExamples, example.props)).includes('#224466'))
+  const before = { ...example.props.palette }
+  tree.find((n) => n.props['aria-label'] === '上传或更换原图').props.onChange({ target: { files: [new Blob(['image'])], value: '' } })
+  tree = render()
+  assert.deepEqual(tree.find((n) => n.type.name === 'PaletteExamples').props.palette, before)
+  assert.equal(tree.find((n) => n.type === 'button' && n.props.children === '保存').props.disabled, false)
+})

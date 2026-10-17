@@ -52,6 +52,9 @@ func (c *Client) printPalette(p any) {
 	switch v := p.(type) {
 	case server.Palette:
 		fmt.Printf("%s  %s\nbg %s  text %s  highlight %s  text2 %s  accent %s\n", v.ID, v.Name, v.BG, v.Text, v.Highlight, v.Text2, v.Accent)
+		if v.ImageURL != "" {
+			fmt.Printf("原图 %s%s\n", c.BaseURL, v.ImageURL)
+		}
 	case server.PaletteDraft:
 		fmt.Printf("%s\nbg %s  text %s  highlight %s  text2 %s  accent %s\n", v.Name, v.BG, v.Text, v.Highlight, v.Text2, v.Accent)
 	}
@@ -180,7 +183,7 @@ func newPaletteAddCmd() *cobra.Command {
 		var out struct {
 			Palette server.Palette `json:"palette"`
 		}
-		if err := c.postJSON("/api/palettes", draft, &out); err != nil {
+		if err := c.sendPaletteImage(http.MethodPost, "/api/palettes", path, draft, &out); err != nil {
 			return err
 		}
 		c.printPalette(out.Palette)
@@ -193,15 +196,20 @@ func newPaletteAddCmd() *cobra.Command {
 	return cmd
 }
 func newPaletteUpdateCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "update <id或名称>", Short: "重命名或修改角色色", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Use: "update <id或名称>", Short: "重命名、修改角色色或替换原图", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		patch := map[string]string{}
 		for _, key := range []string{"name", "bg", "text", "highlight", "text2", "accent"} {
 			if v := optStr(cmd, key); v != nil {
 				patch[key] = *v
 			}
 		}
-		if len(patch) == 0 {
-			return fmt.Errorf("请指定 --name 或角色色")
+		path, _ := cmd.Flags().GetString("image")
+		reextract, _ := cmd.Flags().GetBool("reextract")
+		if reextract && path == "" {
+			return fmt.Errorf("--reextract 需要 --image")
+		}
+		if len(patch) == 0 && path == "" {
+			return fmt.Errorf("请指定 --name、角色色或 --image")
 		}
 		c, err := NewClient()
 		if err != nil {
@@ -214,65 +222,101 @@ func newPaletteUpdateCmd() *cobra.Command {
 		if err != nil {
 			return err
 		}
-		if err := c.sendJSON(http.MethodPatch, "/api/palettes/"+url.PathEscape(id), patch, &out); err != nil {
+		if reextract {
+			draft, err := c.analyzePalette(path, "")
+			if err != nil {
+				return err
+			}
+			for key, value := range map[string]string{"bg": draft.BG, "text": draft.Text, "highlight": draft.Highlight, "text2": draft.Text2, "accent": draft.Accent} {
+				if _, exists := patch[key]; !exists {
+					patch[key] = value
+				}
+			}
+		}
+		endpoint := "/api/palettes/" + url.PathEscape(id)
+		if path != "" {
+			err = c.sendPaletteImage(http.MethodPatch, endpoint, path, patch, &out)
+		} else {
+			err = c.sendJSON(http.MethodPatch, endpoint, patch, &out)
+		}
+		if err != nil {
 			return err
 		}
 		c.printPalette(out.Palette)
 		return nil
 	}}
 	cmd.Flags().String("name", "", "配色名称")
+	cmd.Flags().String("image", "", "设置或替换原图（默认保留颜色）")
+	cmd.Flags().Bool("reextract", false, "使用 --image 重新提色，显式角色色优先")
 	paletteColorFlags(cmd)
 	return cmd
 }
 func (c *Client) analyzePalette(path, name string) (*server.PaletteDraft, error) {
+	var out struct {
+		Palette server.PaletteDraft `json:"palette"`
+	}
+	if err := c.paletteMultipart(http.MethodPost, "/api/palettes/analyze", path, map[string]string{"name": name}, &out); err != nil {
+		return nil, err
+	}
+	return &out.Palette, nil
+}
+func (c *Client) sendPaletteImage(method, endpoint, path string, palette, out any) error {
+	raw, err := json.Marshal(palette)
+	if err != nil {
+		return err
+	}
+	return c.paletteMultipart(method, endpoint, path, map[string]string{"palette": string(raw)}, out)
+}
+func (c *Client) paletteMultipart(method, endpoint, path string, fields map[string]string, out any) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if info.Size() > 20<<20 {
-		return nil, fmt.Errorf("图片不能超过 20 MB")
+		return fmt.Errorf("图片不能超过 20 MB")
 	}
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
-	if err := mw.WriteField("name", name); err != nil {
-		return nil, err
+	for key, value := range fields {
+		if err := mw.WriteField(key, value); err != nil {
+			return err
+		}
 	}
 	fw, err := mw.CreateFormFile("file", filepath.Base(path))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	n, err := io.Copy(fw, io.LimitReader(f, (20<<20)+1))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if n > 20<<20 {
-		return nil, fmt.Errorf("图片不能超过 20 MB")
+		return fmt.Errorf("图片不能超过 20 MB")
 	}
 	if err := mw.Close(); err != nil {
-		return nil, err
+		return err
 	}
-	resp, err := c.HTTP.Post(c.BaseURL+"/api/palettes/analyze", mw.FormDataContentType(), &buf)
+	req, err := http.NewRequest(method, c.BaseURL+endpoint, &buf)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := c.HTTP.Do(req)
+	if err != nil {
+		return err
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, apiError(raw, resp.StatusCode)
+		return apiError(raw, resp.StatusCode)
 	}
-	var out struct {
-		Palette server.PaletteDraft `json:"palette"`
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return nil, err
-	}
-	return &out.Palette, nil
+	return json.Unmarshal(raw, out)
 }

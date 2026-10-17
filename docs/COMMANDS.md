@@ -499,6 +499,8 @@ davinci render -o out.png --scale 2
 davinci palette list --json
 davinci palette list -q 暖色
 davinci palette show pal_xxx
+davinci palette update 暖色 --image ./新原图.png             # 只替换原图，保留颜色
+davinci palette update 暖色 --image ./新原图.png --reextract # 同时重新提色
 davinci palette add --from-image ./cover.png --name 暖色 --dry-run  # 只解析，不保存
 davinci palette add --from-image ./cover.png --name 暖色 --text '#181818'  # 保存前微调
 davinci palette update pal_xxx --name 暖色新版 --bg '#fff4e0' --text '#181818' \
@@ -507,6 +509,10 @@ davinci palette apply pal_xxx -p P --board 2
 davinci -p P undo
 davinci palette delete pal_xxx
 ```
+
+从图片新增时同时保存原图（即使传入 `--bg` 等覆盖参数），复用素材库按内容哈希存储；`--dry-run` 不保存配色或图片。
+配色对象的 `imageUrl` 为 `/assets/<hash>.<ext>`，无原图时为空字符串；`show` 文本输出完整原图 URL，`--json` 保留该字段。
+`update --image <path>` 只替换原图；加 `--reextract` 重新提色，显式传入的角色色仍优先，名称保持不变。
 
 所有子命令遵循 `--json` 输出约定。`list` 返回 `{palettes:[...]}`；`show/add/update` 返回配色对象，
 `add --dry-run` 返回没有 id/时间的草稿；`delete` 返回 `{ok,id}`；`apply` 返回标准命令结果。
@@ -528,8 +534,9 @@ davinci palette delete pal_xxx
 背景图仍可能遮住背景色，启发式也不理解图片语义，应用后应 render 看图。
 一次 undo 恢复全部颜色及应用前的活动画板，redo 恢复应用结果；无变化的重复应用不增加历史步骤。
 
-UI 对照：`/palettes` 卡片网格与详情、新增草稿对应 list/show/add/update/delete；
+UI 对照：`/palettes` 为浏览网格，点击卡片进入完整详情页 `/palettes/:id`，有返回列表入口。详情展示完整原图、五个可编辑角色色与三个实时示例（16:9 幻灯片、3:4 封面、1:1 社交卡片）；
+上传/更换原图后点击保存，独立的「按原图重新提色」先更新草稿供预览。以上对应 list/show/add/update/delete；
 编辑器配色面板和详情的「应用到当前画板」对应 apply；属性里的「我的配色」单色选择对应原有文字/形状/背景颜色命令。
-独立配色页的项目选择框默认最近更新的作品，从编辑器打开管理页会携带项目和画板上下文。
+独立配色页的项目选择框默认最近更新的作品，编辑器紧凑面板的「查看详情」链接携带 `?project=<id>&board=<id>`；切换项目时清除旧画板目标。
 
 复制单个 hex 的 CLI 等价操作（macOS）：`davinci palette show pal_xxx --json | jq -r .bg | pbcopy`；Linux 可接 `wl-copy` / `xclip`，Windows 可接 `Set-Clipboard`。

@@ -49,7 +49,22 @@ func TestPaletteCLI(t *testing.T) {
 			respond(map[string]any{"palette": draft})
 		case "/api/palettes":
 			if r.Method == "POST" {
-				json.NewDecoder(r.Body).Decode(&draft)
+				if err := r.ParseMultipartForm(1 << 20); err != nil {
+					t.Error(err)
+				}
+				defer r.MultipartForm.RemoveAll()
+				if err := json.Unmarshal([]byte(r.FormValue("palette")), &draft); err != nil {
+					t.Error(err)
+				}
+				f, _, err := r.FormFile("file")
+				if err != nil {
+					t.Fatal(err)
+				}
+				data, _ := io.ReadAll(f)
+				f.Close()
+				if string(data) != "image bytes" {
+					t.Error("missing original image")
+				}
 				draft["id"] = "pal_test"
 				saved++
 				respond(map[string]any{"palette": draft})
