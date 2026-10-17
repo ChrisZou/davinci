@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { api, type Palette, type PaletteColors, type PaletteDraft } from '../api'
 import { PaletteExamples } from './PaletteExamples'
 import { paletteShortName } from './palettePresentation'
@@ -57,6 +57,11 @@ export function PaletteDetail({ initial, id, sourceImage, sourceFile, full, deta
     return () => URL.revokeObjectURL(url)
   }, [imageFile])
   const imageURL = imagePreview ?? sourceImage ?? draft.imageUrl
+  const [imageSize, setImageSize] = useState<{ url: string; ratio: number }>()
+  // Bind dimensions to the URL so a replacement never inherits the old image's layout.
+  const imageStyle = full && imageSize && imageSize.url === imageURL
+    ? { '--palette-image-width': `${520 * imageSize.ratio}px` } as CSSProperties
+    : undefined
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const [error, setError] = useState('')
@@ -85,9 +90,12 @@ export function PaletteDetail({ initial, id, sourceImage, sourceFile, full, deta
       </div>}
       {full && <h1 className="palette-detail-title">{draft.name || '新增配色'}</h1>}
       {detailHref && <a href={detailHref} target="_blank" rel="noreferrer" className="text-xs text-muted hover:text-accent">查看详情 ↗</a>}
-      <div className={full ? 'palette-detail-top' : 'contents'}>
-        <div className={full ? 'palette-original' : 'contents'}>
-          {imageURL ? <img src={imageURL} alt="配色原图" className="h-28 w-full shrink-0 rounded-lg bg-paper object-contain" /> : full && <div className="flex flex-col items-center gap-4"><span className="text-sm text-muted">暂无原图</span><button className="btn-ghost" disabled={busy} onClick={() => imageInput.current?.click()}>上传原图</button></div>}
+      <div className={full ? 'palette-detail-top' : 'contents'} style={imageStyle}>
+        <div className={full ? `palette-original${imageURL ? '' : ' palette-original-empty'}` : 'contents'}>
+          {imageURL ? <img key={imageURL} src={imageURL} alt="配色原图" className="h-28 w-full shrink-0 rounded-lg bg-paper object-contain" onLoad={(e) => {
+            const { naturalWidth, naturalHeight } = e.currentTarget
+            if (naturalWidth > 0 && naturalHeight > 0) setImageSize({ url: imageURL, ratio: naturalWidth / naturalHeight })
+          }} /> : full && <div className="flex flex-col items-center gap-4"><span className="text-sm text-muted">暂无原图</span><button className="btn-ghost" disabled={busy} onClick={() => imageInput.current?.click()}>上传原图</button></div>}
         </div>
         <div className={full ? 'palette-controls card p-4' : 'contents'}>
           {!full && <PalettePreview palette={draft} name={draft.name} />}

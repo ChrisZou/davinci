@@ -277,3 +277,44 @@ test('miniature titles keep short names, limit segments and truncate Unicode saf
   assert.ok(tile().includes(`title="${name}"`))
   assert.ok(tile('/assets/source.png').includes('src="/assets/source.png"'))
 })
+
+test('source sizing follows loaded dimensions and ignores dimensions from replaced images', async () => {
+  const state = []
+  let cursor = 0
+  const { PaletteDetail: Detail } = await bundled('src/components/PaletteParts.tsx', {
+    ...React, useEffect() {}, useRef(value) { return { current: value } },
+    useState(initial) {
+      const index = cursor++
+      if (!(index in state)) state[index] = typeof initial === 'function' ? initial() : initial
+      return [state[index], (value) => { state[index] = typeof value === 'function' ? value(state[index]) : value }]
+    },
+  })
+  const nodes = (node) => !node || typeof node !== 'object' ? [] : [node, ...React.Children.toArray(node.props?.children).flatMap(nodes)]
+  const render = (sourceImage, full = true) => {
+    cursor = 0
+    return nodes(Detail({ initial: draft, sourceImage, full, onSaved() {}, onClose() {} }))
+  }
+  const layout = (tree) => tree.find((n) => n.props.className === 'palette-detail-top')
+  const image = (tree) => tree.find((n) => n.type === 'img')
+  render(undefined)
+  let tree = render('blob:portrait')
+  assert.equal(layout(tree).props.style, undefined)
+  image(tree).props.onLoad({ currentTarget: { naturalWidth: 600, naturalHeight: 800 } })
+  tree = render('blob:portrait')
+  assert.equal(layout(tree).props.style['--palette-image-width'], '390px', 'portrait width fits the 520px height limit')
+  const staleLoad = image(tree).props.onLoad
+  tree = render('blob:landscape')
+  assert.equal(layout(tree).props.style, undefined, 'replacement starts without stale portrait sizing')
+  staleLoad({ currentTarget: { naturalWidth: 600, naturalHeight: 800 } })
+  assert.equal(layout(render('blob:landscape')).props.style, undefined)
+  image(tree).props.onLoad({ currentTarget: { naturalWidth: 1600, naturalHeight: 900 } })
+  tree = render('blob:landscape')
+  assert.ok(parseFloat(layout(tree).props.style['--palette-image-width']) > 900, 'landscape can use a wider source column')
+  tree = render('blob:invalid')
+  image(tree).props.onLoad({ currentTarget: { naturalWidth: 0, naturalHeight: 0 } })
+  assert.equal(layout(render('blob:invalid')).props.style, undefined)
+  assert.ok(render('blob:landscape', false).every((n) => !n.props.style?.['--palette-image-width']), 'compact detail keeps its existing thumbnail layout')
+  tree = render(undefined)
+  assert.ok(tree.some((n) => n.props.className?.includes('palette-original-empty')))
+  assert.equal(layout(tree).props.style, undefined)
+})
