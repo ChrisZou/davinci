@@ -146,16 +146,19 @@ davinci watch -p <项目>                   # 实时打印人在编辑器里的�
 
 **选择颜色时优先使用已保存配色，先 `davinci palette list`。**
 
+`show/update/delete/apply` 接受配色 id 或名称（精确匹配，区分大小写）；id 优先。重名时报错并列出候选 id，请改用 id。
+例如：`davinci palette apply 日落橘 -p P`。
+
 ```bash
 davinci palette list --json
 davinci palette list -q 暖色
-davinci palette show <id>
+davinci palette show <id或名称>
 davinci palette add --from-image ./参考图.png --name 暖色 --dry-run
 davinci palette add --from-image ./参考图.png --name 暖色 --text '#161616'
-davinci palette update <id> --name 新名字 --bg '#fff2df' --text '#161616' \
+davinci palette update <id或名称> --name 新名字 --bg '#fff2df' --text '#161616' \
   --highlight '#e85830' --text2 '#675649' --accent '#25818a'
-davinci palette apply <id> -p P --board 2
-davinci palette delete <id>
+davinci palette apply <id或名称> -p P --board 2
+davinci palette delete <id或名称>
 ```
 
 配色跨项目共享，恰好五色 `bg/text/highlight/text2/accent`（背景/主文字/高亮/次文字/点缀）。

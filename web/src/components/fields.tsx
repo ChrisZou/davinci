@@ -122,7 +122,8 @@ export function ColorField({
   palette?: string[]
 }) {
   const { items: savedPalettes } = usePalettes()
-  const mine = [...new Set((savedPalettes ?? []).flatMap((p) => [p.bg, p.text, p.highlight, p.text2, p.accent]))]
+  const [expanded, setExpanded] = useState(false)
+  const mine = [...(savedPalettes ?? [])].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || a.id.localeCompare(b.id))
   const none = !value || value === 'transparent' || value === 'none'
   // The colour input only understands #rrggbb, so anything else (transparent, a
   // shorthand, an rgba() shadow) is shown as black and typed into the text box.
@@ -200,9 +201,19 @@ export function ColorField({
       )}
       {mine.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <span className="text-[11px] text-muted">我的配色</span>
-          <div className="flex max-h-16 flex-wrap gap-1.5 overflow-y-auto">
-            {mine.map((c) => <button key={c} type="button" title={c} aria-label={`我的配色 ${c}`} className="h-6 w-6 shrink-0 rounded-full border border-line-strong hover:scale-110" style={{ background: c }} onClick={() => now(c)} />)}
+          <div className="flex items-center justify-between text-[11px] text-muted">
+            <span>我的配色</span>
+            {mine.length > 3 && <button type="button" aria-expanded={expanded} className="hover:text-ink" onClick={() => setExpanded(!expanded)}>{expanded ? '收起' : '更多'}</button>}
+          </div>
+          <div className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+            {(expanded ? mine : mine.slice(0, 3)).map((p) => (
+              <div key={p.id} role="group" aria-label={p.name} title={p.name} className="flex items-center gap-1.5">
+                {(['bg', 'text', 'highlight', 'text2', 'accent'] as const).map((key, i) => {
+                  const label = `${p.name} · ${['背景', '主文字', '高亮', '次文字', '点缀'][i]} ${p[key]}`
+                  return <button key={key} type="button" title={label} aria-label={label} className="h-5 w-5 shrink-0 rounded border border-line-strong hover:scale-110" style={{ background: p[key] }} onClick={() => now(p[key])} />
+                })}
+              </div>
+            ))}
           </div>
         </div>
       )}

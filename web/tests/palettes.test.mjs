@@ -91,3 +91,61 @@ test('a pre-save list response cannot overwrite the fresh saved palette list', a
     assert.deepEqual(cache.usePalettes().items, [saved])
   } finally { globalThis.fetch = original }
 })
+
+test('colour fields group five roles, show three most recently updated palettes and toggle more', async () => {
+  const items = [1, 4, 2, 3, 5].map((n) => ({ ...saved, id: `pal_${n}`, name: `配色${n}`, updatedAt: `2026-10-${10 + n}T00:00:00Z` }))
+  // Repeated values must remain as distinct role buttons within their palette.
+  items[4].accent = items[4].bg
+  const state = []
+  let cursor = 0
+  const { ColorField } = await bundled('src/components/fields.tsx', {
+    ...React,
+    useEffect() {},
+    useRef(value) { return { current: value } },
+    useState(initial) {
+      const i = cursor++
+      if (!(i in state)) state[i] = initial
+      return [state[i], (next) => { state[i] = next }]
+    },
+    useSyncExternalStore() { return { items, error: '' } },
+  })
+  const nodes = (node) => !node || typeof node !== 'object' ? [] : [node, ...React.Children.toArray(node.props?.children).flatMap(nodes)]
+  let committed
+  const render = () => {
+    cursor = 0
+    return nodes(ColorField({ label: '颜色', value: '#000000', onCommit(value) { committed = value } }))
+  }
+  let tree = render()
+  const groups = () => tree.filter((n) => n.props.role === 'group')
+  const toggle = () => tree.find((n) => n.type === 'button' && 'aria-expanded' in n.props)
+  assert.deepEqual(groups().map((n) => n.props['aria-label']), ['配色5', '配色4', '配色3'])
+  const buttons = nodes(groups()[0]).filter((n) => n.type === 'button')
+  assert.equal(buttons.length, 5)
+  assert.deepEqual(buttons.map((n) => n.props.style.background), ['bg', 'text', 'highlight', 'text2', 'accent'].map((key) => items[4][key]))
+  assert.match(buttons[3].props.title, /配色5 · 次文字/)
+  const original = globalThis.window
+  globalThis.window = { clearTimeout }
+  try { buttons[3].props.onClick(); assert.equal(committed, items[4].text2) }
+  finally { globalThis.window = original }
+  assert.equal(toggle().props['aria-expanded'], false)
+  toggle().props.onClick()
+  tree = render()
+  assert.equal(groups().length, 5)
+  assert.equal(toggle().props.children, '收起')
+  toggle().props.onClick()
+  tree = render()
+  assert.equal(groups().length, 3)
+  assert.deepEqual(items.map((p) => p.id), ['pal_1', 'pal_4', 'pal_2', 'pal_3', 'pal_5'], 'do not reorder the shared cache')
+})
+
+test('new palette detail shows the source thumbnail beside the editable cover preview', () => {
+  const props = { initial: draft, onClose() {}, onSaved() {} }
+  const html = renderToStaticMarkup(React.createElement(PaletteDetail, { ...props, sourceImage: 'blob:reference-image' }))
+  assert.ok(html.includes('src="blob:reference-image"'))
+  assert.ok(html.includes('alt="配色原图"'))
+  assert.ok(html.includes('object-contain'))
+  assert.ok(html.includes('aria-label="封面预览"'))
+  assert.equal((html.match(/type="color"/g) ?? []).length, 5)
+  const savedHTML = renderToStaticMarkup(React.createElement(PaletteDetail, { ...props, id: saved.id }))
+  assert.ok(!savedHTML.includes('alt="配色原图"'))
+})

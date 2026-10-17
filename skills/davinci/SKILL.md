@@ -53,7 +53,7 @@ davinci projects          # 能列出项目（可能是空的）就说明一切�
 2. **找素材**（需要人像、Logo、背景时）：`davinci lib ls -c 人像 -q "指向左上 微笑"`，
    挑中后 `davinci lib show <id>` 读它的说明和标注——人像的标注会告诉你人物该放哪、
    标题该放哪（`placement`、`p_strategy`），照着摆。
-3. **先选配色**：`davinci palette list --json`，优先用已保存配色；`palette show <id>` 读取五个角色色，带入排版命令。
+3. **先选配色**：`davinci palette list --json`，优先用已保存配色；`palette show <id或名称>` 读取五个角色色，带入排版命令。
 4. **一次排完**：把整张图写成一个 JSON 命令数组，`davinci -p <项目> exec --file cover.json`。
    一批命令 = 一个撤销步骤；任何一条失败整批回滚，改好那条重发即可。
 5. **看结果**：`davinci -p <项目> render -o cover.png`，然后**用你能看图的方式打开这张 PNG 看一眼**。
@@ -141,19 +141,22 @@ davinci lib update <id> --tags 指向,推荐 --name "新名字"         # 改信
 **选择颜色时优先使用已保存的配色，先 `davinci palette list`。** 全局配色跨项目共享，
 每组恰好五色：`bg` 背景、`text` 主文字、`highlight` 高亮、`text2` 次文字、`accent` 点缀。
 
+`show/update/delete/apply` 接受配色 id 或名称（精确匹配，区分大小写）；id 优先。重名时报错并列出候选 id，请改用 id。
+例如：`davinci palette apply 日落橘 -p P`。
+
 ```bash
 davinci palette list --json
-davinci palette show <id>
+davinci palette show <id或名称>
 davinci palette add --from-image ./参考图.png --name 暖色 --dry-run  # 只解析
 davinci palette add --from-image ./参考图.png --name 暖色          # 保存
-davinci palette update <id> --text '#181818' --accent '#25818a'
-davinci palette apply <id> -p <项目> --board <画板>                # 一次 undo 可撤销全部
+davinci palette update <id或名称> --text '#181818' --accent '#25818a'
+davinci palette apply <id或名称> -p <项目> --board <画板>                # 一次 undo 可撤销全部
 ```
 
 `add` 也支持五个颜色覆盖参数，保存前微调；解析支持 PNG/JPEG/GIF 首帧/WebP（≤20 MB / 2000 万像素）。
 角色色用六位 hex。`apply` 映射背景、主次文字和形状，编组内图层也参与，保留图片和布局。
 背景图仍可能遮住背景色，应用后必须 render 检查。修改或删除全局配色不改变已应用的画板。
-`palette delete <id>` 只在用户明确要求删除时使用。完整参数见 [命令速查](references/commands.md#全局配色)。
+`palette delete <id或名称>` 只在用户明确要求删除时使用。完整参数见 [命令速查](references/commands.md#全局配色)。
 
 ## 2.5 模板库（照着做）
 

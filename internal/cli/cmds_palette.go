@@ -10,11 +10,39 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"davinci/internal/server"
 	"github.com/spf13/cobra"
 )
+
+// paletteID accepts an ID or an exact name. IDs take precedence over names.
+func (c *Client) paletteID(ref string) (string, error) {
+	var out struct {
+		Palettes []server.Palette `json:"palettes"`
+	}
+	if err := c.getJSON("/api/palettes", &out); err != nil {
+		return "", err
+	}
+	var matches []string
+	for _, p := range out.Palettes {
+		if p.ID == ref {
+			return p.ID, nil
+		}
+		if p.Name == ref {
+			matches = append(matches, p.ID)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	if len(matches) > 1 {
+		sort.Strings(matches)
+		return "", fmt.Errorf("配色名称 %q 重名，请使用候选 id：%s", ref, strings.Join(matches, ", "))
+	}
+	return "", fmt.Errorf("找不到配色：%s（用 `davinci palette list` 查看）", ref)
+}
 
 func (c *Client) printPalette(p any) {
 	if c.JSON {
@@ -66,7 +94,7 @@ func newPaletteCmd() *cobra.Command {
 	}}
 	list.Flags().StringP("query", "q", "", "按名称搜索配色")
 	cmd.AddCommand(list)
-	cmd.AddCommand(&cobra.Command{Use: "show <id>", Short: "配色详情", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd.AddCommand(&cobra.Command{Use: "show <id或名称>", Short: "配色详情", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := NewClient()
 		if err != nil {
 			return err
@@ -74,34 +102,46 @@ func newPaletteCmd() *cobra.Command {
 		var out struct {
 			Palette server.Palette `json:"palette"`
 		}
-		if err := c.getJSON("/api/palettes/"+url.PathEscape(args[0]), &out); err != nil {
+		id, err := c.paletteID(args[0])
+		if err != nil {
+			return err
+		}
+		if err := c.getJSON("/api/palettes/"+url.PathEscape(id), &out); err != nil {
 			return err
 		}
 		c.printPalette(out.Palette)
 		return nil
 	}})
 	cmd.AddCommand(newPaletteAddCmd(), newPaletteUpdateCmd())
-	cmd.AddCommand(&cobra.Command{Use: "delete <id>", Short: "删除配色（已应用的画板不受影响）", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd.AddCommand(&cobra.Command{Use: "delete <id或名称>", Short: "删除配色（已应用的画板不受影响）", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := NewClient()
 		if err != nil {
 			return err
 		}
-		if err := c.delete("/api/palettes/" + url.PathEscape(args[0])); err != nil {
+		id, err := c.paletteID(args[0])
+		if err != nil {
+			return err
+		}
+		if err := c.delete("/api/palettes/" + url.PathEscape(id)); err != nil {
 			return err
 		}
 		if c.JSON {
-			printJSON(map[string]any{"ok": true, "id": args[0]})
+			printJSON(map[string]any{"ok": true, "id": id})
 		} else {
-			fmt.Printf("已删除配色 %s\n", args[0])
+			fmt.Printf("已删除配色 %s\n", id)
 		}
 		return nil
 	}})
-	cmd.AddCommand(&cobra.Command{Use: "apply <id>", Short: "应用到当前画板（-p 指定项目，--board 指定画板，一步撤销）", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd.AddCommand(&cobra.Command{Use: "apply <id或名称>", Short: "应用到当前画板（-p 指定项目，--board 指定画板，一步撤销）", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := NewClient()
 		if err != nil {
 			return err
 		}
-		return c.execAndPrint(map[string]any{"type": "applyPalette", "id": args[0]})
+		id, err := c.paletteID(args[0])
+		if err != nil {
+			return err
+		}
+		return c.execAndPrint(map[string]any{"type": "applyPalette", "id": id})
 	}})
 	return cmd
 }
@@ -153,7 +193,7 @@ func newPaletteAddCmd() *cobra.Command {
 	return cmd
 }
 func newPaletteUpdateCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "update <id>", Short: "重命名或修改角色色", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Use: "update <id或名称>", Short: "重命名或修改角色色", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		patch := map[string]string{}
 		for _, key := range []string{"name", "bg", "text", "highlight", "text2", "accent"} {
 			if v := optStr(cmd, key); v != nil {
@@ -170,7 +210,11 @@ func newPaletteUpdateCmd() *cobra.Command {
 		var out struct {
 			Palette server.Palette `json:"palette"`
 		}
-		if err := c.sendJSON(http.MethodPatch, "/api/palettes/"+url.PathEscape(args[0]), patch, &out); err != nil {
+		id, err := c.paletteID(args[0])
+		if err != nil {
+			return err
+		}
+		if err := c.sendJSON(http.MethodPatch, "/api/palettes/"+url.PathEscape(id), patch, &out); err != nil {
 			return err
 		}
 		c.printPalette(out.Palette)

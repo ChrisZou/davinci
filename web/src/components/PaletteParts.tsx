@@ -35,8 +35,8 @@ function draftOf(p: PaletteDraft): PaletteDraft {
   return { name: p.name, bg: p.bg, text: p.text, highlight: p.highlight, text2: p.text2, accent: p.accent }
 }
 
-export function PaletteDetail({ initial, id, onClose, onSaved, onApply }: {
-  initial: PaletteDraft; id?: string; onClose: () => void
+export function PaletteDetail({ initial, id, sourceImage, onClose, onSaved, onApply }: {
+  initial: PaletteDraft; id?: string; sourceImage?: string; onClose: () => void
   onSaved: (palette: Palette | null) => void
   onApply?: (id: string) => Promise<void>
 }) {
@@ -68,6 +68,7 @@ export function PaletteDetail({ initial, id, onClose, onSaved, onApply }: {
         <h2 className="m-0 font-serif text-lg font-black">{id ? '配色详情' : '新增配色'}</h2>
         <button type="button" className="icon-btn h-8 w-8" title="关闭" aria-label="关闭配色详情" onClick={onClose}>×</button>
       </div>
+      {sourceImage && <img src={sourceImage} alt="配色原图" className="h-28 w-full shrink-0 rounded-lg bg-paper object-contain" />}
       <PalettePreview palette={draft} name={draft.name} />
       <label className="flex flex-col gap-2 text-xs text-muted">名称
         <input aria-label="配色名称" className="h-9 rounded-[10px] bg-paper px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-accent/30" value={draft.name} maxLength={120} disabled={busy} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
@@ -111,6 +112,8 @@ export function PaletteBrowser({ compact, onApply, selectedID, onSelect }: {
   const [selected, setSelected] = useState<Palette | null>(null)
   const [draft, setDraft] = useState<PaletteDraft | null>(null)
   const [draftVersion, setDraftVersion] = useState(0)
+  const [sourceImage, setSourceImage] = useState<string>()
+  useEffect(() => () => { if (sourceImage) URL.revokeObjectURL(sourceImage) }, [sourceImage])
   const [query, setQuery] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -119,15 +122,15 @@ export function PaletteBrowser({ compact, onApply, selectedID, onSelect }: {
   useEffect(() => {
     const mine = ++seq.current
     if (!selectedID) { setSelected(null); return }
-    void api.palette(selectedID).then((p) => { if (mine === seq.current) { setSelected(p); setDraft(null); setError('') } })
+    void api.palette(selectedID).then((p) => { if (mine === seq.current) { setSelected(p); setDraft(null); setSourceImage(undefined); setError('') } })
       .catch((e: Error) => { if (mine === seq.current) setError(e.message) })
     return () => { seq.current++ }
   }, [selectedID])
-  const choose = (p: Palette | null) => { setSelected(p); setDraft(null); onSelect?.(p?.id) }
+  const choose = (p: Palette | null) => { setSelected(p); setDraft(null); setSourceImage(undefined); onSelect?.(p?.id) }
   const analyze = async (f?: File) => {
     if (!f || busy) return
     setBusy(true); setError('')
-    try { const next = await api.analyzePalette(f); choose(null); setDraft(next); setDraftVersion((v) => v + 1) }
+    try { const next = await api.analyzePalette(f); choose(null); setSourceImage(URL.createObjectURL(f)); setDraft(next); setDraftVersion((v) => v + 1) }
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { setBusy(false) }
   }
@@ -150,7 +153,7 @@ export function PaletteBrowser({ compact, onApply, selectedID, onSelect }: {
       <input ref={file} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void analyze(f) }} />
       {(error || loadError) && <p role="alert" className="m-3 text-sm text-accent">{error || loadError}</p>}
       {detail && <aside className={`${compact ? 'min-h-0 flex-1 overflow-y-auto' : 'card w-[360px] shrink-0 overflow-y-auto'}`}>
-        <PaletteDetail key={selected?.id ?? `new-${draftVersion}`} initial={detail} id={selected?.id} onClose={() => choose(null)} onSaved={choose} onApply={onApply} />
+        <PaletteDetail key={selected?.id ?? `new-${draftVersion}`} initial={detail} id={selected?.id} sourceImage={sourceImage} onClose={() => choose(null)} onSaved={choose} onApply={onApply} />
       </aside>}
     </div>
   )

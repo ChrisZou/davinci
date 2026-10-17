@@ -17,7 +17,8 @@ const maxPalettePixels = 20_000_000
 type paletteRGB struct{ r, g, b float64 }
 type paletteCluster struct {
 	paletteRGB
-	weight float64
+	weight     float64
+	flatWeight float64
 }
 
 func (c paletteRGB) hex() string {
@@ -51,8 +52,70 @@ func paletteMix(a, b paletteRGB, t float64) paletteRGB {
 	return paletteRGB{a.r*(1-t) + b.r*t, a.g*(1-t) + b.g*t, a.b*(1-t) + b.b*t}
 }
 
+// Remove low-area edge colours lying inside the RGB segment between two
+// substantially larger colours. Flat-area evidence protects intentional shades
+// (including small text) that happen to lie on the same segment. Inputs are
+// sorted by weight; bounding the anchor set keeps photographic input inexpensive.
+func filterPaletteTransitions(points []paletteCluster) []paletteCluster {
+	kept := make([]paletteCluster, 0, len(points))
+	anchors := points[:min(32, len(points))]
+	for _, p := range points {
+		if p.weight <= 0 {
+			continue
+		}
+		transition := false
+		if p.flatWeight < p.weight*.5 {
+			for i, a := range anchors {
+				if a.weight < p.weight*4 {
+					break
+				}
+				for _, b := range anchors[i+1:] {
+					if b.weight < p.weight*4 {
+						break
+					}
+					length := paletteDistance(a.paletteRGB, b.paletteRGB)
+					if length < 1600 {
+						continue
+					}
+					t := ((p.r-a.r)*(b.r-a.r) + (p.g-a.g)*(b.g-a.g) + (p.b-a.b)*(b.b-a.b)) / length
+					if t >= .08 && t <= .92 && paletteDistance(p.paletteRGB, paletteMix(a.paletteRGB, b.paletteRGB, t)) <= 12*12 {
+						transition = true
+						break
+					}
+				}
+				if transition {
+					break
+				}
+			}
+		}
+		if !transition {
+			kept = append(kept, p)
+		}
+	}
+	return kept
+}
+
+// Neighbour comparisons use source pixels, not the sampling stride: thin text
+// must still contribute, while antialiased boundary pixels get less influence.
+func palettePixelVariation(img image.Image, x, y int, c color.NRGBA) float64 {
+	variation := 0.0
+	for _, d := range [][2]int{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} {
+		pt := image.Pt(x+d[0], y+d[1])
+		if !pt.In(img.Bounds()) {
+			continue
+		}
+		n := color.NRGBAModel.Convert(img.At(pt.X, pt.Y)).(color.NRGBA)
+		variation = max(variation, math.Pow(float64(c.A)-float64(n.A), 2), paletteDistance(
+			paletteRGB{float64(c.R), float64(c.G), float64(c.B)},
+			paletteRGB{float64(n.R), float64(n.G), float64(n.B)},
+		))
+	}
+	return variation
+}
+
 // ExtractPalette decodes bounded raster input, samples at most 128×128 pixels,
-// quantizes to a 5-bit histogram, then runs deterministic weighted k-means.
+// downweights edges and quantizes to a 5-bit histogram, filters transition
+// colours, then runs deterministic weighted k-means.
 // No files, assets or database rows are created by analysis.
 func ExtractPalette(raw []byte) (doc.PaletteColors, error) {
 	if len(raw) > maxPaletteBytes {
@@ -86,6 +149,11 @@ func ExtractPalette(raw []byte) (doc.PaletteColors, error) {
 				hist[key] = h
 			}
 			w := float64(c.A) / 255
+			if variation := palettePixelVariation(img, px, py, c); variation <= 12*12 {
+				h.flatWeight += w
+			} else {
+				w /= 1 + variation/(12*12)
+			}
 			h.r += float64(c.R) * w
 			h.g += float64(c.G) * w
 			h.b += float64(c.B) * w
@@ -109,6 +177,7 @@ func ExtractPalette(raw []byte) (doc.PaletteColors, error) {
 		points = append(points, h)
 	}
 	sort.SliceStable(points, func(i, j int) bool { return points[i].weight > points[j].weight })
+	points = filterPaletteTransitions(points)
 	centers := []paletteCluster{points[0]}
 	for len(centers) < min(8, len(points)) {
 		best, score := -1, 0.0
@@ -140,6 +209,7 @@ func ExtractPalette(raw []byte) (doc.PaletteColors, error) {
 			s.g += p.g * p.weight
 			s.b += p.b * p.weight
 			s.weight += p.weight
+			s.flatWeight += p.flatWeight
 		}
 		for i, s := range sums {
 			if s.weight > 0 {
@@ -152,8 +222,27 @@ func ExtractPalette(raw []byte) (doc.PaletteColors, error) {
 			}
 		}
 	}
+	// Use the strongest sampled colour in each final cluster. Returning a mean
+	// would invent a new mixed colour even after edge bins have been discounted.
+	representatives := make([]paletteCluster, len(centers))
+	for _, p := range points {
+		at, distance := 0, math.Inf(1)
+		for i, c := range centers {
+			if d := paletteDistance(p.paletteRGB, c.paletteRGB); d < distance {
+				at, distance = i, d
+			}
+		}
+		if p.weight > representatives[at].weight {
+			representatives[at] = p
+		}
+	}
+	for i, p := range representatives {
+		if p.weight > 0 {
+			centers[i].paletteRGB = p.paletteRGB
+		}
+	}
 	sort.SliceStable(centers, func(i, j int) bool { return centers[i].weight > centers[j].weight })
-	return assignPaletteRoles(centers), nil
+	return assignPaletteRoles(filterPaletteTransitions(centers)), nil
 }
 
 func assignPaletteRoles(cs []paletteCluster) doc.PaletteColors {

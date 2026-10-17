@@ -492,6 +492,9 @@ davinci render -o out.png --scale 2
 
 选择颜色时先 `davinci palette list`，优先使用已保存的配色。配色是全局资源，不属于任何项目。
 
+`show/update/delete/apply` 接受配色 id 或名称（精确匹配，区分大小写）；id 优先。重名时报错并列出候选 id，请改用 id。
+例如：`davinci palette apply 日落橘 -p P`。
+
 ```bash
 davinci palette list --json
 davinci palette list -q 暖色

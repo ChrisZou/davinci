@@ -13,7 +13,7 @@ import (
 )
 
 func TestPaletteCLI(t *testing.T) {
-	draft := map[string]any{"name": "图片", "bg": "#ffffff", "text": "#000000", "highlight": "#ff4400", "text2": "#666666", "accent": "#0077aa"}
+	draft := map[string]any{"id": "pal_test", "name": "图片", "bg": "#ffffff", "text": "#000000", "highlight": "#ff4400", "text2": "#666666", "accent": "#0077aa"}
 	saved := 0
 	analyzed := 0
 	var command map[string]any
@@ -50,6 +50,7 @@ func TestPaletteCLI(t *testing.T) {
 		case "/api/palettes":
 			if r.Method == "POST" {
 				json.NewDecoder(r.Body).Decode(&draft)
+				draft["id"] = "pal_test"
 				saved++
 				respond(map[string]any{"palette": draft})
 			} else {
@@ -138,5 +139,95 @@ func TestPaletteCLIAnalysisFailureDoesNotSave(t *testing.T) {
 	root.SetArgs([]string{"--server", srv.URL, "palette", "add", "--from-image", file})
 	if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "没有可见颜色") || saves != 0 {
 		t.Fatal(err, saves)
+	}
+}
+
+func TestPaletteCLIResolvesIDOrExactName(t *testing.T) {
+	palettes := []map[string]string{
+		{"id": "pal_sunset", "name": "日落橘"},
+		{"id": "pal_a", "name": "重名"},
+		{"id": "pal_b", "name": "重名"},
+		{"id": "pal_collision", "name": "pal_sunset"},
+		{"id": "pal_named", "name": "pal_like"},
+		{"id": "pal_english", "name": "Sunset"},
+	}
+	var target, method string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == "/api/health":
+			io.WriteString(w, `{"ok":true}`)
+		case r.URL.Path == "/api/palettes":
+			json.NewEncoder(w).Encode(map[string]any{"palettes": palettes})
+		case strings.HasPrefix(r.URL.Path, "/api/palettes/"):
+			target, method = strings.TrimPrefix(r.URL.Path, "/api/palettes/"), r.Method
+			json.NewEncoder(w).Encode(map[string]any{"ok": true, "palette": map[string]string{"id": target}})
+		case r.URL.Path == "/api/projects/p_test":
+			io.WriteString(w, `{"ok":true,"project":{"id":"p_test"}}`)
+		case r.URL.Path == "/api/projects/p_test/commands":
+			var command map[string]any
+			json.NewDecoder(r.Body).Decode(&command)
+			target, _ = command["id"].(string)
+			method = r.Method
+			if command["type"] != "applyPalette" || command["board"] != "2" {
+				t.Error("apply command", command)
+			}
+			io.WriteString(w, `{"ok":true,"data":{}}`)
+		default:
+			t.Errorf("unexpected route: %s", r.URL.Path)
+			http.Error(w, "unexpected route", 404)
+		}
+	}))
+	defer srv.Close()
+	for _, action := range []struct{ name, method string }{{"show", "GET"}, {"update", "PATCH"}, {"delete", "DELETE"}, {"apply", "POST"}} {
+		for _, ref := range []struct{ input, id, errorText string }{
+			{"pal_sunset", "pal_sunset", ""}, // IDs win even when another palette has this name.
+			{"日落橘", "pal_sunset", ""},
+			{"pal_like", "pal_named", ""}, // An ID-shaped name still resolves by exact name.
+			{"Sunset", "pal_english", ""},
+			{"重名", "", "重名"},
+			{"日落", "", "找不到配色"},
+			{"日落橘 ", "", "找不到配色"},
+			{"sunset", "", "找不到配色"},
+			{"pal_missing", "", "找不到配色"},
+		} {
+			t.Run(action.name+"/"+ref.input, func(t *testing.T) {
+				target, method = "", ""
+				root := newRootCmd()
+				args := []string{"--server", srv.URL, "--json", "palette", action.name, ref.input}
+				if action.name == "update" {
+					args = append(args, "--name", "新版")
+				}
+				if action.name == "apply" {
+					args = append(args, "-p", "p_test", "--board", "2")
+				}
+				root.SetArgs(args)
+				err := root.Execute()
+				if ref.errorText != "" {
+					if err == nil || !strings.Contains(err.Error(), ref.errorText) || target != "" {
+						t.Fatalf("ambiguous/missing name must stop before action: target=%s err=%v", target, err)
+					}
+					if ref.input == "重名" && (!strings.Contains(err.Error(), "pal_a") || !strings.Contains(err.Error(), "pal_b")) {
+						t.Fatal("missing candidate IDs", err)
+					}
+					return
+				}
+				if err != nil || target != ref.id || method != action.method {
+					t.Fatalf("target=%s method=%s err=%v", target, method, err)
+				}
+			})
+		}
+	}
+}
+
+func TestPaletteResolutionPropagatesListFailure(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, `{"error":"配色库读取失败"}`)
+	}))
+	defer srv.Close()
+	c := &Client{BaseURL: srv.URL, HTTP: srv.Client()}
+	if _, err := c.paletteID("日落橘"); err == nil || !strings.Contains(err.Error(), "配色库读取失败") {
+		t.Fatal("list failure must not be reported as a missing palette", err)
 	}
 }
