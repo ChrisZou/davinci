@@ -257,11 +257,10 @@ input[type='number'] {
 .palette-original img { display: block; width: 100%; height: 280px; object-fit: contain; }
 .palette-controls { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .palette-controls .palette-role-fields { gap: 8px; }
-.palette-examples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 24px; width: 100%; max-width: 780px; margin: 8px auto 0; align-items: start; }
+.palette-examples { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px 24px; width: 100%; margin: 8px 0 0; align-items: center; }
 .palette-examples-heading { grid-column: 1 / -1; }
-.palette-slide { grid-column: span 2; }
-.palette-data { grid-column: span 2; width: 100%; max-width: 400px; }
-.palette-poster { width: 100%; max-width: 168px; justify-self: end; }
+.palette-slide, .palette-data { grid-column: span 8; }
+.palette-social, .palette-poster { grid-column: span 4; }
 .palette-example { margin: 0; min-width: 0; }
 .palette-art { container-type: inline-size; border: 1px solid rgba(60, 48, 20, .16); border-radius: 10px; box-shadow: 0 2px 4px rgba(60, 48, 20, .04), 0 8px 20px rgba(60, 48, 20, .08); }
 .palette-art h3, .palette-art p { margin: 0; }
@@ -305,7 +304,7 @@ input[type='number'] {
   .palette-original { min-height: 220px; padding: 12px; }
   .palette-original img { height: 260px; }
 }
-@media (max-width: 540px) {
+@media (max-width: 767px) {
   .palette-examples { grid-template-columns: minmax(0, 1fr); gap: 20px; }
-  .palette-example { grid-column: 1; width: 100%; max-width: none; }
+  .palette-example { grid-column: 1; }
 }
