@@ -1,25 +1,14 @@
 import type { PaletteColors } from '../api'
 
-function luminance(hex: string) {
-  const values = (hex.match(/[a-f\d]{2}/gi) ?? ['00', '00', '00']).map((n) => {
-    const v = parseInt(n, 16) / 255
-    return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4
-  })
-  return .2126 * values[0] + .7152 * values[1] + .0722 * values[2]
-}
-
-/** Keep the supplied colours. Use an underline if a filled marker would hide text. */
-export function highlightStyle(palette: PaletteColors) {
-  const a = luminance(palette.text), b = luminance(palette.highlight)
-  return (Math.max(a, b) + .05) / (Math.min(a, b) + .05) >= 4.5
-    ? { color: palette.text, backgroundColor: palette.highlight }
-    : { color: palette.text, backgroundColor: 'transparent', textDecoration: 'underline', textDecorationColor: palette.highlight, textDecorationThickness: '.14em', textUnderlineOffset: '.12em' }
-}
+import { highlightStyle } from './palettePresentation'
 
 export function PaletteExamples({ palette: p }: { palette: PaletteColors }) {
   return (
     <section aria-label="示例设计" className="palette-examples">
-      <h2 className="m-0 font-serif text-lg font-black">示例设计</h2>
+      <header className="palette-examples-heading">
+        <h2 className="m-0 font-serif text-lg font-black">示例设计</h2>
+        <p className="mb-0 mt-1 text-xs text-muted">根据这组配色设计的其他页面</p>
+      </header>
       <figure className="palette-example palette-slide">
         <div className="palette-art" style={{ background: p.bg, color: p.text }} aria-label="16:9 幻灯片">
           <div className="slide-content">
@@ -30,6 +19,18 @@ export function PaletteExamples({ palette: p }: { palette: PaletteColors }) {
           </div>
         </div>
         <figcaption>幻灯片 <span>16:9</span></figcaption>
+      </figure>
+      <figure className="palette-example palette-social">
+        <div className="palette-art" style={{ background: p.bg, color: p.text }} aria-label="1:1 社交卡片">
+          <div className="social-content">
+            <span style={{ color: p.text2 }}>每周灵感</span>
+            <span className="social-quote" style={{ color: p.highlight }}>“</span>
+            <h3>好的设计，<br />让日常<mark style={highlightStyle(p)}>有光</mark>。</h3>
+            <p style={{ color: p.text2 }}>记录值得分享的每一个瞬间</p>
+            <div className="social-foot"><i style={{ background: p.accent }} /><span style={{ color: p.text2 }}>设计与生活</span></div>
+          </div>
+        </div>
+        <figcaption>社交卡片 <span>1:1</span></figcaption>
       </figure>
       <figure className="palette-example palette-poster">
         <div className="palette-art" style={{ background: p.bg, color: p.text }} aria-label="3:4 竖版封面">
@@ -43,17 +44,21 @@ export function PaletteExamples({ palette: p }: { palette: PaletteColors }) {
         </div>
         <figcaption>竖版封面 <span>3:4</span></figcaption>
       </figure>
-      <figure className="palette-example palette-social">
-        <div className="palette-art" style={{ background: p.bg, color: p.text }} aria-label="1:1 社交卡片">
-          <div className="social-content">
-            <span style={{ color: p.text2 }}>每周灵感</span>
-            <span className="social-quote" style={{ color: p.highlight }}>“</span>
-            <h3>好的设计，<br />让日常<mark style={highlightStyle(p)}>有光</mark>。</h3>
-            <p style={{ color: p.text2 }}>记录值得分享的每一个瞬间</p>
-            <div className="social-foot"><i style={{ background: p.accent }} /><span style={{ color: p.text2 }}>设计与生活</span></div>
+      <figure className="palette-example palette-data">
+        <div className="palette-art" style={{ background: p.bg, color: p.text }} aria-label="16:9 数据卡片">
+          <div className="data-content">
+            <span className="data-kicker" style={{ color: p.text2 }}>灵感档案 / 本月回顾</span>
+            <h3>每一天，都有<mark style={highlightStyle(p)}>新发现</mark></h3>
+            <div className="data-metrics">
+              <div><strong>28</strong><span style={{ color: p.text2 }}>灵感记录</span></div>
+              <div className="data-chart" aria-label="每周记录趋势">
+                {[42, 65, 54, 86, 100].map((height, i) => <i key={i} style={{ height: `${height}%`, background: i === 4 ? p.highlight : p.text2 }} />)}
+              </div>
+            </div>
+            <p style={{ color: p.text2 }}><i style={{ background: p.accent }} />把观察，变成创作的起点</p>
           </div>
         </div>
-        <figcaption>社交卡片 <span>1:1</span></figcaption>
+        <figcaption>数据卡片 <span>16:9</span></figcaption>
       </figure>
     </section>
   )

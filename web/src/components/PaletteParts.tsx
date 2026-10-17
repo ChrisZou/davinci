@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type Palette, type PaletteColors, type PaletteDraft } from '../api'
 import { PaletteExamples } from './PaletteExamples'
+import { paletteShortName } from './palettePresentation'
 import { ConfirmDialog } from './Dialog'
 import { reloadPalettes, usePalettes } from './paletteState'
 
@@ -10,13 +11,15 @@ export const PALETTE_ROLES = [
 
 /** A small cover mock, shared by cards and the editable detail preview. */
 export function PalettePreview({ palette, name = '配色' }: { palette: PaletteColors; name?: string }) {
+  const title = paletteShortName(name)
+  const titleSize = [...title].length > 12 ? '7cqw' : [...title].length > 8 ? '8cqw' : '10cqw'
   return (
-    <div className="relative flex aspect-[4/3] w-full flex-col justify-center overflow-hidden rounded-xl p-[10%]" style={{ background: palette.bg }} aria-label="封面预览">
+    <div className="palette-preview relative flex aspect-[4/3] w-full flex-col justify-center overflow-hidden rounded-xl p-[10%]" style={{ background: palette.bg }} aria-label="封面预览">
       <span className="absolute -right-[5%] top-[12%] h-[55%] w-[40%] rotate-12 rounded-[25%]" style={{ background: palette.highlight }} />
       <span className="absolute bottom-[12%] right-[14%] h-[17%] w-[17%] rounded-full" style={{ background: palette.accent }} />
-      <strong className="relative z-10 max-w-[72%] break-words line-clamp-3 font-serif text-2xl font-black leading-tight" style={{ color: palette.text }}>{name}</strong>
-      <span className="relative z-10 mt-3 h-1.5 w-[44%] rounded-full" style={{ background: palette.text2 }} />
-      <span className="relative z-10 mt-2 h-1.5 w-[30%] rounded-full" style={{ background: palette.text2 }} />
+      <strong className="palette-preview-title relative z-10 max-w-[72%] break-words line-clamp-2 shrink-0 font-serif font-black leading-[1.4]" style={{ color: palette.text, fontSize: titleSize }}>{title}</strong>
+      <span className="relative z-10 mt-[5%] h-[1.5cqw] shrink-0 w-[44%] rounded-full" style={{ background: palette.text2 }} />
+      <span className="relative z-10 mt-[3%] h-[1.5cqw] shrink-0 w-[30%] rounded-full" style={{ background: palette.text2 }} />
     </div>
   )
 }
@@ -24,10 +27,12 @@ export function PaletteTile({ palette, selected, onClick }: { palette: Palette; 
   return (
     <button type="button" onClick={onClick} aria-pressed={selected} className="group flex min-w-0 flex-col gap-2 text-left" data-testid="palette-item">
       <span className={`w-full overflow-hidden rounded-xl transition-shadow ${selected ? 'ring-2 ring-accent ring-offset-2 ring-offset-card' : 'group-hover:shadow-[var(--shadow-float)]'}`}>
-        <PalettePreview palette={palette} name={palette.name} />
+        <div className="palette-tile-visual">
+          {palette.imageUrl ? <img src={palette.imageUrl} alt="" loading="lazy" className="palette-tile-image" /> : <PalettePreview palette={palette} name={palette.name} />}
+        </div>
         <span className="flex h-5">{PALETTE_ROLES.map(([key]) => <span key={key} className="flex-1" style={{ background: palette[key] }} />)}</span>
       </span>
-      <span className="w-full truncate px-0.5 text-xs text-ink-2">{palette.name}</span>
+      <span title={palette.name} className="w-full truncate px-0.5 text-xs text-ink-2">{palette.name}</span>
     </button>
   )
 }
@@ -78,14 +83,15 @@ export function PaletteDetail({ initial, id, sourceImage, sourceFile, full, deta
         <h2 className="m-0 font-serif text-lg font-black">{id ? '配色详情' : '新增配色'}</h2>
         <button type="button" className="icon-btn h-8 w-8" title="关闭" aria-label="关闭配色详情" onClick={onClose}>×</button>
       </div>}
+      {full && <h1 className="palette-detail-title">{draft.name || '新增配色'}</h1>}
       {detailHref && <a href={detailHref} target="_blank" rel="noreferrer" className="text-xs text-muted hover:text-accent">查看详情 ↗</a>}
       <div className={full ? 'palette-detail-top' : 'contents'}>
         <div className={full ? 'palette-original' : 'contents'}>
           {imageURL ? <img src={imageURL} alt="配色原图" className="h-28 w-full shrink-0 rounded-lg bg-paper object-contain" /> : full && <div className="flex flex-col items-center gap-4"><span className="text-sm text-muted">暂无原图</span><button className="btn-ghost" disabled={busy} onClick={() => imageInput.current?.click()}>上传原图</button></div>}
         </div>
-        <div className={full ? 'palette-controls card p-5' : 'contents'}>
+        <div className={full ? 'palette-controls card p-4' : 'contents'}>
           {!full && <PalettePreview palette={draft} name={draft.name} />}
-          <div className="flex flex-wrap gap-2">
+          {imageURL && <div className="flex flex-wrap gap-2">
             {imageURL && <button className="btn-ghost" disabled={busy} onClick={() => imageInput.current?.click()}>更换原图</button>}
             {imageURL && <button className="btn-ghost" disabled={busy} onClick={() => void act(async () => {
               let file = imageFile
@@ -98,7 +104,7 @@ export function PaletteDetail({ initial, id, sourceImage, sourceFile, full, deta
               setDraft((current) => ({ ...current, ...Object.fromEntries(PALETTE_ROLES.map(([key]) => [key, colors[key]])) }))
               feedback('已重新提色，请预览后保存')
             })}>按原图重新提色</button>}
-          </div>
+          </div>}
           <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" aria-label="上传或更换原图" className="hidden" disabled={busy} onChange={(e) => {
             const file = e.target.files?.[0]; e.target.value = ''
             if (!file) return
@@ -108,7 +114,7 @@ export function PaletteDetail({ initial, id, sourceImage, sourceFile, full, deta
           <label className="flex flex-col gap-2 text-xs text-muted">名称
             <input aria-label="配色名称" className="h-9 rounded-[10px] bg-paper px-3 text-sm text-ink outline-none focus:ring-2 focus:ring-accent/30" value={draft.name} maxLength={120} disabled={busy} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           </label>
-          <div className="flex flex-col gap-3">
+          <div className="palette-role-fields flex flex-col gap-3">
             {PALETTE_ROLES.map(([key, label]) => (
               <div key={key} className="flex items-center gap-2">
                 <label className="relative h-8 w-8 shrink-0 cursor-pointer rounded-full border border-line-strong" style={{ background: draft[key] }}>
@@ -125,7 +131,7 @@ export function PaletteDetail({ initial, id, sourceImage, sourceFile, full, deta
             ))}
           </div>
           {(error || validation) && <p role="alert" className="m-0 text-xs text-accent">{error || validation}</p>}
-          <span role="status" className="text-xs text-muted">{notice}</span>
+          <span role="status" className="text-xs text-muted empty:hidden">{notice}</span>
           <div className="flex flex-wrap gap-2">
             <button className="btn-primary" disabled={busy || !valid || (!!id && !dirty)} onClick={() => void act(save)}>保存</button>
             {id && onApply && <button className="btn-ghost" disabled={busy || dirty} title={dirty ? '请先保存修改' : undefined} onClick={() => void act(async () => { await onApply(id); feedback('已应用') })}>应用到当前画板</button>}

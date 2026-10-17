@@ -54,7 +54,7 @@ test('palette API propagates analysis/save/apply errors', async () => {
   } finally { globalThis.fetch = original }
 })
 
-const { PalettePreview, PaletteDetail } = await bundled('src/components/PaletteParts.tsx')
+const { PalettePreview, PaletteDetail, PaletteTile } = await bundled('src/components/PaletteParts.tsx')
 test('cover preview renders all five semantic colours and escapes palette names', () => {
   const html = renderToStaticMarkup(React.createElement(PalettePreview, { palette: draft, name: '<封面>' }))
   for (const color of [draft.bg, draft.text, draft.highlight, draft.text2, draft.accent]) assert.ok(html.includes(color), color)
@@ -150,24 +150,21 @@ test('new palette detail shows the source thumbnail beside the editable cover pr
   assert.ok(!savedHTML.includes('alt="配色原图"'))
 })
 
-const { PaletteExamples, highlightStyle } = await bundled('src/components/PaletteExamples.tsx')
-test('examples render three proportional layouts and highlight only key words', () => {
+const { PaletteExamples } = await bundled('src/components/PaletteExamples.tsx')
+test('examples render four proportional layouts and highlight only key words', () => {
   const html = renderToStaticMarkup(React.createElement(PaletteExamples, { palette: draft }))
-  assert.equal((html.match(/<figure/g) ?? []).length, 3)
-  for (const label of ['16:9 幻灯片', '3:4 竖版封面', '1:1 社交卡片']) assert.ok(html.includes(label))
+  assert.equal((html.match(/<figure/g) ?? []).length, 4)
+  for (const label of ['16:9 幻灯片', '3:4 竖版封面', '1:1 社交卡片', '16:9 数据卡片']) assert.ok(html.includes(label))
   assert.match(html, /<h3>让<mark[^>]*>灵感<\/mark>成为日常<\/h3>/)
-  for (const role of ['bg', 'text', 'text2', 'highlight', 'accent']) assert.ok(html.includes(draft[role]))
-  assert.equal(highlightStyle(draft).backgroundColor, draft.highlight)
-  const lowContrast = { ...draft, highlight: draft.text }
-  assert.equal(highlightStyle(lowContrast).backgroundColor, 'transparent')
-  assert.equal(highlightStyle(lowContrast).textDecorationColor, lowContrast.highlight)
-  assert.equal(highlightStyle(lowContrast).color, lowContrast.text)
-  assert.equal(lowContrast.highlight, draft.text, 'never rewrite supplied colours')
+  for (const figure of html.match(/<figure[\s\S]*?<\/figure>/g)) {
+    for (const role of ['bg', 'text', 'text2', 'highlight', 'accent']) assert.ok(figure.includes(draft[role]), role)
+  }
 })
 
 test('full detail displays original and examples; compact detail keeps contextual link', () => {
   const props = { initial: { ...saved, imageUrl: '/assets/original.png' }, id: saved.id, onClose() {}, onSaved() {} }
   const html = renderToStaticMarkup(React.createElement(PaletteDetail, { ...props, full: true }))
+  assert.match(html, /<h1[^>]*>暖色<\/h1>/)
   assert.ok(html.includes('palette-detail-full'))
   assert.ok(html.includes('palette-original'))
   assert.ok(html.includes('src="/assets/original.png"'))
@@ -233,4 +230,50 @@ test('editing a role updates examples before saving; replacing an image preserve
   tree = render()
   assert.deepEqual(tree.find((n) => n.type.name === 'PaletteExamples').props.palette, before)
   assert.equal(tree.find((n) => n.type === 'button' && n.props.children === '保存').props.disabled, false)
+})
+
+const { highlightStyle, paletteShortName } = await bundled('src/components/palettePresentation.ts')
+test('highlight compares against the background at the 3:1 threshold', () => {
+  for (const [bg, highlight, coloredText] of [
+    ['#f4ecdd', '#9a624f', true],
+    ['#f4ecdd', '#66e830', false],
+    ['#ffffff', '#949494', true], // 3.033:1
+    ['#ffffff', '#959595', false], // 2.995:1
+    ['#111111', '#eeeeee', true],
+    ['#111111', '#222222', false],
+  ]) {
+    const palette = Object.freeze({ ...draft, bg, highlight })
+    assert.deepEqual(highlightStyle(palette), coloredText
+      ? { color: highlight, backgroundColor: 'transparent' }
+      : { color: draft.text, backgroundColor: highlight })
+  }
+  assert.equal(highlightStyle({ ...draft, highlight: draft.text }).color, draft.text)
+})
+
+test('every example applies the shared highlight rule to its keyword', () => {
+  for (const highlight of ['#9a624f', '#66e830']) {
+    const palette = { ...draft, bg: '#f4ecdd', highlight }
+    const html = renderToStaticMarkup(React.createElement(PaletteExamples, { palette }))
+    const marks = html.match(/<mark[^>]*>/g)
+    assert.equal(marks.length, 4)
+    const expected = highlightStyle(palette)
+    for (const mark of marks) {
+      assert.ok(mark.includes(`color:${expected.color};background-color:${expected.backgroundColor}`))
+      assert.ok(!mark.includes('text-decoration'))
+    }
+  }
+})
+
+test('miniature titles keep short names, limit segments and truncate Unicode safely', () => {
+  assert.equal(paletteShortName('灰白钴蓝 × 焦橙｜MOFT 撞色表带'), '灰白钴蓝 × 焦橙')
+  assert.equal(paletteShortName('薄荷青 × 薰衣草紫｜Design Systems Report 2025'), '薄荷青 × 薰衣草紫')
+  assert.equal(paletteShortName('海屿慢调｜浅青 × 米白 × 灰蓝 × 深蓝'), '海屿慢调')
+  assert.equal(paletteShortName('浅青 × 米白 × 灰蓝 × 深蓝'), '浅青 × 米白')
+  assert.equal(paletteShortName('😀'.repeat(20)), '😀'.repeat(13) + '…')
+  assert.equal(paletteShortName('  '), '配色')
+  const name = '灰白钴蓝 × 焦橙｜MOFT 撞色表带'
+  const tile = (imageUrl) => renderToStaticMarkup(React.createElement(PaletteTile, { palette: { ...saved, name, imageUrl }, onClick() {} }))
+  assert.ok(tile().includes('line-clamp-2'))
+  assert.ok(tile().includes(`title="${name}"`))
+  assert.ok(tile('/assets/source.png').includes('src="/assets/source.png"'))
 })
