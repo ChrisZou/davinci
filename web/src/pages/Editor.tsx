@@ -599,7 +599,7 @@ export function Editor({ projectID }: { projectID: string }) {
           <aside className={`card flex shrink-0 flex-col overflow-hidden ${rightPanel === 'comments' ? 'w-[320px]' : 'w-[280px]'}`}>
             <div className="flex shrink-0 gap-1 border-b border-line p-2" aria-label="编辑面板">
               <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'properties' ? 'bg-paper text-ink' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'properties'} onClick={() => setRightPanel('properties')}>属性</button>
-              <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'comments' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'comments'} onClick={() => setRightPanel('comments')}>评论改图</button>
+              <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'comments' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'comments'} onClick={() => setRightPanel('comments')}>AI改图</button>
             </div>
             {rightPanel === 'comments' && project ? <CommentsPanel key={projectID} ai={aiComments} board={project.boards.find((b) => b.id === project.active)!} selected={selected} /> : <Properties
               doc={doc}
