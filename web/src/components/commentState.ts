@@ -1,8 +1,16 @@
 import type { EditComment } from '../api'
 
+/** The conversation of the newest comment that has one, or ''. */
+export function latestSession(list: EditComment[]): string {
+  let latest: EditComment | undefined
+  for (const c of list) if (c.session && (!latest || c.createdAt >= latest.createdAt)) latest = c
+  return latest?.session ?? ''
+}
+
 /**
- * What this editor session shows: its own comments, plus one still running from
- * before (it holds the project's queue, so it must stay visible and cancellable).
+ * What the panel shows: the current conversation's comments, plus one still
+ * running from another (it holds the project's queue, so it must stay visible
+ * and cancellable).
  */
 export function sessionComments(current: EditComment[], incoming: EditComment[], session: string): EditComment[] {
   return incoming.filter((c) => c.session === session || c.status === 'running' || current.some((x) => x.id === c.id))

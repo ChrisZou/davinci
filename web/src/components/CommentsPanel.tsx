@@ -11,7 +11,8 @@ export function CommentsPanel({ ai, board, selected }: { ai: EditComments; board
   const { comments, providers, provider, setProvider, error, loaded, sending, cancelling, running, available, detect, cancel } = ai
   const [text, setText] = useState('')
   const bottom = useRef<HTMLDivElement>(null)
-  // One conversation per project: a comment may add boards and land on one of them.
+  // The whole conversation, whatever board each comment was on: a comment may
+  // add boards and land on one of them.
   const current = comments
   const target = selected.length ? selected.map((id) => board.layers.find((l) => l.id === id)?.name || '所选图层').join('、') : '整个画板'
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest' }) }, [current.length, current.at(-1)?.status])
@@ -47,7 +48,10 @@ export function CommentsPanel({ ai, board, selected }: { ai: EditComments; board
         <select id="comment-provider" className="min-w-0 rounded-lg border border-line bg-card px-2 py-1.5 text-[11px] text-ink-2" value={provider} disabled={!!running || sending} onChange={(e) => setProvider(e.target.value)}>
           {(providers.length ? providers : [{ id: 'codex', name: 'Codex', available: false }, { id: 'claude', name: 'Claude Code', available: false }]).map((p) => <option key={p.id} value={p.id}>{p.name}{p.available ? '' : ' · 未检测到'}</option>)}
         </select>
-        <button type="button" aria-label="刷新检测" title="刷新检测" className="h-7 w-7 shrink-0 text-lg text-muted hover:text-accent" onClick={() => void detect()}><span aria-hidden>↻</span></button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button type="button" className="h-7 rounded-lg px-2 text-[11px] font-semibold text-muted hover:bg-paper/60 hover:text-accent disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted" disabled={!!running || sending || !current.length} onClick={ai.startOver}>新对话</button>
+          <button type="button" aria-label="刷新检测" title="刷新检测" className="h-7 w-7 shrink-0 text-lg text-muted hover:text-accent" onClick={() => void detect()}><span aria-hidden>↻</span></button>
+        </div>
       </div>
       <div className="rounded-xl border border-line bg-paper/60 px-3 pt-2.5 focus-within:border-accent/60">
         <div className="truncate text-[10px] text-muted" title={`${board.name} · ${target}`}>↳ {target}</div>

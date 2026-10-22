@@ -200,7 +200,7 @@ CLI 的其他子命令按 `--server` / `DAVINCI_SERVER` / `DAVINCI_PORT` → `ht
 - `GET /api/projects/:id/comments` → `{comments:[...]}`，按时间顺序返回最近 200 条。
 - `POST /api/projects/:id/comments` → HTTP 202 `{comment:{...}}`。
   请求：`{boardId,layerIds:[],text,provider:"codex"|"claude",session?}`；评论 1–4000 字。
-  `session` 是编辑器会话（每次打开项目生成一个，≤64 字符），同一会话的评论才算一段对话。
+  `session` 是对话标识（≤64 字符）：编辑器打开项目时沿用最近一次对话的，点「新对话」换一个；同一标识的评论才算一段对话。
 - `POST /api/projects/:id/ai/session`，JSON body `{session?}` → `{ready,threadId}`：为该会话预热 Codex，不触发模型回复。
 - `POST /api/projects/:id/comments/:comment/cancel`，JSON body `{}` → `{comment:{...}}`。
 
@@ -219,8 +219,8 @@ AI 收到评论所在画板的预览、整个项目（全部画板）的 JSON、
 撤销修改不会删除评论，也不会把历史“已修改”改为新的任务状态。
 
 编辑器本身不能生成图片，AI 也一样；需要新图片时由评论给出本机路径或网址，或从素材库挑选。
-Codex 会话按「编辑器会话 + 规则（命令、字体、配色、素材库）」的指纹保存：每次打开项目、或规则变了，都开新会话，
-不沿用之前的对话；同一会话内服务重启后会恢复。评论都留在数据库里，编辑器只显示本次会话的（以及仍在处理的）评论。
+Codex 会话按「对话 + 规则（命令、字体、配色、素材库）」的指纹保存：换了对话或规则变了就开新会话，
+不沿用之前的回答；同一段对话在刷新页面、重启服务后会恢复。评论都留在数据库里，编辑器只显示当前对话的（以及仍在处理的）评论。
 
 ## 全局配色
 

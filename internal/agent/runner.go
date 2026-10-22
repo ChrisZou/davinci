@@ -29,7 +29,7 @@ type Provider struct {
 type Request struct {
 	Provider, Prompt                 string
 	ProjectID, Instructions, Context string
-	// Session is the editor session (one page load) the conversation belongs to.
+	// Session names the conversation: the editor resumes the latest or starts anew.
 	Session string
 	Image   []byte
 }

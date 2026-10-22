@@ -234,7 +234,7 @@ func TestCommentMultiBoardVersionsUndoInOneStep(t *testing.T) {
 	}
 }
 
-// Each page load is its own conversation: the AI sees only that session's comments.
+// The AI sees only the comments of the conversation it is in.
 func TestCommentContextIsOneSession(t *testing.T) {
 	h, _, e, c := setupComment(t)
 	for i, session := range []string{"page-1", "page-2"} {

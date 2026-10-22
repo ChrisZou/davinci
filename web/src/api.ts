@@ -73,7 +73,7 @@ export interface EditComment {
   target: string
   text: string
   provider: string
-  /** The editor session (one opening of the project) it was made in. */
+  /** The conversation it belongs to. */
   session?: string
   status: 'running' | 'done' | 'failed' | 'cancelled' | 'needs_info'
   reply: string

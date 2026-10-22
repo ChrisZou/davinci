@@ -99,9 +99,9 @@ func (s *Sessions) ensure(ctx context.Context, p *projectSession, req Request, r
 	if err != nil {
 		return nil, err
 	}
-	// A conversation is one editor session under one set of rules: a new page
-	// starts afresh, and a thread keeps the answers it gave under its rules
-	// ("boards can't be added"). Only a thread started for both is resumed.
+	// A thread belongs to one conversation under one set of rules: a new
+	// conversation starts afresh, and a thread keeps the answers it gave under
+	// its rules ("boards can't be added"). Only a thread started for both is resumed.
 	scope := sha256.Sum256([]byte(req.Session + "\x00" + req.Instructions))
 	if p.process != proc || p.scope != scope {
 		if p.scope != scope {

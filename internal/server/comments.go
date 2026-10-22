@@ -27,7 +27,7 @@ type Comment struct {
 	LayerIDs  []string  `json:"layerIds"`
 	Text      string    `json:"text"`
 	Provider  string    `json:"provider"`
-	Session   string    `json:"session,omitempty"` // one page load; each is its own conversation
+	Session   string    `json:"session,omitempty"` // the conversation it belongs to
 	Status    string    `json:"status"`
 	Reply     string    `json:"reply"`
 	CreatedAt time.Time `json:"createdAt"`

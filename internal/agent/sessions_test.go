@@ -201,7 +201,7 @@ func TestSessionsWarmReuseIsolationAndResume(t *testing.T) {
 	if method, params := lastOpen(); method != "thread/resume" || params["developerInstructions"] != "new rules" {
 		t.Fatal("did not resume the thread of the new rules", method)
 	}
-	// A new editor session (page load) is a new conversation.
+	// A new conversation starts a new thread.
 	a.Session = "page-2"
 	if _, err = create().Warm(ctx, a); err != nil {
 		t.Fatal(err)

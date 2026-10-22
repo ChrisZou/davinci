@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type AIProvider, type EditComment } from '../api'
-import { mergeComments, sessionComments } from './commentState'
+import { latestSession, mergeComments, sessionComments } from './commentState'
+
+const newSession = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 
 /** One project-wide queue, shared by the selection composer and comment history. */
 export function useEditComments(projectID: string) {
-  // Every opening of a project (a page load included) is a new conversation:
-  // earlier comments are neither shown nor given to the AI.
-  const session = useMemo(() => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`, [projectID])
+  // The conversation shown and given to the AI: opening a project resumes the
+  // latest one, 新对话 starts another. Unknown ('') until the history loads.
+  const [session, setSession] = useState('')
+  const sessionRef = useRef('')
+  const adopt = (id: string) => { sessionRef.current = id; setSession(id) }
   const [comments, setComments] = useState<EditComment[]>([])
   const [providers, setProviders] = useState<AIProvider[]>([])
   const [provider, setProvider] = useState(() => { try { return localStorage.getItem('davinci.comment-provider') || 'codex' } catch { return 'codex' } })
@@ -29,24 +33,28 @@ export function useEditComments(projectID: string) {
   }
   const receive = useCallback((comment: EditComment) => {
     if (alive.current && comment.projectId === projectID) {
-      setComments((all) => mergeComments(all, sessionComments(all, [comment], session)))
+      setComments((all) => mergeComments(all, sessionComments(all, [comment], sessionRef.current)))
     }
-  }, [projectID, session])
+  }, [projectID])
   const refresh = useCallback(async () => {
     try {
       const list = await api.comments(projectID)
-      if (alive.current) { setComments((all) => mergeComments(all, sessionComments(all, list, session))); setLoaded(true) }
+      if (!alive.current) return
+      if (!sessionRef.current) adopt(latestSession(list) || newSession())
+      setComments((all) => mergeComments(all, sessionComments(all, list, sessionRef.current)))
+      setLoaded(true)
     } catch (e: any) { if (alive.current) setError(e.message) }
-  }, [projectID, session])
+  }, [projectID])
   useEffect(() => {
     alive.current = true
+    adopt('')
     void detect()
     void refresh()
     return () => { alive.current = false }
   }, [projectID, refresh])
 
   useEffect(() => {
-    if (provider !== 'codex' || !available) return
+    if (provider !== 'codex' || !available || !session) return
     const controller = new AbortController()
     // Preload silently. A comment can still initialize/recover the session if
     // warming fails; do not block the editor or add another setup step.
@@ -71,6 +79,13 @@ export function useEditComments(projectID: string) {
     finally { busy.current = false; if (alive.current) setSending(false) }
     return false
   }
+  /** Starts a new conversation: the panel clears and the AI forgets this one. */
+  const startOver = () => {
+    if (busy.current || running) return
+    adopt(newSession())
+    setComments([])
+    setError('')
+  }
   const cancel = async () => {
     if (!running || cancelling) return
     setCancelling(true); setError('')
@@ -81,7 +96,7 @@ export function useEditComments(projectID: string) {
     finally { if (alive.current) setCancelling(false) }
   }
 
-  return { comments, providers, provider, setProvider, error, loaded, sending, cancelling, running, available, detect, submit, cancel, receive, refresh }
+  return { comments, providers, provider, setProvider, error, loaded, sending, cancelling, running, available, detect, submit, cancel, startOver, receive, refresh }
 }
 
 export type EditComments = ReturnType<typeof useEditComments>
