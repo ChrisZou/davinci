@@ -17,7 +17,7 @@ func TestLiveCodexSession(t *testing.T) {
 	defer cancel()
 	saved := ""
 	create := func() *Sessions {
-		return NewSessions(t.TempDir(), func(string) (string, error) { return saved, nil }, func(_, id string) error { saved = id; return nil })
+		return NewSessions(t.TempDir(), func(string, string) (string, error) { return saved, nil }, func(_, id, _ string) error { saved = id; return nil })
 	}
 	s := create()
 	defer s.Close()

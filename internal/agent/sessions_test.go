@@ -74,7 +74,7 @@ func sessionFixture(t *testing.T) (*Sessions, string, func() *Sessions) {
 	saved := map[string]string{}
 	dir := filepath.Join(t.TempDir(), "sessions")
 	create := func() *Sessions {
-		s := NewSessions(dir, func(id string) (string, error) { mu.Lock(); defer mu.Unlock(); return saved[id], nil }, func(id, thread string) error { mu.Lock(); defer mu.Unlock(); saved[id] = thread; return nil })
+		s := NewSessions(dir, func(id, rules string) (string, error) { mu.Lock(); defer mu.Unlock(); return saved[id+"/"+rules], nil }, func(id, thread, rules string) error { mu.Lock(); defer mu.Unlock(); saved[id+"/"+rules] = thread; return nil })
 		t.Cleanup(s.Close)
 		return s
 	}
@@ -170,6 +170,31 @@ func TestSessionsWarmReuseIsolationAndResume(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("resume RPC missing")
+	}
+	// Changed rules: the old thread answered under the old ones, so start anew,
+	// and after a restart resume the thread of the new rules.
+	lastOpen := func() (string, map[string]any) {
+		calls := capturedCalls(t, capture)
+		for i := len(calls) - 1; i >= 0; i-- {
+			if calls[i].Method == "thread/start" || calls[i].Method == "thread/resume" {
+				return calls[i].Method, calls[i].Params
+			}
+		}
+		return "", nil
+	}
+	a.Instructions = "new rules"
+	if _, err = s2.Warm(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if method, params := lastOpen(); method != "thread/start" || params["developerInstructions"] != "new rules" {
+		t.Fatal("kept the old thread across a rules change", method)
+	}
+	s2.Close()
+	if _, err = create().Warm(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if method, params := lastOpen(); method != "thread/resume" || params["developerInstructions"] != "new rules" {
+		t.Fatal("did not resume the thread of the new rules", method)
 	}
 }
 

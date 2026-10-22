@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -65,10 +67,10 @@ func TestCommentFailureRestoresBoardAndNoPartialEdits(t *testing.T) {
 	}
 }
 
-func TestCommentRejectsUnsupportedCommands(t *testing.T) {
+func TestCommentRejectsInvalidCommands(t *testing.T) {
 	h, _, e, c := setupComment(t)
 	before := e.Snapshot()
-	for _, commands := range []string{`[{"type":"undo"}]`, `[{"type":"batch","commands":[]}]`, `[{"type":"setBackground","board":"other","color":"red"}]`, `[{"type":"addImage","path":"/etc/passwd"}]`, `[{"type":"replaceImage","id":"x","url":"https://example.com/a.png"}]`, `null`, `{}`} {
+	for _, commands := range []string{`[{"type":"undo"}]`, `[{"type":"nope"}]`, `[{"type":"batch","commands":[]}]`, `[{"type":"setBackground","board":"other","color":"red"}]`, `[{"type":"addImage","path":"/etc/passwd"}]`, `null`, `{}`} {
 		if err := h.srv.applyComment(&c, &agent.Response{Summary: "test", Commands: commands}, before); err == nil {
 			t.Errorf("accepted %s", commands)
 		}
@@ -198,14 +200,53 @@ func TestCommentOriginAndInputGuards(t *testing.T) {
 	}
 }
 
-func TestCommentAllowedCommandsExist(t *testing.T) {
-	found := map[string]bool{}
-	for _, c := range doc.Schema()["commands"].([]map[string]any) {
-		found[str(c["type"])] = true
+// A comment may do what a person can: boards, palettes, library pictures,
+// local files — still as one undo step.
+func TestCommentMultiBoardVersionsUndoInOneStep(t *testing.T) {
+	h, _, e, c := setupComment(t)
+	pic := filepath.Join(t.TempDir(), "logo.png")
+	if err := os.WriteFile(pic, testPNG(t, 40, 20), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	for name := range commentCommands {
-		if !found[name] {
-			t.Errorf("nonexistent command %s", name)
+	before := e.Snapshot()
+	commands, _ := json.Marshal([]map[string]any{
+		{"type": "duplicateBoard", "name": "左右分栏"},
+		{"type": "setBackground", "color": "#ff0000"},
+		{"type": "duplicateBoard", "id": c.BoardID, "name": "居中海报"},
+		{"type": "addImage", "path": pic, "name": "标志"},
+		{"type": "setBackground", "board": "左右分栏", "color": "#00ff00"},
+	})
+	if err := h.srv.applyComment(&c, &agent.Response{Summary: "两个版本", Commands: string(commands)}, before); err != nil {
+		t.Fatal(err)
+	}
+	p := e.Project()
+	split, _ := p.FindBoard("左右分栏")
+	centered, _ := p.FindBoard("居中海报")
+	if len(p.Boards) != 3 || split == nil || centered == nil {
+		t.Fatalf("boards: %d", len(p.Boards))
+	}
+	if split.Canvas.Background != "#00ff00" || centered.Find("标志") == nil || p.Board(c.BoardID).Find("标志") != nil {
+		t.Fatal("edits landed on the wrong boards")
+	}
+	if res := e.Apply([]byte(`{"type":"undo"}`)); !res.OK || !bytes.Equal(e.Snapshot(), before) {
+		t.Fatal("comment did not undo in one step")
+	}
+}
+
+func TestCommentInstructionsCoverEditorOperations(t *testing.T) {
+	h, _, _, _ := setupComment(t)
+	if _, err := h.srv.store.AddPalette(PaletteDraft{Name: "暖色测试", PaletteColors: doc.PaletteColors{BG: "#fff4e0", Text: "#181818", Highlight: "#e85830", Text2: "#6a574a", Accent: "#247b83"}}); err != nil {
+		t.Fatal(err)
+	}
+	rules := h.srv.commentInstructions()
+	for _, want := range []string{`"type":"duplicateBoard"`, `"type":"removeBoard"`, `"type":"applyPalette"`, `"type":"removeBackground"`, `"type":"insertLayers"`, "暖色测试"} {
+		if !strings.Contains(rules, want) {
+			t.Errorf("instructions miss %s", want)
+		}
+	}
+	for _, unwanted := range []string{`"type":"undo"`, `"type":"redo"`, `"type":"getDocument"`, "只操作给定画板"} {
+		if strings.Contains(rules, unwanted) {
+			t.Errorf("instructions still have %s", unwanted)
 		}
 	}
 }

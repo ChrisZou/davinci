@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,18 +28,20 @@ type Sessions struct {
 	dir      string
 	process  *codexProcess
 	projects map[string]*projectSession
-	load     func(string) (string, error)
-	save     func(string, string) error
+	// Threads are saved with a fingerprint of the rules they were started under.
+	load func(project, rules string) (string, error)
+	save func(project, thread, rules string) error
 }
 
 type projectSession struct {
 	gate        chan struct{}
 	thread      string
 	process     *codexProcess
+	rules       [32]byte
 	contextHash [32]byte
 }
 
-func NewSessions(dir string, load func(string) (string, error), save func(string, string) error) *Sessions {
+func NewSessions(dir string, load func(string, string) (string, error), save func(string, string, string) error) *Sessions {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Sessions{ctx: ctx, cancel: cancel, dir: dir, projects: map[string]*projectSession{}, load: load, save: save}
 }
@@ -96,11 +99,17 @@ func (s *Sessions) ensure(ctx context.Context, p *projectSession, req Request, r
 	if err != nil {
 		return nil, err
 	}
-	if p.process != proc {
-		if p.thread == "" && s.load != nil {
-			p.thread, err = s.load(req.ProjectID)
-			if err != nil {
-				return nil, err
+	rules := sha256.Sum256([]byte(req.Instructions))
+	if p.process != proc || p.rules != rules {
+		if p.rules != rules {
+			// A thread keeps the answers it gave under its rules ("boards can't be
+			// added"), so only one started under these same rules is resumed.
+			p.thread = ""
+			if s.load != nil {
+				p.thread, err = s.load(req.ProjectID, hex.EncodeToString(rules[:]))
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 		params := map[string]any{"cwd": s.dir, "approvalPolicy": "never", "sandbox": "read-only", "developerInstructions": req.Instructions, "config": proc.config}
@@ -131,12 +140,13 @@ func (s *Sessions) ensure(ctx context.Context, p *projectSession, req Request, r
 			return nil, errors.New("Codex 未返回会话 ID")
 		}
 		if s.save != nil {
-			if err = s.save(req.ProjectID, result.Thread.ID); err != nil {
+			if err = s.save(req.ProjectID, result.Thread.ID, hex.EncodeToString(rules[:])); err != nil {
 				return nil, err
 			}
 		}
 		p.thread = result.Thread.ID
 		p.process = proc
+		p.rules = rules
 		p.contextHash = [32]byte{}
 	}
 	hash := sha256.Sum256([]byte(req.Context))

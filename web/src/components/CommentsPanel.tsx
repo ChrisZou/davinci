@@ -11,7 +11,8 @@ export function CommentsPanel({ ai, board, selected }: { ai: EditComments; board
   const { comments, providers, provider, setProvider, error, loaded, sending, cancelling, running, available, detect, cancel } = ai
   const [text, setText] = useState('')
   const bottom = useRef<HTMLDivElement>(null)
-  const current = comments.filter((c) => c.boardId === board.id)
+  // One conversation per project: a comment may add boards and land on one of them.
+  const current = comments
   const target = selected.length ? selected.map((id) => board.layers.find((l) => l.id === id)?.name || '所选图层').join('、') : '整个画板'
   useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest' }) }, [current.length, current.at(-1)?.status])
   const submit = async (retry?: EditComment) => {
