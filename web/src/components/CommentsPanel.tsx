@@ -21,7 +21,7 @@ export function CommentsPanel({ ai, board, selected }: { ai: EditComments; board
 
   return <div className="flex min-h-0 flex-1 flex-col" data-testid="comments-panel">
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4" aria-label="评论记录">
-      {!loaded ? <p className="text-xs text-muted">正在读取评论…</p> : <ol className="m-0 flex list-none flex-col gap-5 p-0">
+      {!loaded ? <p className="text-xs text-muted">正在读取评论…</p> : !current.length ? <p className="m-0 pt-10 text-center text-[11px] leading-5 text-faint">新的对话<br />说说想怎么改这张图</p> : <ol className="m-0 flex list-none flex-col gap-5 p-0">
         {current.map((c) => <li key={c.id} className="text-xs" data-testid="edit-comment">
           <div className="mb-2 flex items-center justify-between text-[10px] text-faint"><span>你</span><time dateTime={c.createdAt}>{new Date(c.createdAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></div>
           <div className="rounded-2xl rounded-tr-sm bg-paper px-3 py-3">

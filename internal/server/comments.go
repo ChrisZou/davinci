@@ -27,6 +27,7 @@ type Comment struct {
 	LayerIDs  []string  `json:"layerIds"`
 	Text      string    `json:"text"`
 	Provider  string    `json:"provider"`
+	Session   string    `json:"session,omitempty"` // one page load; each is its own conversation
 	Status    string    `json:"status"`
 	Reply     string    `json:"reply"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -57,15 +58,15 @@ func (s *Server) initComments() error {
 	if s.comments.sessions != nil {
 		s.comments.sessions.Close()
 	}
-	s.comments.sessions = agent.NewSessions(filepath.Join(s.dataDir, "ai"), func(project, rules string) (string, error) {
+	s.comments.sessions = agent.NewSessions(filepath.Join(s.dataDir, "ai"), func(project, scope string) (string, error) {
 		var thread string
-		err := s.store.db.QueryRow("SELECT thread_id FROM ai_sessions WHERE project_id=? AND rules=?", project, rules).Scan(&thread)
+		err := s.store.db.QueryRow("SELECT thread_id FROM ai_sessions WHERE project_id=? AND scope=?", project, scope).Scan(&thread)
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", nil
 		}
 		return thread, err
-	}, func(project, thread, rules string) error {
-		_, err := s.store.db.Exec("INSERT INTO ai_sessions(project_id,thread_id,rules) VALUES(?,?,?) ON CONFLICT(project_id) DO UPDATE SET thread_id=excluded.thread_id, rules=excluded.rules", project, thread, rules)
+	}, func(project, thread, scope string) error {
+		_, err := s.store.db.Exec("INSERT INTO ai_sessions(project_id,thread_id,scope) VALUES(?,?,?) ON CONFLICT(project_id) DO UPDATE SET thread_id=excluded.thread_id, scope=excluded.scope", project, thread, scope)
 		return err
 	})
 	s.comments.warm = s.comments.sessions.Warm
@@ -84,17 +85,17 @@ func (s *Server) initComments() error {
  CREATE INDEX IF NOT EXISTS comments_project ON comments(project_id,created_at);
  CREATE TABLE IF NOT EXISTS ai_sessions (
  project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
- thread_id TEXT NOT NULL, rules TEXT NOT NULL DEFAULT '');`)
+ thread_id TEXT NOT NULL, scope TEXT NOT NULL DEFAULT '');`)
 	if err != nil {
 		return err
 	}
-	// Threads saved before rules were recorded never match, so they start anew.
+	// Threads saved before the scope was recorded never match, so they start anew.
 	cols, err := s.store.tableColumns("ai_sessions")
 	if err != nil {
 		return err
 	}
-	if !cols["rules"] {
-		if _, err = s.store.db.Exec(`ALTER TABLE ai_sessions ADD COLUMN rules TEXT NOT NULL DEFAULT ''`); err != nil {
+	if !cols["scope"] {
+		if _, err = s.store.db.Exec(`ALTER TABLE ai_sessions ADD COLUMN scope TEXT NOT NULL DEFAULT ''`); err != nil {
 			return err
 		}
 	}
@@ -185,6 +186,7 @@ func (s *Server) handleCreateComment(c echo.Context) error {
 		LayerIDs []string `json:"layerIds"`
 		Text     string   `json:"text"`
 		Provider string   `json:"provider"`
+		Session  string   `json:"session"`
 	}
 	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, 32<<10)
 	if err := json.NewDecoder(c.Request().Body).Decode(&in); err != nil {
@@ -193,6 +195,9 @@ func (s *Server) handleCreateComment(c echo.Context) error {
 	in.Text = strings.TrimSpace(in.Text)
 	if len([]rune(in.Text)) == 0 || len([]rune(in.Text)) > 4000 || len(in.LayerIDs) > 100 {
 		return fail(c, 400, "请输入 1–4000 字的评论，最多选择 100 个图层")
+	}
+	if len(in.Session) > 64 {
+		return fail(c, 400, "会话标识过长")
 	}
 	if in.Provider != "codex" && in.Provider != "claude" {
 		return fail(c, 400, "请选择 Codex 或 Claude Code")
@@ -244,7 +249,7 @@ func (s *Server) handleCreateComment(c echo.Context) error {
 	if in.LayerIDs == nil {
 		in.LayerIDs = []string{}
 	}
-	comment := Comment{ID: id, ProjectID: c.Param("id"), BoardID: b.ID, LayerIDs: in.LayerIDs, Target: target, Text: in.Text, Provider: in.Provider, Status: "running", CreatedAt: time.Now().UTC()}
+	comment := Comment{ID: id, ProjectID: c.Param("id"), BoardID: b.ID, LayerIDs: in.LayerIDs, Target: target, Text: in.Text, Provider: in.Provider, Session: in.Session, Status: "running", CreatedAt: time.Now().UTC()}
 	if err := s.saveComment(comment); err != nil {
 		return err
 	}
@@ -282,7 +287,7 @@ func (s *Server) processComment(ctx context.Context, j *commentJob, b *doc.Board
 	c := j.comment
 	s.comments.mu.Unlock()
 	started := time.Now()
-	req, err := s.sessionRequest(c.ProjectID, snapshot)
+	req, err := s.sessionRequest(c.ProjectID, c.Session, snapshot)
 	var preview []byte
 	var reused bool
 	if err == nil {
@@ -388,7 +393,7 @@ func (s *Server) commentTurn(c Comment, snapshot []byte) string {
 	history, _ := s.listComments(c.ProjectID)
 	contextComments := []Comment{}
 	for _, prev := range history {
-		if prev.ID != c.ID && prev.Status != "running" {
+		if prev.ID != c.ID && prev.Session == c.Session && prev.Status != "running" {
 			contextComments = append(contextComments, prev)
 		}
 	}
@@ -406,7 +411,7 @@ func (s *Server) commentPrompt(c Comment, snapshot []byte) string {
 func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
 
 // Prepare the full project before the first comment, without model inference.
-func (s *Server) sessionRequest(id string, snapshot []byte) (agent.Request, error) {
+func (s *Server) sessionRequest(id, session string, snapshot []byte) (agent.Request, error) {
 	project, err := s.store.GetProject(id)
 	if err != nil {
 		return agent.Request{}, err
@@ -415,7 +420,7 @@ func (s *Server) sessionRequest(id string, snapshot []byte) (agent.Request, erro
 		return agent.Request{}, errors.New("项目不存在")
 	}
 	contextData := mustJSON(map[string]any{"projectId": id, "name": project.Name, "document": json.RawMessage(snapshot)})
-	return agent.Request{ProjectID: id, Instructions: s.commentInstructions(), Context: "当前项目上下文，等待后续评论；打开项目本身不要求修改。后续提供的最新快照优先。\n" + string(contextData)}, nil
+	return agent.Request{ProjectID: id, Session: session, Instructions: s.commentInstructions(), Context: "当前项目上下文，等待后续评论；打开项目本身不要求修改。后续提供的最新快照优先。\n" + string(contextData)}, nil
 }
 
 func (s *Server) handleWarmSession(c echo.Context) error {
@@ -427,11 +432,18 @@ func (s *Server) handleWarmSession(c echo.Context) error {
 	s.comments.wg.Add(1)
 	s.comments.mu.Unlock()
 	defer s.comments.wg.Done()
+	var in struct {
+		Session string `json:"session"`
+	}
+	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, 4<<10)
+	if err := json.NewDecoder(c.Request().Body).Decode(&in); err != nil || len(in.Session) > 64 {
+		return fail(c, 400, "会话格式不正确")
+	}
 	e, err := s.engine(c.Param("id"))
 	if err != nil {
 		return fail(c, 404, "项目不存在")
 	}
-	req, err := s.sessionRequest(c.Param("id"), e.Snapshot())
+	req, err := s.sessionRequest(c.Param("id"), in.Session, e.Snapshot())
 	if err != nil {
 		return err
 	}

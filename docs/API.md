@@ -197,7 +197,9 @@ CLI 的其他子命令按 `--server` / `DAVINCI_SERVER` / `DAVINCI_PORT` → `se
 - `GET /api/ai/providers` → `{providers:[{id,name,available}]}`。`available` 只表示找到可执行文件，登录/额度在实际执行时检查。
 - `GET /api/projects/:id/comments` → `{comments:[...]}`，按时间顺序返回最近 200 条。
 - `POST /api/projects/:id/comments` → HTTP 202 `{comment:{...}}`。
-  请求：`{boardId,layerIds:[],text,provider:"codex"|"claude"}`；评论 1–4000 字。
+  请求：`{boardId,layerIds:[],text,provider:"codex"|"claude",session?}`；评论 1–4000 字。
+  `session` 是编辑器会话（每次打开项目生成一个，≤64 字符），同一会话的评论才算一段对话。
+- `POST /api/projects/:id/ai/session`，JSON body `{session?}` → `{ready,threadId}`：为该会话预热 Codex，不触发模型回复。
 - `POST /api/projects/:id/comments/:comment/cancel`，JSON body `{}` → `{comment:{...}}`。
 
 评论包含 `id,projectId,boardId,layerIds,target,text,provider,status,reply,createdAt`。
@@ -205,7 +207,7 @@ CLI 的其他子命令按 `--server` / `DAVINCI_SERVER` / `DAVINCI_PORT` → `se
 同项目同时只处理一条，全服务最多两条；冲突返回 409。单次最多 5 分钟，不自动重试付费请求。
 失败后重新提交同一评论即可重试，会使用最新画稿。
 
-AI 收到评论所在画板的预览、整个项目（全部画板）的 JSON、选中图层、项目最近六条评论，
+AI 收到评论所在画板的预览、整个项目（全部画板）的 JSON、选中图层、同一会话最近六条评论，
 以及除撤销/重做外的全部编辑命令、字体、已保存配色和素材库目录。人在编辑器里能做的操作 AI 都能做：
 增删、复制、重命名、排序画板，套用配色，使用素材库图片，导入评论里给出的本机图片路径或网址，抠图等。
 命令不带 `board` 时作用于评论所在画板，也可以用 `board` 字段或 `selectBoard` 切换。
@@ -215,7 +217,8 @@ AI 收到评论所在画板的预览、整个项目（全部画板）的 JSON、
 撤销修改不会删除评论，也不会把历史“已修改”改为新的任务状态。
 
 编辑器本身不能生成图片，AI 也一样；需要新图片时由评论给出本机路径或网址，或从素材库挑选。
-Codex 会话按规则（命令、字体、配色、素材库）的指纹保存，规则变了就开新会话，不沿用按旧规则作答的历史。
+Codex 会话按「编辑器会话 + 规则（命令、字体、配色、素材库）」的指纹保存：每次打开项目、或规则变了，都开新会话，
+不沿用之前的对话；同一会话内服务重启后会恢复。评论都留在数据库里，编辑器只显示本次会话的（以及仍在处理的）评论。
 
 ## 全局配色
 

@@ -29,7 +29,9 @@ type Provider struct {
 type Request struct {
 	Provider, Prompt                 string
 	ProjectID, Instructions, Context string
-	Image                            []byte
+	// Session is the editor session (one page load) the conversation belongs to.
+	Session string
+	Image   []byte
 }
 type Response struct {
 	Summary  string `json:"summary"`

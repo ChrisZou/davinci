@@ -73,6 +73,8 @@ export interface EditComment {
   target: string
   text: string
   provider: string
+  /** The editor session (one opening of the project) it was made in. */
+  session?: string
   status: 'running' | 'done' | 'failed' | 'cancelled' | 'needs_info'
   reply: string
   createdAt: string
@@ -131,9 +133,9 @@ export const api = {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ board }),
     }))
   },
-  async prepareAI(id: string, signal?: AbortSignal) {
+  async prepareAI(id: string, session: string, signal?: AbortSignal) {
     return asJSON<{ ready: boolean; threadId: string }>(await fetch(`/api/projects/${encodeURIComponent(id)}/ai/session`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal,
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session }), signal,
     }))
   },
   async aiProviders() {
@@ -142,7 +144,7 @@ export const api = {
   async comments(id: string) {
     return (await asJSON<{ comments: EditComment[] }>(await fetch(`/api/projects/${encodeURIComponent(id)}/comments`))).comments
   },
-  async createComment(id: string, input: { boardId: string; layerIds: string[]; text: string; provider: string }) {
+  async createComment(id: string, input: { boardId: string; layerIds: string[]; text: string; provider: string; session: string }) {
     return (await asJSON<{ comment: EditComment }>(await fetch(`/api/projects/${encodeURIComponent(id)}/comments`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input),
     }))).comment

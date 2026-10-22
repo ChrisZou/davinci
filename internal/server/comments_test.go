@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -233,6 +234,23 @@ func TestCommentMultiBoardVersionsUndoInOneStep(t *testing.T) {
 	}
 }
 
+// Each page load is its own conversation: the AI sees only that session's comments.
+func TestCommentContextIsOneSession(t *testing.T) {
+	h, _, e, c := setupComment(t)
+	for i, session := range []string{"page-1", "page-2"} {
+		prev := c
+		prev.ID, prev.Session, prev.Text, prev.Status = fmt.Sprintf("earlier-%d", i), session, "上一页的评论 "+session, "done"
+		if err := h.srv.saveComment(prev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.Session = "page-2"
+	turn := h.srv.commentTurn(c, e.Snapshot())
+	if !strings.Contains(turn, "上一页的评论 page-2") || strings.Contains(turn, "上一页的评论 page-1") {
+		t.Fatal("context crosses page sessions")
+	}
+}
+
 func TestCommentInstructionsCoverEditorOperations(t *testing.T) {
 	h, _, _, _ := setupComment(t)
 	if _, err := h.srv.store.AddPalette(PaletteDraft{Name: "暖色测试", PaletteColors: doc.PaletteColors{BG: "#fff4e0", Text: "#181818", Highlight: "#e85830", Text2: "#6a574a", Accent: "#247b83"}}); err != nil {
@@ -317,12 +335,12 @@ func TestWarmSessionPreloadsProjectWithoutEditing(t *testing.T) {
 	calls := 0
 	h.srv.comments.warm = func(ctx context.Context, req agent.Request) (string, error) {
 		calls++
-		if req.ProjectID != id || !strings.Contains(req.Context, "评论测试") || !strings.Contains(req.Context, e.Project().Active) || !strings.Contains(req.Instructions, "setTextStyle") {
-			t.Error("missing project context or command instructions")
+		if req.ProjectID != id || req.Session != "page-1" || !strings.Contains(req.Context, "评论测试") || !strings.Contains(req.Context, e.Project().Active) || !strings.Contains(req.Instructions, "setTextStyle") {
+			t.Error("missing project context, session or command instructions")
 		}
 		return "thread-test", nil
 	}
-	code, raw := h.do("POST", "/api/projects/"+id+"/ai/session", map[string]any{})
+	code, raw := h.do("POST", "/api/projects/"+id+"/ai/session", map[string]any{"session": "page-1"})
 	if code != 200 || !bytes.Contains(raw, []byte("thread-test")) || calls != 1 {
 		t.Fatalf("warm: %d %s", code, raw)
 	}
@@ -333,7 +351,7 @@ func TestWarmSessionPreloadsProjectWithoutEditing(t *testing.T) {
 	if err != nil || len(comments) != 0 {
 		t.Fatal("warming created a comment", err)
 	}
-	code, _ = h.do("POST", "/api/projects/missing/ai/session", map[string]any{})
+	code, _ = h.do("POST", "/api/projects/missing/ai/session", map[string]any{"session": "page-1"})
 	if code != 404 || calls != 1 {
 		t.Fatal("missing project warmed", code)
 	}

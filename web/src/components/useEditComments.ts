@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, type AIProvider, type EditComment } from '../api'
-import { mergeComments } from './commentState'
+import { mergeComments, sessionComments } from './commentState'
 
 /** One project-wide queue, shared by the selection composer and comment history. */
 export function useEditComments(projectID: string) {
+  // Every opening of a project (a page load included) is a new conversation:
+  // earlier comments are neither shown nor given to the AI.
+  const session = useMemo(() => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`, [projectID])
   const [comments, setComments] = useState<EditComment[]>([])
   const [providers, setProviders] = useState<AIProvider[]>([])
   const [provider, setProvider] = useState(() => { try { return localStorage.getItem('davinci.comment-provider') || 'codex' } catch { return 'codex' } })
@@ -26,15 +29,15 @@ export function useEditComments(projectID: string) {
   }
   const receive = useCallback((comment: EditComment) => {
     if (alive.current && comment.projectId === projectID) {
-      setComments((all) => mergeComments(all, [comment]))
+      setComments((all) => mergeComments(all, sessionComments(all, [comment], session)))
     }
-  }, [projectID])
+  }, [projectID, session])
   const refresh = useCallback(async () => {
     try {
       const list = await api.comments(projectID)
-      if (alive.current) { setComments((all) => mergeComments(all, list)); setLoaded(true) }
+      if (alive.current) { setComments((all) => mergeComments(all, sessionComments(all, list, session))); setLoaded(true) }
     } catch (e: any) { if (alive.current) setError(e.message) }
-  }, [projectID])
+  }, [projectID, session])
   useEffect(() => {
     alive.current = true
     void detect()
@@ -47,9 +50,9 @@ export function useEditComments(projectID: string) {
     const controller = new AbortController()
     // Preload silently. A comment can still initialize/recover the session if
     // warming fails; do not block the editor or add another setup step.
-    void api.prepareAI(projectID, controller.signal).catch(() => {})
+    void api.prepareAI(projectID, session, controller.signal).catch(() => {})
     return () => controller.abort()
-  }, [projectID, provider, available])
+  }, [projectID, session, provider, available])
 
   const submit = async (input: { text: string; boardId: string; layerIds: string[] }) => {
     if (busy.current || running || !loaded || !available) return false
@@ -58,7 +61,7 @@ export function useEditComments(projectID: string) {
     busy.current = true; setSending(true); setError('')
     try {
       const comment = await api.createComment(projectID, {
-        ...input, text: message, provider, layerIds: [...input.layerIds],
+        ...input, text: message, provider, session, layerIds: [...input.layerIds],
       })
       if (!alive.current) return
       receive(comment)

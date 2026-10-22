@@ -28,16 +28,16 @@ type Sessions struct {
 	dir      string
 	process  *codexProcess
 	projects map[string]*projectSession
-	// Threads are saved with a fingerprint of the rules they were started under.
-	load func(project, rules string) (string, error)
-	save func(project, thread, rules string) error
+	// Threads are saved with a fingerprint of the conversation they belong to.
+	load func(project, scope string) (string, error)
+	save func(project, thread, scope string) error
 }
 
 type projectSession struct {
 	gate        chan struct{}
 	thread      string
 	process     *codexProcess
-	rules       [32]byte
+	scope       [32]byte
 	contextHash [32]byte
 }
 
@@ -99,14 +99,15 @@ func (s *Sessions) ensure(ctx context.Context, p *projectSession, req Request, r
 	if err != nil {
 		return nil, err
 	}
-	rules := sha256.Sum256([]byte(req.Instructions))
-	if p.process != proc || p.rules != rules {
-		if p.rules != rules {
-			// A thread keeps the answers it gave under its rules ("boards can't be
-			// added"), so only one started under these same rules is resumed.
+	// A conversation is one editor session under one set of rules: a new page
+	// starts afresh, and a thread keeps the answers it gave under its rules
+	// ("boards can't be added"). Only a thread started for both is resumed.
+	scope := sha256.Sum256([]byte(req.Session + "\x00" + req.Instructions))
+	if p.process != proc || p.scope != scope {
+		if p.scope != scope {
 			p.thread = ""
 			if s.load != nil {
-				p.thread, err = s.load(req.ProjectID, hex.EncodeToString(rules[:]))
+				p.thread, err = s.load(req.ProjectID, hex.EncodeToString(scope[:]))
 				if err != nil {
 					return nil, err
 				}
@@ -140,13 +141,13 @@ func (s *Sessions) ensure(ctx context.Context, p *projectSession, req Request, r
 			return nil, errors.New("Codex 未返回会话 ID")
 		}
 		if s.save != nil {
-			if err = s.save(req.ProjectID, result.Thread.ID, hex.EncodeToString(rules[:])); err != nil {
+			if err = s.save(req.ProjectID, result.Thread.ID, hex.EncodeToString(scope[:])); err != nil {
 				return nil, err
 			}
 		}
 		p.thread = result.Thread.ID
 		p.process = proc
-		p.rules = rules
+		p.scope = scope
 		p.contextHash = [32]byte{}
 	}
 	hash := sha256.Sum256([]byte(req.Context))

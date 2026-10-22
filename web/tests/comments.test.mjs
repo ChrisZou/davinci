@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { build } from 'esbuild'
 
 const { outputFiles } = await build({ entryPoints: ['src/components/commentState.ts'], bundle: true, write: false, platform: 'node', format: 'esm' })
-const { mergeComments } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
+const { mergeComments, sessionComments } = await import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
 const running = { id: 'c1', status: 'running', createdAt: '2026-10-16T10:00:00Z' }
 
 test('completion pushed before HTTP creation response stays complete', () => {
@@ -20,6 +20,18 @@ test('stale history preserves pushed results and new comments', () => {
 test('reconnect history catches up missed completions', () => {
   const done = { ...running, status: 'done' }
   assert.deepEqual(mergeComments([running], [done]), [done])
+})
+test('a new editor session starts with an empty conversation', () => {
+  const earlier = { ...running, id: 'c0', status: 'done', session: 'old' }
+  const mine = { ...running, id: 'c2', status: 'done', session: 'new' }
+  assert.deepEqual(sessionComments([], [earlier, mine], 'new'), [mine])
+})
+test('a comment still running from before stays visible after it finishes', () => {
+  const blocking = { ...running, session: 'old' }
+  const shown = sessionComments([], [blocking], 'new')
+  assert.deepEqual(shown, [blocking])
+  const done = { ...blocking, status: 'done' }
+  assert.deepEqual(sessionComments(shown, [done], 'new'), [done])
 })
 
 const bridgeBuild = await build({

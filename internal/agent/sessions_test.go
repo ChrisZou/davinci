@@ -74,7 +74,12 @@ func sessionFixture(t *testing.T) (*Sessions, string, func() *Sessions) {
 	saved := map[string]string{}
 	dir := filepath.Join(t.TempDir(), "sessions")
 	create := func() *Sessions {
-		s := NewSessions(dir, func(id, rules string) (string, error) { mu.Lock(); defer mu.Unlock(); return saved[id+"/"+rules], nil }, func(id, thread, rules string) error { mu.Lock(); defer mu.Unlock(); saved[id+"/"+rules] = thread; return nil })
+		s := NewSessions(dir, func(id, scope string) (string, error) { mu.Lock(); defer mu.Unlock(); return saved[id+"/"+scope], nil }, func(id, thread, scope string) error {
+			mu.Lock()
+			defer mu.Unlock()
+			saved[id+"/"+scope] = thread
+			return nil
+		})
 		t.Cleanup(s.Close)
 		return s
 	}
@@ -195,6 +200,14 @@ func TestSessionsWarmReuseIsolationAndResume(t *testing.T) {
 	}
 	if method, params := lastOpen(); method != "thread/resume" || params["developerInstructions"] != "new rules" {
 		t.Fatal("did not resume the thread of the new rules", method)
+	}
+	// A new editor session (page load) is a new conversation.
+	a.Session = "page-2"
+	if _, err = create().Warm(ctx, a); err != nil {
+		t.Fatal(err)
+	}
+	if method, _ := lastOpen(); method != "thread/start" {
+		t.Fatal("a new page resumed the previous conversation", method)
 	}
 }
 
