@@ -35,7 +35,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.PersistentFlags().StringVar(&gf.server, "server", "", "davinci 服务地址（默认 http://127.0.0.1:7789）")
+	root.PersistentFlags().StringVar(&gf.server, "server", "", "davinci 服务地址（默认依次找 davinci-dev.localhost、davinci.localhost、数据目录的 server.json）")
 	root.PersistentFlags().StringVarP(&gf.project, "project", "p", "", "项目 id 或名称（缺省取最近更新的）")
 	root.PersistentFlags().StringVar(&gf.data, "data", "", "数据目录（默认：davinci 仓库下的 data/，也可用 DAVINCI_DATA）")
 	root.PersistentFlags().IntVar(&gf.port, "port", 0, "服务端口（仅 serve 使用；其余命令用 --server）")

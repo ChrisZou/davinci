@@ -64,7 +64,7 @@ func newServeCmd() *cobra.Command {
 				return err
 			}
 			if open {
-				// After Start, so WebURL can see this server behind davinci.localhost.
+				// After Start, so WebURL can see this server behind a local domain.
 				openBrowser((&Client{BaseURL: srv.Addr()}).WebURL())
 			}
 			select {

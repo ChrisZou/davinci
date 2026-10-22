@@ -184,9 +184,11 @@ davinci serve --port 7789 --data ./data   # 指定端口：被占用就报错，
 
 不指定端口时，服务先试 7789，被占用就换一个空闲端口，并把实际地址写进数据目录的 `server.json`
 （`{"url", "pid", "boot"}`，服务退出时删掉）。一个数据目录同时只能有一个服务（`server.lock`）。
-CLI 的其他子命令按 `--server` / `DAVINCI_SERVER` / `DAVINCI_PORT` → `server.json` → 7789 的顺序找服务，
-都找不到就自己拉起一个。给人看的编辑器地址（`open`、`new`、`serve --open`）在 `davinci.localhost` 指向
-同一个服务时用 `http://davinci.localhost`，否则用 API 地址；`DAVINCI_WEB_URL` 可以直接指定。数据目录里是 `davinci.db`（SQLite）、`assets/`、`fonts/`。
+CLI 的其他子命令按 `--server` / `DAVINCI_SERVER` / `DAVINCI_PORT` → `http://davinci-dev.localhost` →
+`http://davinci.localhost` → 数据目录的 `server.json` 的顺序找服务，不猜端口；本地域名要能答出 davinci 的
+`/api/health` 才算（反向代理返回 502 就跳过）。给了 `--data` / `DAVINCI_DATA` 时跳过本地域名，只找该数据目录的服务。
+都找不到就自己拉起一个。给人看的编辑器地址（`open`、`new`、`serve --open`）按同样顺序用第一个指向同一个服务的
+本地域名，否则用 API 地址；`DAVINCI_WEB_URL` 可以直接指定。数据目录里是 `davinci.db`（SQLite）、`assets/`、`fonts/`。
 数据目录里若是更早版本建的库（文档格式不同），启动时会明确报错，换个 `--data` 即可。
 
 ## 评论改图（本机 AI）

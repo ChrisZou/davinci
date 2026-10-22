@@ -137,7 +137,7 @@ davinci -p P -b 1 render --clipboard
 ```bash
 davinci projects                         # 列表
 davinci new "名字" --preset xhs-3-4       # 新建（--json 返回 {project:{id,…}}）
-davinci open <项目>                       # 编辑器地址 http://davinci.localhost/editor/<id>（浏览器里打开同一份设计）
+davinci open <项目>                       # 编辑器地址，如 http://davinci-dev.localhost/editor/<id>（浏览器里打开同一份设计）
 davinci doc -p <项目>                     # 整份文档 JSON
 davinci watch -p <项目>                   # 实时打印人在编辑器里的改动
 ```

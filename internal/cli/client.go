@@ -43,17 +43,25 @@ func dataDir() string {
 }
 
 // serverURL is where the server is, and the boot id to expect there (or ""):
-// the address given (--server, DAVINCI_SERVER, DAVINCI_PORT), else what the
-// data directory's server.json says, else the default port — where a server
-// from before server.json existed still listens.
+// the address given (--server, DAVINCI_SERVER, DAVINCI_PORT); else the first
+// local domain a davinci server answers at — unless a data directory was named,
+// whose own server is the one meant; else what that data directory's
+// server.json says. Nothing known means "": EnsureServer starts one.
 func serverURL() (string, string) {
 	if u := explicitURL(); u != "" {
 		return u, ""
 	}
+	if gf.data == "" && os.Getenv("DAVINCI_DATA") == "" {
+		for _, d := range localDomains {
+			if bootOf(d) != "" {
+				return d, ""
+			}
+		}
+	}
 	if f, err := server.ReadServerFile(dataDir()); err == nil && f.URL != "" {
 		return strings.TrimRight(f.URL, "/"), f.Boot
 	}
-	return fmt.Sprintf("http://127.0.0.1:%d", defaultPort), ""
+	return "", ""
 }
 
 // explicitURL is the server address the person named, or "".

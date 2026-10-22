@@ -8,15 +8,15 @@ import (
 	"time"
 )
 
-// prettyURL is where a person opens davinci on a machine that routes
-// davinci.localhost to it (for example port 80 → a local reverse proxy →
-// 127.0.0.1:7789). The CLI itself keeps talking to BaseURL directly.
-const prettyURL = "http://davinci.localhost"
+// localDomains are where a local reverse proxy may route davinci (port 80 →
+// proxy → whatever port the server listens on), the dev server first. They are
+// the addresses a person uses, so the CLI prefers them to any port.
+var localDomains = []string{"http://davinci-dev.localhost", "http://davinci.localhost"}
 
 // WebURL is the address to hand a person for opening the editor:
-// DAVINCI_WEB_URL if set, else prettyURL when it reaches this same server
-// (same boot id), else BaseURL. Machines without the proxy — the mini, the dev
-// server — thus keep printing 127.0.0.1 links that actually work.
+// DAVINCI_WEB_URL if set, else the first local domain that reaches this same
+// server (same boot id), else BaseURL. Machines without the proxy thus keep
+// printing 127.0.0.1 links that actually work.
 func (c *Client) WebURL() string {
 	if c.webURL != "" {
 		return c.webURL
@@ -24,8 +24,14 @@ func (c *Client) WebURL() string {
 	c.webURL = c.BaseURL
 	if v := os.Getenv("DAVINCI_WEB_URL"); v != "" {
 		c.webURL = strings.TrimRight(v, "/")
-	} else if boot := bootOf(c.BaseURL); boot != "" && bootOf(prettyURL) == boot {
-		c.webURL = prettyURL
+		return c.webURL
+	}
+	boot := bootOf(c.BaseURL)
+	for _, d := range localDomains {
+		if d == c.BaseURL || boot != "" && bootOf(d) == boot {
+			c.webURL = d
+			break
+		}
 	}
 	return c.webURL
 }
