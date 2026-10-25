@@ -71,6 +71,14 @@ func (s *Server) handleSchema(c echo.Context) error {
 		routes[i].Path = "/api" + routes[i].Path
 	}
 	schema["endpoints"] = routes
+	schema["projectMetadata"] = map[string]any{
+		"source":     map[string]any{"type": "string", "label": "来源", "default": ""},
+		"link":       map[string]any{"type": "string", "label": "来源链接", "default": ""},
+		"author":     map[string]any{"type": "string", "label": "作者", "default": ""},
+		"likes":      map[string]any{"type": "integer", "label": "点赞数", "minimum": 0, "default": 0},
+		"note":       map[string]any{"type": "string", "label": "备注", "default": ""},
+		"templateId": map[string]any{"type": "string", "label": "模板id", "default": "", "description": "Empty means unset; template → design duplication sets the source template ID."},
+	}
 	return c.JSON(http.StatusOK, schema)
 }
 
@@ -146,6 +154,9 @@ func (s *Server) handleCreateProject(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return badRequest(c, "invalid JSON body: "+err.Error())
 	}
+	if err := req.ProjectMeta.validate(); err != nil {
+		return badRequest(c, err.Error())
+	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = "未命名设计"
@@ -213,13 +224,16 @@ type patchProjectReq struct {
 }
 
 // handlePatchProject changes a project's metadata — its name, which library it
-// is in (kind), tags, note and link — without touching the document, which
+// is in (kind) and its provenance — without touching the document, which
 // only commands change.
 func (s *Server) handlePatchProject(c echo.Context) error {
 	id := c.Param("id")
 	var req patchProjectReq
 	if err := c.Bind(&req); err != nil {
 		return badRequest(c, "invalid JSON body: "+err.Error())
+	}
+	if err := req.ProjectMeta.validate(); err != nil {
+		return badRequest(c, err.Error())
 	}
 	if p, _ := s.store.GetProject(id); p == nil {
 		return c.JSON(http.StatusNotFound, map[string]any{"ok": false, "error": "project not found"})
@@ -240,9 +254,7 @@ func (s *Server) handlePatchProject(c echo.Context) error {
 	if err != nil {
 		return errJSON(c, err)
 	}
-	return c.JSON(http.StatusOK, map[string]any{"ok": true, "project": map[string]any{
-		"id": p.ID, "name": p.Name, "kind": p.Kind, "tags": p.Tags, "note": p.Note, "link": p.Link,
-	}})
+	return c.JSON(http.StatusOK, map[string]any{"ok": true, "project": summaryOf(p)})
 }
 
 // handleThumbnail serves the thumbnail the editor last saved as an image, so

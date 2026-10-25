@@ -136,11 +136,29 @@ davinci -p P -b 1 render --clipboard
 
 ```bash
 davinci projects                         # 列表
+davinci project show <项目>              # 元数据、模板id和画板；支持 --json
+davinci project update <项目> --template-id <模板id>  # 空字符串清除关联
 davinci new "名字" --preset xhs-3-4       # 新建（--json 返回 {project:{id,…}}）
 davinci open <项目>                       # 编辑器地址，如 http://davinci-dev.localhost/editor/<id>（浏览器里打开同一份设计）
 davinci doc -p <项目>                     # 整份文档 JSON
 davinci watch -p <项目>                   # 实时打印人在编辑器里的改动
 ```
+
+## 模板库
+
+```bash
+davinci tpl ls --tag 大字 -q 作者名       # 搜名称、标签、备注、来源链接、来源、作者
+davinci tpl show <模板>                  # 来源 / 来源链接 / 作者 / 点赞数 / 备注
+davinci tpl add cover.png --source 小红书 --author 作者名 --likes 120 --link https://example.com/post --note "版式备注" --tags 大字
+davinci tpl update <模板> --source B站 --author 作者名 --likes 0
+davinci tpl use <模板> "新作品"          # 全文档复制，自动记录 templateId=原模板ID
+```
+
+`tpl update` 和 `project update` 支持 `--name / --tags / --note / --link / --source / --author / --likes / --template-id`。
+未传字段保留；文字字段传 `""` 清空，`--tags ""` 清空标签，`--likes 0` 重置点赞数。点赞数只接受 ≥ 0 的整数。
+来源（`source`）与来源链接（`link`）分开保存。模板生成作品不复制标签、备注、来源链接、来源、作者、点赞数；
+同类复制保留所有元数据（包括作品已有的 `templateId`）。空 `templateId` 表示未关联；列表 JSON 随 note/link 风格省略空字符串，详情返回空字符串。
+API 创建/PATCH 项目、JSON 或 multipart 的 `/api/projects/from-image` 都接受这些 JSON 字段；`/api/schema` 的 `projectMetadata` 列出字段说明。
 
 ## 全局配色
 

@@ -13,7 +13,7 @@ func newProjectsCmd() *cobra.Command {
 	var templates, all bool
 	cmd := &cobra.Command{
 		Use:     "projects",
-		Aliases: []string{"ls", "ps"},
+		Aliases: []string{"project", "ls", "ps"},
 		Short:   "列出作品（--templates 列模板库，--all 全部）",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := NewClient()
@@ -37,7 +37,11 @@ func newProjectsCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&templates, "templates", false, "列模板库里的模板")
 	cmd.Flags().BoolVar(&all, "all", false, "作品和模板都列")
-	cmd.AddCommand(newRmProjectCmd())
+	show := newTplShowCmd()
+	show.Use, show.Short = "show <项目 id 或名称>", "查看项目元数据和模板id"
+	update := newTplUpdateCmd()
+	update.Use, update.Short = "update <项目 id 或名称>", "修改项目元数据和模板id"
+	cmd.AddCommand(newRmProjectCmd(), show, update)
 	return cmd
 }
 

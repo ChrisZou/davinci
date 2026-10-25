@@ -172,13 +172,13 @@ func newTplShowCmd() *cobra.Command {
 			if len(p.Tags) > 0 {
 				fmt.Printf("标签：%s\n", strings.Join(p.Tags, "、"))
 			}
-			if p.Link != "" {
-				fmt.Printf("来源：%s\n", p.Link)
+			fmt.Printf("来源：%s\n来源链接：%s\n作者：%s\n点赞数：%d\n备注：%s\n", p.Source, p.Link, p.Author, p.Likes, p.Note)
+			if p.TemplateID != "" {
+				fmt.Printf("模板id：%s\n", p.TemplateID)
 			}
-			if p.Note != "" {
-				fmt.Printf("\n%s\n", p.Note)
+			if p.Kind == server.KindTemplate {
+				fmt.Printf("\n看图：davinci tpl get %s　图层：davinci -p %s layers　照着做：davinci tpl use %s\n", p.ID, p.ID, p.ID)
 			}
-			fmt.Printf("\n看图：davinci tpl get %s　图层：davinci -p %s layers　照着做：davinci tpl use %s\n", p.ID, p.ID, p.ID)
 			return nil
 		},
 	}
@@ -332,7 +332,8 @@ func (c *Client) projectFromImage(ref string, fields map[string]string) (*server
 }
 
 func newTplAddCmd() *cobra.Command {
-	var name, tags, note, link string
+	var name, tags, note, link, source, author string
+	var likes int
 	cmd := &cobra.Command{
 		Use:   "add <本地文件|URL>...",
 		Short: "把图片收藏成模板（新建一个画布同尺寸、整张图做一个图层的模板项目）",
@@ -341,6 +342,9 @@ func newTplAddCmd() *cobra.Command {
   davinci tpl add ~/inspo/*.png --tags 极简`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if likes < 0 {
+				return fmt.Errorf("--likes 必须是 ≥ 0 的整数")
+			}
 			c, err := NewClient()
 			if err != nil {
 				return err
@@ -353,7 +357,8 @@ func newTplAddCmd() *cobra.Command {
 				return fmt.Errorf("--name 和 --link 只能在添加单个文件时使用")
 			}
 			for _, ref := range args {
-				p, err := c.projectFromImage(ref, map[string]string{"kind": server.KindTemplate, "name": name, "tags": tags, "note": n, "link": link})
+				p, err := c.projectFromImage(ref, map[string]string{"kind": server.KindTemplate, "name": name, "tags": tags, "note": n, "link": link,
+					"source": source, "author": author, "likes": fmt.Sprint(likes)})
 				if err != nil {
 					return fmt.Errorf("%s: %w", ref, err)
 				}
@@ -370,6 +375,9 @@ func newTplAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&tags, "tags", "", "标签，逗号分隔")
 	cmd.Flags().StringVar(&note, "note", "", "备注：喜欢它哪里，或 @文件")
 	cmd.Flags().StringVar(&link, "link", "", "来源链接（原帖地址）")
+	cmd.Flags().StringVar(&source, "source", "", "来源（平台名称）")
+	cmd.Flags().StringVar(&author, "author", "", "作者")
+	cmd.Flags().IntVar(&likes, "likes", 0, "点赞数（≥ 0）")
 	return cmd
 }
 
@@ -408,9 +416,13 @@ func newTplMoveCmd() *cobra.Command {
 func newTplUpdateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <模板 id 或名称>",
-		Short: "改模板的名称、标签、备注或来源链接",
+		Short: "修改模板元数据",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			likes, _ := cmd.Flags().GetInt("likes")
+			if likes < 0 {
+				return fmt.Errorf("--likes 必须是 ≥ 0 的整数")
+			}
 			c, err := NewClient()
 			if err != nil {
 				return err
@@ -421,8 +433,14 @@ func newTplUpdateCmd() *cobra.Command {
 				return err
 			}
 			patch := map[string]any{}
-			assign(patch, "name", optStr(cmd, "name"))
-			assign(patch, "link", optStr(cmd, "link"))
+			for flag, field := range map[string]string{"name": "name", "link": "link", "source": "source", "author": "author", "template-id": "templateId"} {
+				if value := optStr(cmd, flag); value != nil {
+					patch[field] = *value
+				}
+			}
+			if cmd.Flags().Changed("likes") {
+				patch["likes"] = likes
+			}
 			if t := optStr(cmd, "tags"); t != nil {
 				parts := []string{}
 				for _, s := range strings.FieldsFunc(*t, func(r rune) bool { return r == ',' || r == '，' || r == '、' }) {
@@ -438,7 +456,7 @@ func newTplUpdateCmd() *cobra.Command {
 				patch["note"] = v
 			}
 			if len(patch) == 0 {
-				return fmt.Errorf("没有要改的内容（--name / --tags / --note / --link）")
+				return fmt.Errorf("没有要改的内容（--name / --tags / --note / --link / --source / --author / --likes / --template-id）")
 			}
 			if err := c.sendJSON(http.MethodPatch, "/api/projects/"+url.PathEscape(id), patch, nil); err != nil {
 				return err
@@ -451,5 +469,9 @@ func newTplUpdateCmd() *cobra.Command {
 	cmd.Flags().String("tags", "", "替换全部标签，逗号分隔")
 	cmd.Flags().String("note", "", "新的备注，或 @文件")
 	cmd.Flags().String("link", "", "来源链接")
+	cmd.Flags().String("source", "", "来源（平台名称），空字符串清除")
+	cmd.Flags().String("author", "", "作者，空字符串清除")
+	cmd.Flags().Int("likes", 0, "点赞数（≥ 0，0 清除）")
+	cmd.Flags().String("template-id", "", "模板id，空字符串清除")
 	return cmd
 }

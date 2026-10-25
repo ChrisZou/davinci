@@ -109,7 +109,7 @@ func TestTemplatesAreProjectsOfAnotherKind(t *testing.T) {
 // new work and leaves the template as it was.
 func TestDuplicateTemplateIntoDesign(t *testing.T) {
 	h := start(t)
-	_, out := h.projectFromImage(map[string]string{"name": "参考封面", "tags": "大字", "note": "备注"}, testPNG(t, 600, 800))
+	_, out := h.projectFromImage(map[string]string{"name": "参考封面", "tags": "大字", "note": "备注", "source": "小红书", "author": "作者", "likes": "125", "link": "https://example.com/post"}, testPNG(t, 600, 800))
 	id := out["project"].(map[string]any)["id"].(string)
 	if ok, msg := h.exec(id, map[string]any{"type": "addText", "text": "标题"}); !ok {
 		t.Fatalf("addText: %s", msg)
@@ -124,7 +124,7 @@ func TestDuplicateTemplateIntoDesign(t *testing.T) {
 		t.Fatalf("duplicate: HTTP %d: %s", code, body)
 	}
 	p := res.Project
-	if p.Kind != KindDesign || p.Name != "我的新封面" || p.Width != 600 || len(p.Tags) != 0 || p.Note != "" {
+	if p.Kind != KindDesign || p.Name != "我的新封面" || p.Width != 600 || len(p.Tags) != 0 || p.Note != "" || p.Link != "" || p.Source != "" || p.Author != "" || p.Likes != 0 || p.TemplateID != id {
 		t.Fatalf("copy = %+v", p)
 	}
 	if l := h.layers(p.ID); len(l) != 2 {
@@ -140,9 +140,101 @@ func TestDuplicateTemplateIntoDesign(t *testing.T) {
 
 	// Copying within the template library keeps the tags and note.
 	code, body = h.do("POST", "/api/projects/"+id+"/duplicate", map[string]any{"kind": "template"})
+	res.Project = ProjectSummary{}
 	_ = json.Unmarshal(body, &res)
-	if code != http.StatusCreated || res.Project.Kind != KindTemplate || res.Project.Name != "参考封面" || res.Project.Note != "备注" {
+	if code != http.StatusCreated || res.Project.Kind != KindTemplate || res.Project.Name != "参考封面" || res.Project.Note != "备注" || res.Project.Source != "小红书" || res.Project.Author != "作者" || res.Project.Likes != 125 || res.Project.Link != "https://example.com/post" || res.Project.TemplateID != "" {
 		t.Errorf("template copy: HTTP %d, %+v", code, res.Project)
+	}
+}
+
+func TestProjectProvenanceAPI(t *testing.T) {
+	h := start(t)
+	fields := map[string]any{"name": "来源测试", "kind": KindTemplate, "source": " 小红书 ", "author": " 作者甲 ", "likes": 1234, "templateId": " p_original ", "link": "https://example.com/post", "note": "备注"}
+	code, body := h.do("POST", "/api/projects", fields)
+	var out struct {
+		Project Project `json:"project"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatal(err)
+	}
+	if code != http.StatusCreated {
+		t.Fatalf("create: %d %s", code, body)
+	}
+	id := out.Project.ID
+	check := func(method, path string, payload any) {
+		t.Helper()
+		code, body := h.do(method, path, payload)
+		var res struct {
+			Project Project `json:"project"`
+		}
+		if err := json.Unmarshal(body, &res); err != nil {
+			t.Fatal(err)
+		}
+		p := res.Project
+		if code != http.StatusOK || p.Source != "小红书" || p.Author != "作者甲" || p.Likes != 1234 || p.TemplateID != "p_original" || p.Link != fields["link"] || p.Note != "备注" {
+			t.Fatalf("%s: %d %s", method, code, body)
+		}
+	}
+	check("GET", "/api/projects/"+id, nil)
+	check("PATCH", "/api/projects/"+id, map[string]any{"source": "小红书", "author": "作者甲", "likes": 1234, "templateId": "p_original"})
+	check("PATCH", "/api/projects/"+id, map[string]any{"tags": []string{"大字"}})
+	list := h.listProjects("?kind=template&q=" + url.QueryEscape("小红书 作者甲"))
+	if len(list) != 1 || list[0].Source != "小红书" || list[0].Author != "作者甲" || list[0].Likes != 1234 || list[0].TemplateID != "p_original" {
+		t.Fatalf("list: %+v", list)
+	}
+	for _, likes := range []any{-1, 1.5, "10"} {
+		for _, route := range []struct{ method, path string }{{"PATCH", "/api/projects/" + id}, {"POST", "/api/projects"}, {"POST", "/api/projects/from-image"}} {
+			code, body := h.do(route.method, route.path, map[string]any{"likes": likes, "name": "不应改名", "ref": "/missing.png"})
+			if code != http.StatusBadRequest {
+				t.Fatalf("invalid likes %v: %d %s", likes, code, body)
+			}
+		}
+	}
+	check("GET", "/api/projects/"+id, nil)
+	for _, raw := range []string{"-1", "1.5", "oops"} {
+		code, out := h.projectFromImage(map[string]string{"likes": raw}, testPNG(t, 1, 1))
+		if code != http.StatusBadRequest {
+			t.Fatalf("multipart likes %q: %d %+v", raw, code, out)
+		}
+	}
+	code, body = h.do("PATCH", "/api/projects/"+id, map[string]any{"source": "", "author": "", "likes": 0, "templateId": ""})
+	if code != http.StatusOK {
+		t.Fatalf("clear: %d %s", code, body)
+	}
+	code, body = h.do("GET", "/api/projects/"+id, nil)
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatal(err)
+	}
+	if code != http.StatusOK || out.Project.Source != "" || out.Project.Author != "" || out.Project.Likes != 0 || out.Project.TemplateID != "" || out.Project.Name != "来源测试" || out.Project.Note != "备注" {
+		t.Fatalf("clear: %d %s", code, body)
+	}
+	code, body = h.do("GET", "/api/schema", nil)
+	var schema struct {
+		ProjectMetadata map[string]map[string]any `json:"projectMetadata"`
+	}
+	if err := json.Unmarshal(body, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if code != http.StatusOK || schema.ProjectMetadata["source"]["label"] != "来源" || schema.ProjectMetadata["link"]["label"] != "来源链接" || schema.ProjectMetadata["likes"]["minimum"] != float64(0) {
+		t.Fatalf("schema: %d %s", code, body)
+	}
+}
+
+func TestProjectFromImageJSONMetadata(t *testing.T) {
+	h := start(t)
+	asset, err := h.srv.assets.SaveBytes(testPNG(t, 10, 20), "png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code, body := h.do("POST", "/api/projects/from-image", map[string]any{"ref": "/assets/" + asset.SHA + "." + asset.Ext, "source": "B站", "author": "作者乙", "likes": 0, "templateId": "p_template"})
+	var out struct {
+		Project ProjectSummary `json:"project"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatal(err)
+	}
+	if code != http.StatusCreated || out.Project.Source != "B站" || out.Project.Author != "作者乙" || out.Project.Likes != 0 || out.Project.TemplateID != "p_template" {
+		t.Fatalf("from-image JSON: %d %s", code, body)
 	}
 }
 

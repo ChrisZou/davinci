@@ -390,22 +390,30 @@ davinci lib category add 表情包               # 新建分类（rename / rm �
 ## 模板库（`davinci tpl`）
 
 模板就是普通项目（分层、可编辑、可导出），只是归在「模板库」而不是「作品」里，带标签、
-备注（喜欢它哪里）和来源链接，用来照着做新作品。编辑模板本身和编辑作品一样：`-p <模板id>`
+备注、来源（平台名）、来源链接、作者和点赞数，用来照着做新作品。编辑模板本身和编辑作品一样：`-p <模板id>`
 加任意命令。不带 `-p` 时默认的「最近项目」只在作品里找，不会落到模板上。
 
 ```bash
 davinci tpl ls                                # 全部模板
-davinci tpl ls --tag 大字 -q 人物              # 按标签 + 关键词（名称/标签/备注/链接）
+davinci tpl ls --tag 大字 -q 人物              # 按标签 + 关键词（名称/标签/备注/链接/来源/作者）
 davinci tpl tags                              # 用过的标签及数量
-davinci tpl show p_xxx                        # 备注、标签、来源、画板数
+davinci tpl show p_xxx                        # 来源、来源链接、作者、点赞数、备注、标签、画板数
 davinci tpl get p_xxx [-o cover.png]          # 渲染第 1 个画板成 PNG，打印路径（拿来看图）
 davinci tpl use p_xxx "新封面"                 # 整份复制成新作品（全部画板和图层），在副本上改
-davinci tpl add cover.jpg --tags 大字 --note "标题压满上半屏" --link <原帖>   # 一张图收藏成模板
+davinci tpl add cover.jpg --tags 大字 --note "标题压满上半屏" --source 小红书 --author 作者名 --likes 120 --link <原帖URL>
 davinci tpl move p_xxx                        # 作品移进模板库；--to design 移回作品
-davinci tpl update p_xxx --note "人物压字"     # 改名称 / 标签 / 备注 / 链接
+davinci tpl update p_xxx --source B站 --author 作者名 --likes 0 --note "人物压字"
+davinci project show <作品id>                 # 查看元数据和模板id
+davinci project update <作品id> --template-id p_xxx  # 设置模板关联，传 "" 清除
 davinci projects --templates                  # 同样列出模板（--all 作品和模板都列）
 ```
 
+`tpl add` 支持 `--source / --author / --likes`，以及 `--name / --tags / --note / --link`。
+`tpl update` 和 `project update` 支持上述字段及 `--template-id`；未传字段保留，文字传 `""` 清除，`--likes 0` 重置。
+点赞数只接受 ≥ 0 的整数，默认 0。来源平台 `source` 与来源链接 `link` 独立保存，`note` 为备注。
+`tpl use` 从模板生成作品时自动设置 `templateId` 为原模板 ID，不复制模板的标签、备注、链接、来源、作者和点赞数；同类复制保留所有元数据。
+`project` 是 `projects` 的别名，项目列表也显示模板id。空 `templateId` 表示未关联；列表 JSON 省略空字符串，详情返回空字符串，与 note/link 一致。
+创建/PATCH 项目及 `/api/projects/from-image`（JSON 或 multipart）接受 `source / author / likes / templateId`；字段说明见 `/api/schema` 的 `projectMetadata`。
 删除模板用 `davinci projects rm`，和删作品一样。
 
 ## CLI → 命令对照

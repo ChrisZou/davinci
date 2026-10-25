@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type ProjectSummary, type TagCount } from '../api'
+import { api, type ProjectMetadata, type ProjectSummary, type TagCount } from '../api'
 import { navigate } from '../App'
 import { ConfirmDialog, Modal } from '../components/Dialog'
 import { Lockup } from '../components/Brand'
@@ -75,7 +75,7 @@ export function Templates() {
 
   /** Saves pictures (files or image URLs) as templates; the last one opens on the right. */
   const save = useCallback(
-    async (sources: (File | string)[]) => {
+    async (sources: (File | string)[], fields: ProjectMetadata = {}) => {
       const list = sources.filter((s) => typeof s === 'string' || s.type.startsWith('image/'))
       if (!list.length) return
       setUploading(list.length)
@@ -83,7 +83,7 @@ export function Templates() {
       try {
         for (const src of list) {
           // Saved while a tag is picked, a template gets that tag too.
-          last = await api.projectFromImage(src, { kind: 'template', tags: tag ? [tag] : [] })
+          last = await api.projectFromImage(src, { kind: 'template', tags: tag ? [tag] : [], ...fields })
           setUploading((n) => n - 1)
         }
       } catch (e: any) {
@@ -236,9 +236,9 @@ export function Templates() {
       {linkOpen && (
         <LinkDialog
           onCancel={() => setLinkOpen(false)}
-          onSubmit={(url) => {
+          onSubmit={(url, fields) => {
             setLinkOpen(false)
-            void save([url])
+            void save([url], fields)
           }}
         />
       )}
@@ -281,6 +281,15 @@ function TemplateTile({ t, selected, onClick }: { t: ProjectSummary; selected: b
       </span>
       <span className="truncate px-0.5 text-xs text-ink-2">{t.name}</span>
       {t.tags.length > 0 && <span className="truncate px-0.5 text-[11px] text-faint">{t.tags.map((x) => `#${x}`).join(' ')}</span>}
+      {(t.author || t.likes > 0) && (
+        <span className="flex w-full items-center justify-between gap-2 px-0.5 text-[11px] text-muted">
+          <span className="truncate">{t.author}</span>
+          <span className="flex shrink-0 items-center gap-1" aria-label={`点赞数 ${t.likes}`}>
+            <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" /></svg>
+            {t.likes.toLocaleString()}
+          </span>
+        </span>
+      )}
     </button>
   )
 }
@@ -302,8 +311,7 @@ function TemplateDetail({
 }) {
   const [name, setName] = useState(t.name)
   const [tags, setTags] = useState(t.tags.join('，'))
-  const [note, setNote] = useState(t.note ?? '')
-  const [link, setLink] = useState(t.link ?? '')
+  const [metadata, setMetadata] = useState<MetadataValues>({ source: t.source ?? '', author: t.author ?? '', likes: String(t.likes), link: t.link ?? '', note: t.note ?? '' })
   const [confirm, setConfirm] = useState(false)
   const [starting, setStarting] = useState(false)
 
@@ -333,7 +341,7 @@ function TemplateDetail({
         </button>
       </div>
       <button
-        className="mx-5 mt-3 flex h-80 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-paper-deep p-3"
+        className="mx-5 mt-3 flex h-40 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-paper-deep p-3"
         title="打开编辑"
         onClick={() => navigate(`/editor/${t.id}`)}
       >
@@ -379,7 +387,6 @@ function TemplateDetail({
               const next = parseTags(tags)
               if (next.join('|') !== t.tags.join('|')) void save({ tags: next })
             }}
-            placeholder="比如：大字，红底白字，人物压字"
             className="h-9 rounded-[10px] bg-paper px-3 text-[13px] text-ink outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
           />
           {suggestions.length > 0 && (
@@ -401,35 +408,14 @@ function TemplateDetail({
             </span>
           )}
         </label>
-        <label className="flex flex-col gap-2">
-          <span className="text-xs text-muted">备注：喜欢它哪里</span>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            onBlur={() => note !== (t.note ?? '') && void save({ note })}
-            rows={6}
-            placeholder="比如：标题压满上半屏，人物叠在字上；黄黑撞色很抓眼"
-            className="resize-y rounded-[10px] bg-paper px-3 py-2.5 text-[13px] leading-relaxed text-ink outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
-          />
-        </label>
-        <label className="flex flex-col gap-2">
-          <span className="flex items-center justify-between text-xs text-muted">
-            来源链接
-            {/^https?:\/\//.test(t.link ?? '') && (
-              <a href={t.link} target="_blank" rel="noreferrer" className="text-accent hover:underline">
-                打开原帖 ↗
-              </a>
-            )}
-          </span>
-          <input
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-            onBlur={() => link.trim() !== (t.link ?? '') && void save({ link: link.trim() })}
-            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-            placeholder="原帖地址（可选）"
-            className="h-9 rounded-[10px] bg-paper px-3 text-[13px] text-ink outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
-          />
-        </label>
+        <MetadataInputs
+          values={metadata}
+          onChange={(key, value) => setMetadata((m) => ({ ...m, [key]: value }))}
+          onCommit={(key) => {
+            const value = key === 'likes' ? Number(metadata.likes) : metadata[key].trim()
+            if (value !== (t[key] ?? '')) void save({ [key]: value })
+          }}
+        />
         <div className="flex flex-col gap-1 text-[11px] text-faint">
           <span>
             ID <code className="select-all">{t.id}</code>
@@ -469,8 +455,48 @@ function TemplateDetail({
   )
 }
 
-function LinkDialog({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (url: string) => void }) {
+type MetadataValues = { source: string; author: string; likes: string; link: string; note: string }
+
+function MetadataInputs({ values, onChange, onCommit }: {
+  values: MetadataValues
+  onChange: (key: keyof MetadataValues, value: string) => void
+  onCommit?: (key: keyof MetadataValues) => void
+}) {
+  const inputClass = 'h-9 min-w-0 w-full rounded-[10px] bg-paper px-3 text-[13px] text-ink outline-none focus:ring-2 focus:ring-accent/30'
+  return (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+      {(['source', 'author', 'likes', 'link', 'note'] as const).map((key) => (
+        <label key={key} className={`flex min-w-0 flex-col gap-2 ${key === 'source' || key === 'link' || key === 'note' ? 'col-span-2' : ''}`}>
+          <span className="flex items-center justify-between text-xs text-muted">
+            {{ source: '来源', author: '作者', likes: '点赞数', link: '来源链接', note: '备注' }[key]}
+            {key === 'link' && /^https?:\/\//.test(values.link) && <a href={values.link} target="_blank" rel="noreferrer" aria-label="打开来源链接" title="打开来源链接" className="text-accent">↗</a>}
+          </span>
+          {key === 'note' ? (
+            <textarea value={values[key]} rows={2} onChange={(e) => onChange(key, e.target.value)} onBlur={() => onCommit?.(key)} className={`${inputClass} h-auto resize-y py-2 leading-relaxed`} />
+          ) : (
+            <input
+              type={key === 'likes' ? 'number' : key === 'link' ? 'url' : 'text'}
+              min={key === 'likes' ? 0 : undefined}
+              step={key === 'likes' ? 1 : undefined}
+              value={values[key]}
+              onChange={(e) => onChange(key, e.target.value)}
+              onBlur={(e) => {
+                if (e.currentTarget.checkValidity()) onCommit?.(key)
+                else e.currentTarget.reportValidity()
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+              className={inputClass}
+            />
+          )}
+        </label>
+      ))}
+    </div>
+  )
+}
+
+function LinkDialog({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (url: string, fields: ProjectMetadata) => void }) {
   const [url, setUrl] = useState('')
+  const [metadata, setMetadata] = useState<MetadataValues>({ source: '', author: '', likes: '0', link: '', note: '' })
   const ok = /^https?:\/\/\S+$/.test(url.trim())
   return (
     <Modal onClose={onCancel} label="从链接添加" width="w-[460px]">
@@ -478,18 +504,23 @@ function LinkDialog({ onCancel, onSubmit }: { onCancel: () => void; onSubmit: (u
         className="p-6"
         onSubmit={(e) => {
           e.preventDefault()
-          if (ok) onSubmit(url.trim())
+          if (ok) onSubmit(url.trim(), { ...metadata, likes: Number(metadata.likes) })
         }}
       >
         <h2 className="font-serif text-lg font-black text-ink">从链接添加</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">粘贴图片地址（右键图片 →「复制图片地址」），服务端会把图片存下来，做成一个模板。</p>
-        <input
+        <label className="mt-4 flex flex-col gap-2 text-xs text-muted">
+          图片地址
+          <input
           autoFocus
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://…"
-          className="mt-4 h-10 w-full rounded-[10px] bg-paper px-3 text-[13px] text-ink outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
+          type="url"
+          required
+          className="h-10 w-full rounded-[10px] bg-paper px-3 text-[13px] text-ink outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
         />
+        </label>
+        <div className="mt-4"><MetadataInputs values={metadata} onChange={(key, value) => setMetadata((m) => ({ ...m, [key]: value }))} /></div>
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onCancel}>
             取消

@@ -34,19 +34,23 @@ const (
 // Project is one design. Document is an opaque JSON blob owned by the editor;
 // the backend only reads canvas width/height out of it for listings.
 type Project struct {
-	ID        string          `json:"id"`
-	Name      string          `json:"name"`
-	Kind      string          `json:"kind"`
-	Tags      []string        `json:"tags"`
-	Note      string          `json:"note"`
-	Link      string          `json:"link"`
-	Width     int             `json:"width"`
-	Height    int             `json:"height"`
-	Document  json.RawMessage `json:"document"`
-	Thumbnail string          `json:"thumbnail,omitempty"`
-	Revision  int64           `json:"revision"`
-	CreatedAt time.Time       `json:"createdAt"`
-	UpdatedAt time.Time       `json:"updatedAt"`
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Kind       string          `json:"kind"`
+	Tags       []string        `json:"tags"`
+	Note       string          `json:"note"`
+	Link       string          `json:"link"`
+	Source     string          `json:"source"`
+	Author     string          `json:"author"`
+	Likes      int             `json:"likes"`
+	TemplateID string          `json:"templateId"`
+	Width      int             `json:"width"`
+	Height     int             `json:"height"`
+	Document   json.RawMessage `json:"document"`
+	Thumbnail  string          `json:"thumbnail,omitempty"`
+	Revision   int64           `json:"revision"`
+	CreatedAt  time.Time       `json:"createdAt"`
+	UpdatedAt  time.Time       `json:"updatedAt"`
 }
 
 // Asset is an uploaded or imported binary (image or font) kept under data/assets.
@@ -60,16 +64,20 @@ type Asset struct {
 
 // ProjectSummary is the lightweight form used by listings and the CLI.
 type ProjectSummary struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Kind      string    `json:"kind"`
-	Tags      []string  `json:"tags"`
-	Note      string    `json:"note,omitempty"`
-	Link      string    `json:"link,omitempty"`
-	Width     int       `json:"width"`
-	Height    int       `json:"height"`
-	Revision  int64     `json:"revision"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Kind       string    `json:"kind"`
+	Tags       []string  `json:"tags"`
+	Note       string    `json:"note,omitempty"`
+	Link       string    `json:"link,omitempty"`
+	Source     string    `json:"source,omitempty"`
+	Author     string    `json:"author,omitempty"`
+	Likes      int       `json:"likes"`
+	TemplateID string    `json:"templateId,omitempty"`
+	Width      int       `json:"width"`
+	Height     int       `json:"height"`
+	Revision   int64     `json:"revision"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 var projectsDDL = `
@@ -185,6 +193,10 @@ var projectColumns = []struct{ name, ddl string }{
 	{"tags", `ALTER TABLE projects ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`},
 	{"note", `ALTER TABLE projects ADD COLUMN note TEXT NOT NULL DEFAULT ''`},
 	{"link", `ALTER TABLE projects ADD COLUMN link TEXT NOT NULL DEFAULT ''`},
+	{"source", `ALTER TABLE projects ADD COLUMN source TEXT NOT NULL DEFAULT ''`},
+	{"author", `ALTER TABLE projects ADD COLUMN author TEXT NOT NULL DEFAULT ''`},
+	{"likes", `ALTER TABLE projects ADD COLUMN likes INTEGER NOT NULL DEFAULT 0`},
+	{"template_id", `ALTER TABLE projects ADD COLUMN template_id TEXT NOT NULL DEFAULT ''`},
 }
 
 func (s *Store) addProjectColumns() error {
@@ -286,14 +298,14 @@ func (s *Store) NewProject(name string, width, height int, document json.RawMess
 type ProjectQuery struct {
 	// Kind is KindDesign, KindTemplate, or "" for every project.
 	Kind string
-	// Q matches the name, tags, note and link; spaces separate terms that
+	// Q matches the name, tags, note, link, source and author; spaces separate terms that
 	// must all match.
 	Q string
 	// Tag keeps only projects carrying exactly this tag.
 	Tag string
 }
 
-const summaryColumns = `id,name,kind,tags,note,link,width,height,revision,updated_at`
+const summaryColumns = `id,name,kind,tags,note,link,source,author,likes,template_id,width,height,revision,updated_at`
 
 // ListProjects sums up the projects a query picks, newest first.
 func (s *Store) ListProjects(q ProjectQuery) ([]ProjectSummary, error) {
@@ -305,8 +317,8 @@ func (s *Store) ListProjects(q ProjectQuery) ([]ProjectSummary, error) {
 	}
 	for _, term := range strings.Fields(q.Q) {
 		like := "%" + term + "%"
-		where = append(where, "(name LIKE ? OR tags LIKE ? OR note LIKE ? OR link LIKE ?)")
-		args = append(args, like, like, like, like)
+		where = append(where, "(name LIKE ? OR tags LIKE ? OR note LIKE ? OR link LIKE ? OR source LIKE ? OR author LIKE ?)")
+		args = append(args, like, like, like, like, like, like)
 	}
 	if tag := strings.TrimSpace(q.Tag); tag != "" {
 		// Tags are a JSON array of strings; match the quoted element so "红"
@@ -325,7 +337,7 @@ func (s *Store) ListProjects(q ProjectQuery) ([]ProjectSummary, error) {
 		var p ProjectSummary
 		var tags string
 		var updated int64
-		if err := rows.Scan(&p.ID, &p.Name, &p.Kind, &tags, &p.Note, &p.Link, &p.Width, &p.Height, &p.Revision, &updated); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Kind, &tags, &p.Note, &p.Link, &p.Source, &p.Author, &p.Likes, &p.TemplateID, &p.Width, &p.Height, &p.Revision, &updated); err != nil {
 			return nil, err
 		}
 		p.Tags = parseTags(tags)
@@ -376,14 +388,14 @@ func parseTags(raw string) []string {
 
 // GetProject loads one project.
 func (s *Store) GetProject(id string) (*Project, error) {
-	row := s.db.QueryRow(`SELECT id,name,kind,tags,note,link,width,height,document,thumbnail,revision,created_at,updated_at FROM projects WHERE id=?`, id)
+	row := s.db.QueryRow(`SELECT id,name,kind,tags,note,link,source,author,likes,template_id,width,height,document,thumbnail,revision,created_at,updated_at FROM projects WHERE id=?`, id)
 	var p Project
 	// The document column is TEXT; database/sql will not scan a string straight
 	// into a json.RawMessage, so it goes through a []byte first.
 	var doc []byte
 	var tags string
 	var created, updated int64
-	if err := row.Scan(&p.ID, &p.Name, &p.Kind, &tags, &p.Note, &p.Link, &p.Width, &p.Height, &doc, &p.Thumbnail, &p.Revision, &created, &updated); err != nil {
+	if err := row.Scan(&p.ID, &p.Name, &p.Kind, &tags, &p.Note, &p.Link, &p.Source, &p.Author, &p.Likes, &p.TemplateID, &p.Width, &p.Height, &doc, &p.Thumbnail, &p.Revision, &created, &updated); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
@@ -438,21 +450,35 @@ func (s *Store) RenameProject(id, name string) error {
 // ProjectMeta changes what a project is filed as and how it is found; nil
 // leaves a field alone.
 type ProjectMeta struct {
-	Kind *string   `json:"kind"`
-	Tags *[]string `json:"tags"`
-	Note *string   `json:"note"`
-	Link *string   `json:"link"`
+	Kind       *string   `json:"kind"`
+	Tags       *[]string `json:"tags"`
+	Note       *string   `json:"note"`
+	Link       *string   `json:"link"`
+	Source     *string   `json:"source"`
+	Author     *string   `json:"author"`
+	Likes      *int      `json:"likes"`
+	TemplateID *string   `json:"templateId"`
+}
+
+func (m ProjectMeta) validate() error {
+	if m.Kind != nil && *m.Kind != KindDesign && *m.Kind != KindTemplate {
+		return fmt.Errorf("kind must be %q or %q", KindDesign, KindTemplate)
+	}
+	if m.Likes != nil && *m.Likes < 0 {
+		return fmt.Errorf("likes must be an integer >= 0")
+	}
+	return nil
 }
 
 // SetProjectMeta applies a ProjectMeta. Moving a project between the works and
 // the template library does not count as an edit: updated_at stays put.
 func (s *Store) SetProjectMeta(id string, m ProjectMeta) error {
+	if err := m.validate(); err != nil {
+		return err
+	}
 	set := []string{}
 	args := []any{}
 	if m.Kind != nil {
-		if *m.Kind != KindDesign && *m.Kind != KindTemplate {
-			return fmt.Errorf("kind must be %q or %q", KindDesign, KindTemplate)
-		}
 		set, args = append(set, "kind=?"), append(args, *m.Kind)
 	}
 	if m.Tags != nil {
@@ -465,6 +491,18 @@ func (s *Store) SetProjectMeta(id string, m ProjectMeta) error {
 	if m.Link != nil {
 		set, args = append(set, "link=?"), append(args, strings.TrimSpace(*m.Link))
 	}
+	if m.Source != nil {
+		set, args = append(set, "source=?"), append(args, strings.TrimSpace(*m.Source))
+	}
+	if m.Author != nil {
+		set, args = append(set, "author=?"), append(args, strings.TrimSpace(*m.Author))
+	}
+	if m.Likes != nil {
+		set, args = append(set, "likes=?"), append(args, *m.Likes)
+	}
+	if m.TemplateID != nil {
+		set, args = append(set, "template_id=?"), append(args, strings.TrimSpace(*m.TemplateID))
+	}
 	if len(set) == 0 {
 		return nil
 	}
@@ -475,6 +513,10 @@ func (s *Store) SetProjectMeta(id string, m ProjectMeta) error {
 // DuplicateProject copies a project's document and thumbnail as a new project
 // of the given kind.
 func (s *Store) DuplicateProject(id, name, kind string) (*Project, error) {
+	meta := ProjectMeta{Kind: &kind}
+	if err := meta.validate(); err != nil {
+		return nil, err
+	}
 	src, err := s.GetProject(id)
 	if err != nil || src == nil {
 		return nil, err
@@ -486,11 +528,13 @@ func (s *Store) DuplicateProject(id, name, kind string) (*Project, error) {
 	if err := s.SetThumbnail(p.ID, src.Thumbnail); err != nil {
 		return nil, err
 	}
-	meta := ProjectMeta{Kind: &kind}
 	if kind == src.Kind {
 		// A copy within the same library keeps how the original is filed; a
-		// design started from a template starts out bare.
+		// design started from a template keeps only its template's ID.
 		meta.Tags, meta.Note, meta.Link = &src.Tags, &src.Note, &src.Link
+		meta.Source, meta.Author, meta.Likes, meta.TemplateID = &src.Source, &src.Author, &src.Likes, &src.TemplateID
+	} else if src.Kind == KindTemplate && kind == KindDesign {
+		meta.TemplateID = &src.ID
 	}
 	if err := s.SetProjectMeta(p.ID, meta); err != nil {
 		return nil, err

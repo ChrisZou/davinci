@@ -169,17 +169,23 @@ UI：`/palettes` 浏览网格，`/palettes/:id` 完整详情页，显示原图�
 ## 2.5 模板库（照着做）
 
 模板库是用户收藏的封面。每个模板都是完整的分层项目（和作品一样），只是归在模板库里，
-带标签和备注。用户说"照着我收藏的那种做""用模板库里的大字报风"时用它。
+带标签、来源、来源链接、作者、点赞数和备注。用户说"照着我收藏的那种做""用模板库里的大字报风"时用它。
 
 ```bash
 davinci tpl tags                       # 有哪些标签
-davinci tpl ls --tag 大字 -q 人物       # 找模板（名称/标签/备注/链接都会搜）
-davinci tpl show <模板id>              # 读备注：版式、配色、适合什么选题、文字块位置和字数
+davinci tpl ls --tag 大字 -q 人物       # 找模板（名称/标签/备注/链接/来源/作者都会搜）
+davinci tpl show <模板id>              # 来源、来源链接、作者、点赞数、备注和画板
 davinci tpl get <模板id>               # 渲染成 PNG 并打印路径——用你能看图的方式打开看一眼
 davinci tpl use <模板id> "新作品名"     # 整份复制成新作品，然后用 -p <新作品id> 改字、换图
-davinci tpl add <文件|URL> --tags a,b --note "喜欢它哪里"   # 用户让你收藏时
+davinci tpl add <文件|URL> --tags a,b --source 小红书 --author "作者名" --likes 120 --link <原帖URL> --note "喜欢它哪里"
+davinci tpl update <模板id> --source B站 --author "作者名" --likes 0 --note "新版备注"
 davinci tpl move <作品>                 # 用户让你把某个作品放进模板库时
 ```
+
+- `source` 是来源平台，`link` 是来源链接，`note` 是备注，三者独立。`likes` 是 ≥ 0 的整数，默认 0。
+- `tpl update --source "" --author "" --link "" --note ""` 清除文字；`--likes 0` 清除点赞数。不传的字段保留。
+- `tpl use` 从模板生成作品时自动写入 `templateId=<原模板id>`，不继承模板的来源、作者或点赞数。
+  用 `davinci project show <作品id>` 查看；`davinci project update <作品id> --template-id <模板id>` 修改，`--template-id ""` 清除。
 
 - **不要直接改模板本身**（除非用户明确要求）：先 `tpl use` 复制出新作品，再在新作品上改。
 - 不带 `-p` 时默认的项目只会是作品，不会是模板。

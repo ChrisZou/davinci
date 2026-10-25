@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -77,17 +78,27 @@ func (s *Server) handleDuplicateProject(c echo.Context) error {
 // canvas is the picture's own size (within 3000px on the long side) and the
 // picture fills it as an ordinary image layer, so it can be cut up later.
 //
-// It takes a multipart upload ("file" plus "name kind tags note link") or a
+// It takes a multipart upload ("file" plus project metadata) or a
 // JSON body naming the picture by "ref": a local path, an http(s) URL or an
 // /assets/ URL already on the server.
 func (s *Server) handleProjectFromImage(c echo.Context) error {
 	var (
 		ref, name, kind, note, link string
+		source, author, templateID  string
+		likes                       int
 		tags                        []string
 		url                         string
 	)
 	if strings.HasPrefix(c.Request().Header.Get("Content-Type"), "multipart/") {
 		name, kind, note, link = c.FormValue("name"), c.FormValue("kind"), c.FormValue("note"), c.FormValue("link")
+		source, author, templateID = c.FormValue("source"), c.FormValue("author"), c.FormValue("templateId")
+		if raw := c.FormValue("likes"); raw != "" {
+			var err error
+			likes, err = strconv.Atoi(raw)
+			if err != nil || likes < 0 {
+				return badRequest(c, "likes must be an integer >= 0")
+			}
+		}
 		tags = splitTags(c.FormValue("tags"))
 		fh, err := c.FormFile("file")
 		if err != nil {
@@ -119,24 +130,31 @@ func (s *Server) handleProjectFromImage(c echo.Context) error {
 		}
 	} else {
 		var req struct {
-			Ref  string   `json:"ref"`
-			Name string   `json:"name"`
-			Kind string   `json:"kind"`
-			Tags []string `json:"tags"`
-			Note string   `json:"note"`
-			Link string   `json:"link"`
+			Ref        string   `json:"ref"`
+			Name       string   `json:"name"`
+			Kind       string   `json:"kind"`
+			Tags       []string `json:"tags"`
+			Note       string   `json:"note"`
+			Link       string   `json:"link"`
+			Source     string   `json:"source"`
+			Author     string   `json:"author"`
+			Likes      int      `json:"likes"`
+			TemplateID string   `json:"templateId"`
 		}
 		if err := c.Bind(&req); err != nil {
 			return badRequest(c, "invalid JSON body: "+err.Error())
 		}
 		ref, name, kind, tags, note, link = req.Ref, req.Name, req.Kind, req.Tags, req.Note, req.Link
+		source, author, likes, templateID = req.Source, req.Author, req.Likes, req.TemplateID
 		if strings.TrimSpace(ref) == "" {
 			return badRequest(c, `"ref" (a local path, an http(s) URL or an /assets/ URL) is required`)
 		}
 	}
 	kind = firstNonEmptyStr(kind, KindTemplate)
-	if kind != KindDesign && kind != KindTemplate {
-		return badRequest(c, `kind must be "design" or "template"`)
+	meta := ProjectMeta{Kind: &kind, Tags: &tags, Note: &note, Link: &link,
+		Source: &source, Author: &author, Likes: &likes, TemplateID: &templateID}
+	if err := meta.validate(); err != nil {
+		return badRequest(c, err.Error())
 	}
 	if url == "" {
 		u, _, err := s.assets.Add(ref)
@@ -171,7 +189,7 @@ func (s *Server) handleProjectFromImage(c echo.Context) error {
 		s.forget(p.ID)
 		return err
 	}
-	if err := s.store.SetProjectMeta(p.ID, ProjectMeta{Kind: &kind, Tags: &tags, Note: &note, Link: &link}); err != nil {
+	if err := s.store.SetProjectMeta(p.ID, meta); err != nil {
 		return fail(badRequest(c, err.Error()))
 	}
 	cmd, _ := json.Marshal(map[string]any{"type": "addImage", "url": url, "name": "原图", "x": 0, "y": 0, "width": w, "height": h})
@@ -204,5 +222,6 @@ func fitLongSide(w, h, max int) (int, int) {
 // summaryOf is the listing row for a project.
 func summaryOf(p *Project) ProjectSummary {
 	return ProjectSummary{ID: p.ID, Name: p.Name, Kind: p.Kind, Tags: p.Tags, Note: p.Note, Link: p.Link,
+		Source: p.Source, Author: p.Author, Likes: p.Likes, TemplateID: p.TemplateID,
 		Width: p.Width, Height: p.Height, Revision: p.Revision, UpdatedAt: p.UpdatedAt}
 }

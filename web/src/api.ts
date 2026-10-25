@@ -21,6 +21,10 @@ export interface ProjectSummary {
   tags: string[]
   note?: string
   link?: string
+  source?: string
+  author?: string
+  likes: number
+  templateId?: string
   width: number
   height: number
   revision: number
@@ -32,6 +36,8 @@ export interface Project extends ProjectSummary {
   thumbnail?: string
   createdAt: string
 }
+
+export type ProjectMetadata = Partial<Pick<ProjectSummary, 'name' | 'kind' | 'tags' | 'note' | 'link' | 'source' | 'author' | 'likes' | 'templateId'>>
 
 export interface LibraryCategory {
   id: string
@@ -177,7 +183,7 @@ export const api = {
     return out.project
   },
 
-  async createProject(input: { name?: string; preset?: string; width?: number; height?: number }) {
+  async createProject(input: ProjectMetadata & { preset?: string; width?: number; height?: number }) {
     const out = await asJSON<{ project: Project; editorURL: string }>(
       await fetch(`${base}/api/projects`, {
         method: 'POST',
@@ -306,7 +312,7 @@ export const api = {
   },
 
   /** Files a project in the works or the template library, and sets how it is found. */
-  async updateProject(id: string, patch: { name?: string; kind?: ProjectKind; tags?: string[]; note?: string; link?: string }) {
+  async updateProject(id: string, patch: ProjectMetadata) {
     await asJSON(
       await fetch(`${base}/api/projects/${encodeURIComponent(id)}`, {
         method: 'PATCH',
@@ -329,12 +335,15 @@ export const api = {
   },
 
   /** A project made of one picture (a file, or an image URL the server fetches), filed as a template by default. */
-  async projectFromImage(src: File | string, fields: { kind?: ProjectKind; tags?: string[] } = {}) {
+  async projectFromImage(src: File | string, fields: ProjectMetadata = {}) {
     const form = new FormData()
     if (typeof src === 'string') form.append('ref', src)
     else form.append('file', src, src.name)
     form.append('kind', fields.kind ?? 'template')
     if (fields.tags?.length) form.append('tags', fields.tags.join(','))
+    for (const key of ['name', 'note', 'link', 'source', 'author', 'likes', 'templateId'] as const) {
+      if (fields[key] !== undefined) form.append(key, String(fields[key]))
+    }
     const out = await asJSON<{ project: ProjectSummary }>(await fetch(`${base}/api/projects/from-image`, { method: 'POST', body: form }))
     return out.project
   },

@@ -94,14 +94,14 @@ func (c *Client) printProjects(list []server.ProjectSummary) {
 	}
 	w := newTabWriter()
 	defer w.Flush()
-	fmt.Fprintln(w, "ID\t名称\t类别\t画布\t修订\t更新")
+	fmt.Fprintln(w, "ID\t名称\t类别\t画布\t修订\t更新\t模板id")
 	for _, p := range list {
 		kind := "作品"
 		if p.Kind == server.KindTemplate {
 			kind = "模板"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%d×%d\t%d\t%s\n", p.ID, p.Name, kind, p.Width, p.Height, p.Revision,
-			p.UpdatedAt.Local().Format("01-02 15:04"))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d×%d\t%d\t%s\t%s\n", p.ID, p.Name, kind, p.Width, p.Height, p.Revision,
+			p.UpdatedAt.Local().Format("01-02 15:04"), p.TemplateID)
 	}
 }
 
