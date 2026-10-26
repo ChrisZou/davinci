@@ -81,9 +81,10 @@ davinci -p <项目> exec --file cover.json          # 从文件读（长的一�
 | `applyTextPreset` | `id* preset*` | 预设见 `davinci text presets` |
 
 `style` 的键：`fontFamily` `fontSize` `fontWeight`(100–900) `fontStyle` `fill`（别名 `color`）
-`textAlign`(left/center/right) `lineHeight` `charSpacing` `padding`
+`textAlign`(left/center/right) `lineHeight` `letterSpacing`（画布像素，同 CSS `letter-spacing`）`padding`
 `textBackgroundColor`（文字底色）`stroke`（`"#000:8"` = 颜色:粗细）`paintFirst`（描边压在字下面，粗描边必开）
 `shadow`（`"rgba(0,0,0,.5):18:4:6"` = 颜色:模糊:x:y）`underline` `linethrough`。
+旧 `charSpacing` 仍兼容，单位为千分之一 em；新编辑使用 `letterSpacing`。
 斜体：`fontStyle: "italic"`。
 变形（梯形，右端收窄的透视标题）：`warp: "trapezoid"`，`warpAmount` 梯形强度 -100~100（常用 15–35），
 `warpBias` 相对高度 -100~100（-100 下沿平直、上沿往右压低；100 上沿平直；0 上下各收一半）；`warp: "none"` 取消。

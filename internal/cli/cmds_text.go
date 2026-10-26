@@ -105,7 +105,7 @@ func newTextStyleCmd() *cobra.Command {
 			assign(style, "stroke", optStr(cmd, "stroke"))
 			assign(style, "textAlign", optStr(cmd, "align"))
 			assign(style, "lineHeight", optFloat(cmd, "line-height"))
-			assign(style, "charSpacing", optFloat(cmd, "letter-spacing"))
+			assign(style, "letterSpacing", optFloat(cmd, "letter-spacing"))
 			assign(style, "opacity", optFloat(cmd, "opacity"))
 			if len(style) == 0 {
 				return fmt.Errorf("至少给一个样式参数，用 --help 看有哪些")
@@ -123,7 +123,7 @@ func newTextStyleCmd() *cobra.Command {
 	cmd.Flags().StringVar(&stroke, "stroke", "", "描边：颜色[:粗细]")
 	cmd.Flags().StringVar(&align, "align", "", "对齐 left|center|right")
 	cmd.Flags().Float64Var(&lineH, "line-height", 0, "行高倍数")
-	cmd.Flags().Float64Var(&ls, "letter-spacing", 0, "字距")
+	cmd.Flags().Float64Var(&ls, "letter-spacing", 0, "字距（像素，与 CSS letter-spacing 一致）")
 	cmd.Flags().Float64Var(&opacity, "opacity", 0, "不透明度 0-1")
 	return cmd
 }

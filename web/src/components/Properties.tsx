@@ -9,6 +9,7 @@ import { keys } from '../editor/keys'
 import { ColorField, NumField, Section, Segmented, Select, Slider, Switch, Toggle } from './fields'
 import { ShapeFill } from './ShapeFill'
 import { readGradient } from '../render/gradient'
+import { DEFAULT_FONT_SIZE, letterSpacingPx } from '../render/text'
 
 /**
  * The right-hand panel: whatever the selection is, or the canvas when nothing
@@ -834,7 +835,7 @@ function PresetTile({ preset, onClick }: { preset: TextPreset; onClick: () => vo
           WebkitTextStroke: stroke.stroke ? `2px ${stroke.stroke}` : undefined,
           paintOrder: st.paintFirst ? 'stroke fill' : undefined,
           textShadow: shadow ? `${shadow.offsetX / 3}px ${shadow.offsetY / 3}px ${shadow.blur / 3}px ${shadow.color}` : undefined,
-          letterSpacing: st.charSpacing ? `${Number(st.charSpacing) / 100}em` : undefined,
+          letterSpacing: `${letterSpacingPx(st) / (Number(st.fontSize) || DEFAULT_FONT_SIZE)}em`,
         }}
       >
         {preset.name}
@@ -878,7 +879,7 @@ function TextSections({
         <Grid2>
           <NumField label="字号" value={Number(style.fontSize ?? 48)} min={1} testId="text-size" onCommit={(fontSize) => patch({ fontSize })} />
           <NumField label="行高" value={Number(style.lineHeight ?? 1.2)} step={0.05} min={0.5} max={4} onCommit={(lineHeight) => patch({ lineHeight })} />
-          <NumField label="字距" value={Number(style.charSpacing ?? 0)} onCommit={(charSpacing) => patch({ charSpacing })} />
+          <NumField label="字距" value={letterSpacingPx(style)} suffix="px" testId="text-letter-spacing" onCommit={(letterSpacing) => patch({ letterSpacing })} />
           <NumField label="内边距" value={Number(style.padding ?? 0)} min={0} onCommit={(padding) => patch({ padding })} />
         </Grid2>
         <Segmented

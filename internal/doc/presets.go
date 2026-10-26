@@ -50,7 +50,7 @@ var TextPresets = []TextPreset{
 	{Key: "red-box", Name: "红底白字", Style: map[string]any{"fill": "#ffffff", "textBackgroundColor": "#e5322d", "fontSize": 120.0, "fontWeight": 700.0, "padding": 24.0, "lineHeight": 1.3}},
 	{Key: "outline-black", Name: "黑描边", Style: map[string]any{"fill": "#ffffff", "stroke": "#000000", "strokeWidth": 8.0, "paintFirst": true, "fontSize": 132.0, "fontWeight": 900.0, "lineHeight": 1.2}},
 	{Key: "soft-shadow", Name: "柔和投影", Style: map[string]any{"fill": "#ffffff", "shadow": "rgba(0,0,0,.55):24:4:6", "fontSize": 128.0, "fontWeight": 700.0, "lineHeight": 1.25}},
-	{Key: "subtitle", Name: "小字副标题", Style: map[string]any{"fill": "rgba(255,255,255,.92)", "fontSize": 44.0, "fontWeight": 500.0, "charSpacing": 4.0, "lineHeight": 1.4}},
+	{Key: "subtitle", Name: "小字副标题", Style: map[string]any{"fill": "rgba(255,255,255,.92)", "fontSize": 44.0, "fontWeight": 500.0, "letterSpacing": 0.176, "lineHeight": 1.4}},
 	{Key: "marker", Name: "荧光笔", Style: map[string]any{"fill": "#1a1a1a", "textBackgroundColor": "#c6f135", "fontSize": 104.0, "fontWeight": 700.0, "padding": 16.0, "lineHeight": 1.35}},
 }
 

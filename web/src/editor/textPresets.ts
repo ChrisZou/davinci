@@ -72,7 +72,7 @@ export const textPresets: TextPreset[] = [
       fill: 'rgba(255,255,255,.92)',
       fontSize: 44,
       fontWeight: 500,
-      charSpacing: 4,
+      letterSpacing: 0.176,
       lineHeight: 1.4,
     },
   },

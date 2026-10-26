@@ -179,7 +179,7 @@ export class Renderer implements FaceLookup {
     const st = (l.style ?? {}) as Record<string, any>
     const stretch = Number(st.stretch) > 0 ? Number(st.stretch) : 1
     const wrap = Math.max(1, l.width / stretch)
-    const key = JSON.stringify([l.text, st.fontFamily, st.fontSize, st.fontWeight, st.fontStyle, st.lineHeight, st.charSpacing, wrap])
+    const key = JSON.stringify([l.text, st.fontFamily, st.fontSize, st.fontWeight, st.fontStyle, st.lineHeight, st.letterSpacing, st.charSpacing, wrap])
     const hit = this.layouts.get(l.id)
     if (hit && hit.key === key) return hit.layout
     const layout = layoutText(l, wrap, this, this.fonts)

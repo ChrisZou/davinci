@@ -219,7 +219,8 @@ davinci layer z 标题 front
 | `fill`（别名 `color`） | CSS 颜色 |
 | `textAlign` | `left`\|`center`\|`right` |
 | `lineHeight` | 倍数 |
-| `charSpacing` | 像素字距 |
+| `letterSpacing` | 额外字距，单位为画布像素；与 CSS `letter-spacing: Npx` 一致，不随字号变化，可为负数或小数。CLI 使用 `--letter-spacing` |
+| `charSpacing` | 兼容旧画稿：千分之一 em，像素值 = `charSpacing × fontSize / 1000`。新编辑使用 `letterSpacing` |
 | `shadow` | `"颜色:模糊:偏移x:偏移y"`，如 `"rgba(0,0,0,.6):18:4:4"` |
 | `textBackgroundColor` | 文字底色（封面标题高频） |
 | `stroke` | `"颜色[:粗细]"`，如 `"#000:8"` |

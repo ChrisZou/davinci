@@ -328,7 +328,7 @@ func checkParams(cmd map[string]any, allowed []string, what string) error {
 // layoutKey is what a text layer's height depends on.
 func layoutKey(l *Layer) string {
 	st := l.Style
-	b, _ := json.Marshal([]any{l.TextOf(), st["fontFamily"], st["fontSize"], st["fontWeight"], st["fontStyle"], st["lineHeight"], st["charSpacing"], st["stretch"], l.Width})
+	b, _ := json.Marshal([]any{l.TextOf(), st["fontFamily"], st["fontSize"], st["fontWeight"], st["fontStyle"], st["lineHeight"], st["letterSpacing"], st["charSpacing"], st["stretch"], l.Width})
 	return string(b)
 }
 

@@ -3,6 +3,7 @@ import type { Board, Document, Layer, LayerRow, ProjectDoc } from '../types'
 import { boardDocument } from '../types'
 import type { Renderer } from '../render/renderer'
 import { parseColour } from '../render/renderer'
+import { letterSpacingPx } from '../render/text'
 import { boundsOf, boxSize, centreOf, cornersOf, type Frame } from '../render/geometry'
 import { blobToDataURL, encodeBoard, getRenderer, type ImageFormat } from './ck'
 import { fontStack } from './fonts'
@@ -455,12 +456,15 @@ export class Editor {
     const z = this.z
     const fs = Number(st.fontSize) || 40
     const lh = Number(st.lineHeight) || 1.16
+    const spacing = letterSpacingPx(st)
     const stretch = Number(st.stretch) > 0 ? Number(st.stretch) : 1
     const inset = (f.strokeWidth / 2) * z
     const s = ed.ta.style
     s.left = `${l.x * z + this.tx}px`
     s.top = `${l.y * z + this.ty}px`
-    s.width = `${(l.width / stretch) * z + inset * 2}px`
+    // CSS includes trailing letter spacing; canvas measures only the gaps.
+    // Allow that trailing space so centred/right-aligned text stays in place.
+    s.width = `${Math.max(1, l.width / stretch + spacing) * z + inset * 2}px`
     s.padding = `${inset}px`
     s.transform = `rotate(${l.rotation || 0}deg) scaleX(${stretch})`
     s.fontFamily = fontStack(String(st.fontFamily ?? ''))
@@ -468,7 +472,7 @@ export class Editor {
     s.fontWeight = String(st.fontWeight ?? 400)
     s.fontStyle = st.fontStyle === 'italic' ? 'italic' : 'normal'
     s.lineHeight = `${1.13 * fs * lh * z}px`
-    s.letterSpacing = `${((Number(st.charSpacing) || 0) / 1000) * fs * z}px`
+    s.letterSpacing = `${spacing * z}px`
     s.textAlign = String(st.textAlign ?? 'left')
     s.color = String(st.fill ?? '#111111')
     s.caretColor = ACCENT
@@ -1123,6 +1127,7 @@ export class Editor {
     const props: Record<string, unknown> = { x: Math.round(gh.x ?? g.layer.x), y: Math.round(gh.y ?? g.layer.y), width: Math.round(gh.width ?? g.layer.width) }
     if (g.layer.type === 'text') {
       if (gh.style?.fontSize !== undefined) props.fontSize = gh.style.fontSize
+      if (gh.style?.letterSpacing !== undefined) props.letterSpacing = gh.style.letterSpacing
     } else if (!(g.layer.type === 'shape' && g.layer.shape?.kind === 'line')) {
       props.height = Math.round(gh.height ?? g.layer.height)
     }
@@ -1314,7 +1319,10 @@ export class Editor {
       if (corner) {
         const k = nw / w
         ghost.width = Math.max(8, l.width * k)
-        ghost.style = { fontSize: Math.max(1, Math.round((Number(st.fontSize) || 40) * k)) }
+        ghost.style = {
+          fontSize: Math.max(1, Math.round((Number(st.fontSize) || 40) * k)),
+          letterSpacing: letterSpacingPx(st) * k,
+        }
         nh = h * k
       } else {
         ghost.width = Math.max(8, l.width + (nw - w))

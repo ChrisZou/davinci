@@ -292,6 +292,9 @@ func bakeScale(l *Layer, sx, sy float64) {
 	switch l.Type {
 	case "text":
 		l.SetS("fontSize", math.Max(1, round(num(l.S("fontSize"), 40)*sy)))
+		if spacing := l.S("letterSpacing"); spacing != nil {
+			l.SetS("letterSpacing", nilIfZero(num(spacing, 0)*sy))
+		}
 		l.Width = math.Max(8, round(l.Width*sx))
 		if cw, w, ok := splitStroke(str(l.S("stroke"))); ok && cw != "" {
 			l.SetS("stroke", cw+":"+fnum(roundTo(w*sy, 1)))

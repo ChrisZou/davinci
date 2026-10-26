@@ -114,7 +114,7 @@ func newLayerAddTextCmd() *cobra.Command {
 			assign(style, "shadow", optStr(cmd, "shadow"))
 			assign(style, "textAlign", optStr(cmd, "align"))
 			assign(style, "lineHeight", optFloat(cmd, "line-height"))
-			assign(style, "charSpacing", optFloat(cmd, "letter-spacing"))
+			assign(style, "letterSpacing", optFloat(cmd, "letter-spacing"))
 			m := map[string]any{"type": "addText", "text": joinArgs(args)}
 			assign(m, "x", optFloat(cmd, "x"))
 			assign(m, "y", optFloat(cmd, "y"))
@@ -138,7 +138,7 @@ func newLayerAddTextCmd() *cobra.Command {
 	cmd.Flags().StringVar(&shadow, "shadow", "", "阴影：颜色:模糊:偏移x:偏移y")
 	cmd.Flags().StringVar(&align, "align", "", "对齐 left|center|right")
 	cmd.Flags().Float64Var(&lineH, "line-height", 0, "行高倍数")
-	cmd.Flags().Float64Var(&ls, "letter-spacing", 0, "字距")
+	cmd.Flags().Float64Var(&ls, "letter-spacing", 0, "字距（像素，与 CSS letter-spacing 一致）")
 	cmd.Flags().StringVar(&name, "name", "", "图层名称（默认用文字内容）")
 	return cmd
 }

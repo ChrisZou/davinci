@@ -17,7 +17,7 @@ import (
 var propKeys = []string{
 	"x", "y", "rotation", "opacity", "visible", "locked", "name",
 	"color", "fill", "fillGradient", "fontFamily", "fontSize", "fontWeight", "fontStyle", "textAlign",
-	"lineHeight", "charSpacing", "padding", "textBackgroundColor", "underline",
+	"lineHeight", "letterSpacing", "charSpacing", "padding", "textBackgroundColor", "underline",
 	"linethrough", "paintFirst", "shadow", "stroke", "strokeWidth", "cornerRadius",
 	"flipX", "flipY", "filters", "width", "height", "skew", "skewY", "stretch", "warp", "warpAmount", "warpBias",
 }
@@ -25,7 +25,7 @@ var propKeys = []string{
 // textStyleKeys is what addText's and setTextStyle's style bag may hold.
 var textStyleKeys = []string{
 	"fontFamily", "fontSize", "fontWeight", "fontStyle", "fill", "color", "textAlign",
-	"lineHeight", "charSpacing", "shadow", "textBackgroundColor", "stroke", "strokeWidth",
+	"lineHeight", "letterSpacing", "charSpacing", "shadow", "textBackgroundColor", "stroke", "strokeWidth",
 	"paintFirst", "underline", "linethrough", "padding", "skew", "skewY", "stretch", "warp", "warpAmount", "warpBias",
 }
 
@@ -97,6 +97,12 @@ func applyProps(l *Layer, props map[string]any) error {
 		}
 	}
 	if v, ok := props["fontSize"]; ok {
+		// Freeze legacy tracking at its current pixel value before changing size,
+		// so the pixel spacing shown in the panel behaves like CSS from now on.
+		if isText && l.S("letterSpacing") == nil && l.S("charSpacing") != nil {
+			l.SetS("letterSpacing", nilIfZero(num(l.S("charSpacing"), 0)*num(l.S("fontSize"), 40)/1000))
+			l.SetS("charSpacing", nil)
+		}
 		l.SetS("fontSize", math.Max(1, num(v, num(l.S("fontSize"), 40))))
 	}
 	if v, ok := props["fontWeight"]; ok {
@@ -118,6 +124,11 @@ func applyProps(l *Layer, props map[string]any) error {
 	}
 	if v, ok := props["charSpacing"]; ok {
 		l.SetS("charSpacing", nilIfZero(num(v, 0)))
+		l.SetS("letterSpacing", nil)
+	}
+	if v, ok := props["letterSpacing"]; ok {
+		l.SetS("letterSpacing", nilIfZero(num(v, 0)))
+		l.SetS("charSpacing", nil)
 	}
 	if v, ok := props["padding"]; ok {
 		l.SetS("padding", nilIfZero(math.Max(0, num(v, 0))))

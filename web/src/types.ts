@@ -14,6 +14,9 @@ export interface TextStyle {
   fill?: string
   textAlign?: 'left' | 'center' | 'right'
   lineHeight?: number
+  /** Extra space between characters in canvas pixels, like CSS letter-spacing. */
+  letterSpacing?: number
+  /** Legacy spacing in thousandths of an em; used only when letterSpacing is absent. */
   charSpacing?: number
   /** Textbox only: shadow as [color, blur, offsetX, offsetY]. */
   shadow?: string

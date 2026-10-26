@@ -1,5 +1,5 @@
 import type { CanvasKit, Font, Typeface } from 'canvaskit-wasm'
-import type { Layer } from '../types'
+import type { Layer, TextStyle } from '../types'
 
 /**
  * Text layout for a text layer — the same rules Fabric.js applied when these
@@ -9,8 +9,9 @@ import type { Layer } from '../types'
  *    the last;
  *  - a line's baseline sits 1.13 × fontSize × (1 − 0.222) below its top,
  *    whatever the font's own ascent says;
- *  - letter spacing (charSpacing, in thousandths of an em) follows every
- *    character, and the last one's is not counted in the line's width.
+ *  - letter spacing follows every character, and the last one's is not
+ *    counted in the line's width. New edits use canvas pixels; legacy
+ *    charSpacing values are still read as thousandths of an em.
  *
  * Wrapping improves on Fabric's (which only broke at spaces, so a long
  * Chinese line never wrapped and widened its box instead): lines also break
@@ -22,6 +23,13 @@ export const FONT_SIZE_MULT = 1.13
 export const FONT_SIZE_FRACTION = 0.222
 export const DEFAULT_LINE_HEIGHT = 1.16
 export const DEFAULT_FONT_SIZE = 40
+/** Shared by canvas layout, the HTML text editor and the properties panel. */
+export function letterSpacingPx(style: TextStyle): number {
+  if (style.letterSpacing != null && Number.isFinite(Number(style.letterSpacing))) return Number(style.letterSpacing)
+  const fs = Number(style.fontSize) > 0 ? Number(style.fontSize) : DEFAULT_FONT_SIZE
+  return (Number(style.charSpacing) || 0) * fs / 1000
+}
+
 /** Chrome's synthetic italic: glyphs sheared by a quarter of their height. */
 export const SYNTHETIC_ITALIC_SKEW = -0.25
 
@@ -138,7 +146,7 @@ export function layoutText(l: Layer, wrapWidth: number, faces: FaceLookup, fonts
   const st = (l.style ?? {}) as Record<string, any>
   const fs = Number(st.fontSize) > 0 ? Number(st.fontSize) : DEFAULT_FONT_SIZE
   const lh = Number(st.lineHeight) > 0 ? Number(st.lineHeight) : DEFAULT_LINE_HEIGHT
-  const spacing = (Number(st.charSpacing) || 0) * fs / 1000
+  const spacing = letterSpacingPx(st)
   const weight = numericWeight(st.fontWeight)
   const italic = st.fontStyle === 'italic'
   const family = String(st.fontFamily || faces.fallbacks[0] || '')
