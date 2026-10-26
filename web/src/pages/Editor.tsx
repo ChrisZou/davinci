@@ -23,6 +23,7 @@ import {
   type ZMove,
 } from '../editor/keyboard'
 import { Properties } from '../components/Properties'
+import { CoverProperties, type CoverMetadata } from '../components/CoverProperties'
 import { CommentsPanel } from '../components/CommentsPanel'
 import { SelectionComment } from '../components/SelectionComment'
 import { useEditComments } from '../components/useEditComments'
@@ -76,6 +77,7 @@ export function Editor({ projectID }: { projectID: string }) {
   const [stripOpen, setStripOpen] = useFilmstripOpen()
   const [name, setName] = useState('')
   const [isTemplate, setIsTemplate] = useState(false)
+  const [coverMetadata, setCoverMetadata] = useState<CoverMetadata | null>(null)
   /** A template opens for viewing; 编辑模板 switches it to normal editing. */
   const [editTemplate, setEditTemplate] = useState(() => new URLSearchParams(location.search).has('edit'))
   const [starting, setStarting] = useState(false)
@@ -132,6 +134,8 @@ export function Editor({ projectID }: { projectID: string }) {
         if (!alive) return
         setName(p.name)
         setIsTemplate(p.kind === 'template')
+        const { source, author, likes, link, note, tags } = p
+        setCoverMetadata({ source, author, likes, link, note, tags })
         document.title = `${p.name} · DaVinci`
 
         const session = new Session(projectID, {
@@ -510,7 +514,7 @@ export function Editor({ projectID }: { projectID: string }) {
         )}
       </header>
 
-      <div className="flex min-h-0 flex-1 px-5 pb-5">
+      <div className={`flex min-h-0 flex-1 px-5 pb-5 ${viewOnly ? 'flex-col md:flex-row' : ''}`}>
         {showPanels && !viewOnly && (
           <aside className="card flex w-[252px] shrink-0 flex-col overflow-hidden">
             <LayerPanel rows={rows} doc={doc} selected={selected} onSelect={select} onRun={run} onContextMenu={(e, id) => {
@@ -522,7 +526,7 @@ export function Editor({ projectID }: { projectID: string }) {
         )}
 
         <div
-          className="relative min-w-0 flex-1"
+          className="relative min-h-0 min-w-0 flex-1"
           ref={stageRef}
           data-testid="stage"
           onContextMenu={(e) => {
@@ -600,6 +604,7 @@ export function Editor({ projectID }: { projectID: string }) {
           )}
         </div>
 
+        {showPanels && viewOnly && coverMetadata && <CoverProperties metadata={coverMetadata} />}
         {showPanels && !viewOnly && (
           <aside className={`card flex shrink-0 flex-col overflow-hidden ${rightPanel === 'comments' ? 'w-[320px]' : 'w-[280px]'}`}>
             <div className="flex shrink-0 gap-1 border-b border-line p-2" aria-label="编辑面板">
