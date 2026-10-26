@@ -48,13 +48,16 @@ export function ShapeFill({ style, palette, onChange }: {
               </svg>
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-3">
             {gradient.stops.map((s, i) => (
-              <div key={i} className="flex min-w-0 flex-col gap-2">
+              <div key={i} className="grid grid-cols-[minmax(0,1fr)_80px] items-start gap-2">
                 <ColorField label={i === 0 ? '起点' : '终点'} value={s.color} showPalettes={false} testId={`gradient-color-${i}`} onCommit={(color) => {
                   if (color.trim() && CSS.supports('color', color)) stop(i, { color })
                 }} />
-                <NumField label="不透明度" value={s.opacity} min={0} max={1} scale={100} suffix="%" testId={`gradient-opacity-${i}`} onCommit={(opacity) => stop(i, { opacity })} />
+                <div className="flex min-w-0 flex-col gap-2">
+                  <span className="text-xs text-muted">不透明度</span>
+                  <NumField label="" ariaLabel={`${i === 0 ? '起点' : '终点'}不透明度`} value={s.opacity} min={0} max={1} scale={100} suffix="%" testId={`gradient-opacity-${i}`} onCommit={(opacity) => stop(i, { opacity })} />
+                </div>
               </div>
             ))}
           </div>

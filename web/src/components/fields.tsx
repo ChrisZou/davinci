@@ -30,6 +30,7 @@ export function NumField({
   suffix,
   scale = 1,
   testId,
+  ariaLabel,
 }: {
   label: string
   value: number
@@ -41,6 +42,7 @@ export function NumField({
   /** Displays value×scale and commits the typed number ÷ scale (percentages). */
   scale?: number
   testId?: string
+  ariaLabel?: string
 }) {
   const shown = Math.round(value * scale * 100) / 100
   const [draft, setDraft] = useState(String(shown))
@@ -63,12 +65,13 @@ export function NumField({
 
   return (
     <label className="flex h-9 min-w-0 flex-1 cursor-text items-center justify-between gap-2 rounded-[10px] bg-paper px-3 focus-within:ring-2 focus-within:ring-accent/30">
-      <span className="shrink-0 text-xs text-muted">{label}</span>
+      {label && <span className="shrink-0 text-xs text-muted">{label}</span>}
       <span className="flex min-w-0 items-center gap-0.5">
         <input
           type="number"
           step={step}
           data-testid={testId}
+          aria-label={ariaLabel}
           className="w-full min-w-0 bg-transparent text-right text-[13px] tabular-nums text-ink outline-none"
           value={draft}
           onFocus={(e) => {
