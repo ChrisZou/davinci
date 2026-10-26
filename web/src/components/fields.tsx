@@ -24,6 +24,7 @@ export function NumField({
   label,
   value,
   onCommit,
+  onPreview,
   step = 1,
   min,
   max,
@@ -35,6 +36,8 @@ export function NumField({
   label: string
   value: number
   onCommit: Commit<number>
+  /** Preview while typing; null cancels an incomplete or abandoned input. */
+  onPreview?: (value: number | null) => void
   step?: number
   min?: number
   max?: number
@@ -47,19 +50,29 @@ export function NumField({
   const shown = Math.round(value * scale * 100) / 100
   const [draft, setDraft] = useState(String(shown))
   const [focused, setFocused] = useState(false)
+  const preview = useRef(onPreview)
+  preview.current = onPreview
+  useEffect(() => () => preview.current?.(null), [])
   useEffect(() => {
     if (!focused) setDraft(String(shown))
   }, [shown, focused])
 
-  const commit = (raw: string) => {
+  const parse = (raw: string) => {
     const n = Number(raw)
-    if (!Number.isFinite(n) || raw.trim() === '') {
-      setDraft(String(shown))
-      return
-    }
+    if (!Number.isFinite(n) || raw.trim() === '') return null
     let next = n / scale
     if (min !== undefined) next = Math.max(min, next)
     if (max !== undefined) next = Math.min(max, next)
+    return next
+  }
+
+  const commit = (raw: string) => {
+    const next = parse(raw)
+    if (next === null) {
+      setDraft(String(shown))
+      onPreview?.(null)
+      return
+    }
     onCommit(next)
   }
 
@@ -78,7 +91,10 @@ export function NumField({
             setFocused(true)
             e.target.select()
           }}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            onPreview?.(parse(e.target.value))
+          }}
           onBlur={() => {
             setFocused(false)
             commit(draft)
@@ -86,7 +102,6 @@ export function NumField({
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault()
-              commit(draft)
               ;(e.target as HTMLInputElement).blur()
             }
           }}

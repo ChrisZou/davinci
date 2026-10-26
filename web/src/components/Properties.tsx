@@ -35,8 +35,8 @@ export interface PanelProps {
   onPickFromLibrary?: (layer: Layer) => void
   /** Opens the crop dialog for an image layer. */
   onCrop: (layer: Layer) => void
-  /** Shows a slider's value on the canvas before it is committed. */
-  onPreview: (id: string, key: 'opacity' | 'filters', value: number | Record<string, number>) => void
+  /** Shows a control's value on the canvas before it is committed; null cancels it. */
+  onPreview: (id: string, key: 'opacity' | 'filters' | 'letterSpacing', value: number | Record<string, number> | null) => void
 }
 
 /**
@@ -725,7 +725,7 @@ function LayerSection(props: PanelProps & { layer: Layer }) {
         </div>
       </Section>
 
-      {layer.type === 'text' && <TextSections layer={layer} patch={patch} onRun={onRun} palette={palette} />}
+      {layer.type === 'text' && <TextSections key={layer.id} layer={layer} patch={patch} onRun={onRun} onPreview={props.onPreview} palette={palette} />}
       {layer.type === 'image' && <ImageSections {...props} layer={layer} />}
       {layer.type === 'shape' && layer.shape?.kind === 'line' && <LineSection layer={layer} onRun={onRun} palette={palette} />}
       {layer.type === 'shape' && layer.shape?.kind !== 'line' && <ShapeSection layer={layer} onRun={onRun} palette={palette} />}
@@ -848,11 +848,13 @@ function TextSections({
   layer,
   patch,
   onRun,
+  onPreview,
   palette,
 }: {
   layer: Layer
   patch: (props: Record<string, unknown>) => void
   onRun: (cmd: unknown) => void
+  onPreview: PanelProps['onPreview']
   palette: string[]
 }) {
   const style = (layer.style ?? {}) as Record<string, any>
@@ -879,7 +881,14 @@ function TextSections({
         <Grid2>
           <NumField label="字号" value={Number(style.fontSize ?? 48)} min={1} testId="text-size" onCommit={(fontSize) => patch({ fontSize })} />
           <NumField label="行高" value={Number(style.lineHeight ?? 1.2)} step={0.05} min={0.5} max={4} onCommit={(lineHeight) => patch({ lineHeight })} />
-          <NumField label="字距" value={letterSpacingPx(style)} suffix="px" testId="text-letter-spacing" onCommit={(letterSpacing) => patch({ letterSpacing })} />
+          <NumField
+            label="字距"
+            value={letterSpacingPx(style)}
+            suffix="px"
+            testId="text-letter-spacing"
+            onPreview={(value) => onPreview(layer.id, 'letterSpacing', value)}
+            onCommit={(letterSpacing) => patch({ letterSpacing })}
+          />
           <NumField label="内边距" value={Number(style.padding ?? 0)} min={0} onCommit={(padding) => patch({ padding })} />
         </Grid2>
         <Segmented

@@ -185,7 +185,7 @@ export class Editor {
   private panFrom: Pt = { x: 0, y: 0 }
   /** Gesture results waiting for the server, by layer. */
   private ghosts = new Map<string, Ghost>()
-  /** Slider values being dragged, by layer. */
+  /** Control values being adjusted, by layer. */
   private previews = new Map<string, Ghost>()
   private editing: { id: string; ta: HTMLTextAreaElement; done: boolean } | null = null
 
@@ -323,15 +323,23 @@ export class Editor {
   // --- live previews -----------------------------------------------------
 
   /**
-   * Shows a value while a slider is still being dragged. A slider only sends
-   * its command when it settles (one undo step, not hundreds); until then the
+   * Shows a value while a control is being adjusted. It only sends its
+   * command when it settles (one undo step, not hundreds); until then the
    * canvas shows the value from here.
    */
-  preview(id: string, key: 'opacity' | 'filters', value: number | Record<string, number>) {
+  preview(id: string, key: 'opacity' | 'filters' | 'letterSpacing', value: number | Record<string, number> | null) {
     const g: Ghost = { ...(this.previews.get(id) ?? {}) }
-    if (key === 'opacity') g.opacity = Math.max(0, Math.min(1, Number(value)))
-    else g.style = { ...(g.style ?? {}), filters: value }
-    this.previews.set(id, g)
+    if (value === null) {
+      if (key === 'opacity') delete g.opacity
+      else {
+        g.style = { ...(g.style ?? {}) }
+        delete g.style[key]
+        if (!Object.keys(g.style).length) delete g.style
+      }
+    } else if (key === 'opacity') g.opacity = Math.max(0, Math.min(1, Number(value)))
+    else g.style = { ...(g.style ?? {}), [key]: value }
+    if (Object.keys(g).length) this.previews.set(id, g)
+    else this.previews.delete(id)
     this.render()
   }
 
