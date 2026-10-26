@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { Document, Layer, LayerRow } from '../types'
+import { gradientCSS, readGradient } from '../render/gradient'
 
 /**
  * The layer list, front-to-back.
@@ -257,7 +258,8 @@ function Thumb({ layer, type }: { layer?: Layer; type: Layer['type'] }) {
   }
   if (type === 'shape') {
     const kind = layer?.shape?.kind ?? 'rect'
-    const fill = String(style.fill ?? '#999')
+    const gradient = readGradient(style.fillGradient)
+    const fill = gradient ? gradientCSS(gradient) : String(style.fill ?? '#999')
     const shape =
       kind === 'ellipse' ? 'rounded-full' : kind === 'triangle' ? '' : style.cornerRadius ? 'rounded-[3px]' : ''
     return (

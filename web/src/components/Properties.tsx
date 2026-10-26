@@ -7,6 +7,8 @@ import { parseStroke, parseShadow } from '../editor/style'
 import { DEFAULT_SHEAR, SHEAR, WARPS, warpShape } from '../editor/warp'
 import { keys } from '../editor/keys'
 import { ColorField, NumField, Section, Segmented, Select, Slider, Switch, Toggle } from './fields'
+import { ShapeFill } from './ShapeFill'
+import { readGradient } from '../render/gradient'
 
 /**
  * The right-hand panel: whatever the selection is, or the canvas when nothing
@@ -75,6 +77,7 @@ function docColours(doc: Document): string[] {
     for (const l of layers) {
       const st = (l.style ?? {}) as Record<string, unknown>
       add(st.fill)
+      readGradient(st.fillGradient)?.stops.forEach((stop) => add(stop.color))
       add(st.textBackgroundColor)
       add(parseStroke(st.stroke as string | undefined).stroke)
       if (l.children) walk(l.children)
@@ -1115,12 +1118,11 @@ function ShapeSection({ layer, onRun, palette }: { layer: Layer; onRun: (cmd: un
   const hasStroke = !!style.stroke && Number(style.strokeWidth) > 0
   return (
     <Section title="外观">
-      <ColorField
-        label="填充"
+      <ShapeFill
+        key={layer.id}
         palette={palette}
-        value={String(style.fill ?? '#000000')}
-        testId="shape-fill"
-        onCommit={(fill) => onRun({ type: 'setShapeProps', id: layer.id, fill })}
+        style={style}
+        onChange={(props) => onRun({ type: 'setShapeProps', id: layer.id, ...props })}
       />
       <ColorField
         label="描边"

@@ -94,7 +94,7 @@ davinci canvas bg --image ~/Pictures/bg.jpg
 |---|---|---|
 | `addText` | `text`**必填** `x` `y` `width` `style` `name` | 默认放画布中部，颜色按背景自动选深/浅 |
 | `addImage` | `url` \| `path` `x` `y` `width` `height` `name` | 默认按原始尺寸，居中 |
-| `addShape` | `kind` `x``y``width``height`**必填** `fill` `stroke` `strokeWidth` `cornerRadius` `opacity` | `kind` ∈ `rect`\|`ellipse`\|`triangle` |
+| `addShape` | `kind` `x``y``width``height`**必填** `fill` `fillGradient` `stroke` `strokeWidth` `cornerRadius` `opacity` | `kind` ∈ `rect`\|`ellipse`\|`triangle` |
 | `duplicateLayer` | `id`**必填** `x` `y` | 副本落在原图层上方，默认略偏移 |
 | `removeLayer` | `id`**必填** | 删 |
 | `renameLayer` | `id``name`**必填** | 重命名 |
@@ -281,7 +281,16 @@ davinci image replace 人像 ~/Pictures/new.jpg
 
 ## 形状
 
-`setShapeProps`：`id` `fill` `stroke` `strokeWidth` `cornerRadius`。
+`setShapeProps`：`id` `fill` `fillGradient` `stroke` `strokeWidth` `cornerRadius`。
+
+矩形（含圆角）、椭圆和三角形支持两端线性渐变。`fillGradient` 的格式如下，也可用于 `addShape` 或 `updateLayer.props`：
+
+```json
+{"type":"setShapeProps","id":"色块","fillGradient":{"type":"linear","angle":180,"stops":[{"color":"#000000","opacity":0},{"color":"#000000","opacity":1}]}}
+```
+
+`angle` 默认 180°；0° 向上、90° 向右、180° 向下、270° 向左，随图层一起旋转。两端各有 `color` 和 `opacity`（0–1，默认 1）。渐变按形状尺寸铺满，缩放、圆角和导出保持一致。
+设置 `fillGradient:null` 恢复原来的纯色；直接设置 `fill` 或 `color` 也会清除渐变。同一次编辑同时设置纯色和渐变时，优先使用渐变。直线不支持渐变填充。
 
 ```bash
 davinci exec '{"type":"setShapeProps","id":"色块","fill":"#e5322d","cornerRadius":16}'

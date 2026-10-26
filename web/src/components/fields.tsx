@@ -107,6 +107,7 @@ export function ColorField({
   testId,
   allowNone,
   palette,
+  showPalettes = true,
 }: {
   label: string
   value: string
@@ -120,6 +121,8 @@ export function ColorField({
   allowNone?: boolean
   /** Colours already used in the document, offered as swatches. */
   palette?: string[]
+  /** Compact controls (such as gradient endpoints) can omit palette suggestions. */
+  showPalettes?: boolean
 }) {
   const { items: savedPalettes } = usePalettes()
   const [expanded, setExpanded] = useState(false)
@@ -184,7 +187,7 @@ export function ColorField({
           </button>
         )}
       </div>
-      {swatches.length > 0 && (
+      {showPalettes && swatches.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {swatches.map((c) => (
             <button
@@ -199,7 +202,7 @@ export function ColorField({
           ))}
         </div>
       )}
-      {mine.length > 0 && (
+      {showPalettes && mine.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between text-[11px] text-muted">
             <span>我的配色</span>

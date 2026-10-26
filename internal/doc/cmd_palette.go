@@ -106,6 +106,7 @@ func init() {
 					}
 					if background {
 						l.SetS("fill", colors.BG)
+						l.SetS("fillGradient", nil)
 						continue
 					}
 					fill, stroke := colors.Highlight, colors.Accent
@@ -116,6 +117,7 @@ func init() {
 					if l.Shape == nil || l.Shape.Kind != "line" {
 						if f := str(l.S("fill")); f != "none" && f != "transparent" && f != "" {
 							l.SetS("fill", fill)
+							l.SetS("fillGradient", nil)
 						}
 					}
 					if s := str(l.S("stroke")); s != "" && s != "none" && s != "transparent" {

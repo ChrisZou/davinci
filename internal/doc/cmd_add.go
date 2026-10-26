@@ -176,6 +176,7 @@ func init() {
 			{Name: "width", Type: "number", Desc: "宽", Required: true},
 			{Name: "height", Type: "number", Desc: "高", Required: true},
 			{Name: "fill", Type: "string", Desc: "填充色", Default: "#e5322d"},
+			gradientParam,
 			{Name: "stroke", Type: "string", Desc: "描边色"},
 			{Name: "strokeWidth", Type: "number", Desc: "描边宽度"},
 			{Name: "cornerRadius", Type: "number", Desc: "圆角（矩形）"},
@@ -237,6 +238,11 @@ func init() {
 				X: round(num(cmd["x"], 0)), Y: round(num(cmd["y"], 0)), Width: width, Height: height,
 				Opacity: clamp(num(cmd["opacity"], 1), 0, 1), Visible: true,
 				Shape: &ShapeRef{Kind: kind}, Style: style,
+			}
+			if value, ok := cmd["fillGradient"]; ok {
+				if err := setFillGradient(l, value); err != nil {
+					return nil, err
+				}
 			}
 			c.B.Layers = append(c.B.Layers, l)
 			return map[string]any{"id": l.ID, "name": l.Name, "type": l.Type}, nil

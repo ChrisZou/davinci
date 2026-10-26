@@ -16,7 +16,7 @@ import (
 // a typo is an error rather than a silent no-op.
 var propKeys = []string{
 	"x", "y", "rotation", "opacity", "visible", "locked", "name",
-	"color", "fill", "fontFamily", "fontSize", "fontWeight", "fontStyle", "textAlign",
+	"color", "fill", "fillGradient", "fontFamily", "fontSize", "fontWeight", "fontStyle", "textAlign",
 	"lineHeight", "charSpacing", "padding", "textBackgroundColor", "underline",
 	"linethrough", "paintFirst", "shadow", "stroke", "strokeWidth", "cornerRadius",
 	"flipX", "flipY", "filters", "width", "height", "skew", "skewY", "stretch", "warp", "warpAmount", "warpBias",
@@ -82,7 +82,13 @@ func applyProps(l *Layer, props map[string]any) error {
 				l.SetS("stroke", c)
 			} else {
 				l.SetS("fill", c)
+				l.SetS("fillGradient", nil)
 			}
+		}
+	}
+	if v, ok := props["fillGradient"]; ok {
+		if err := setFillGradient(l, v); err != nil {
+			return err
 		}
 	}
 	if v, ok := props["fontFamily"]; ok {

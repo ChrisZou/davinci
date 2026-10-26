@@ -59,6 +59,8 @@ export interface ImageStyle {
 
 export interface ShapeStyle {
   fill?: string
+  /** Overrides the solid fill until it is removed. Angles follow CSS: 0° up, 90° right. */
+  fillGradient?: LinearGradient
   stroke?: string
   strokeWidth?: number
   cornerRadius?: number
@@ -66,6 +68,17 @@ export interface ShapeStyle {
   lineStyle?: 'solid' | 'dashed'
   /** Line shapes only: arrowheads — none, at the right end, or at both ends. */
   arrow?: 'none' | 'end' | 'both'
+}
+
+export interface GradientStop {
+  color: string
+  opacity: number
+}
+
+export interface LinearGradient {
+  type: 'linear'
+  angle: number
+  stops: [GradientStop, GradientStop]
 }
 
 export interface Layer {

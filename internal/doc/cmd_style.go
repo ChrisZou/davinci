@@ -222,9 +222,10 @@ func init() {
 	})
 
 	define(Spec{
-		Type: "setShapeProps", Summary: "修改形状：填充、描边、圆角；直线的颜色（stroke）、粗细（strokeWidth）、线型、箭头",
+		Type: "setShapeProps", Summary: "修改形状：纯色或渐变填充、描边、圆角；直线的颜色（stroke）、粗细（strokeWidth）、线型、箭头",
 		Params: []Param{REF,
 			{Name: "fill", Type: "string", Desc: "填充色"},
+			gradientParam,
 			{Name: "stroke", Type: "string", Desc: "描边色（直线：线的颜色）"},
 			{Name: "strokeWidth", Type: "number", Desc: "描边宽度（直线：线的粗细）"},
 			{Name: "cornerRadius", Type: "number", Desc: "圆角"},
@@ -245,6 +246,12 @@ func init() {
 					l.SetS("stroke", colour(cmd["fill"], str(l.S("stroke"))))
 				} else if !line {
 					l.SetS("fill", colour(cmd["fill"], str(l.S("fill"))))
+					l.SetS("fillGradient", nil)
+				}
+			}
+			if value, ok := cmd["fillGradient"]; ok {
+				if err := setFillGradient(l, value); err != nil {
+					return nil, err
 				}
 			}
 			if has(cmd, "stroke") {

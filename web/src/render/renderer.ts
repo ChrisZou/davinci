@@ -2,6 +2,7 @@ import type { Canvas, CanvasKit, Image, ImageFilter, Paint } from 'canvaskit-was
 import type { Board, Layer } from '../types'
 import { contentMatrix, frameOf, membersBox, type Frame, type Mat } from './geometry'
 import { FontCache, layoutText, numericWeight, textFaces, type Face, type FaceLookup, type TextLayout } from './text'
+import { gradientLine, readGradient } from './gradient'
 
 /**
  * The davinci renderer: turns a board of the document into pixels with
@@ -357,7 +358,20 @@ export class Renderer implements FaceLookup {
     const fill = parseColour(ck, st.fill)
     const p = new ck.Paint()
     p.setAntiAlias(true)
-    if (fill) {
+    const gradient = readGradient(st.fillGradient)
+    if (gradient) {
+      const [start, end] = gradientLine(w, h, gradient.angle)
+      const colors = gradient.stops.map((stop) => {
+        const color = ck.parseColorString(stop.color)
+        color[3] *= stop.opacity
+        return color
+      })
+      const shader = ck.Shader.MakeLinearGradient(start, end, colors, [0, 1], ck.TileMode.Clamp, undefined, 1)
+      p.setShader(shader)
+      canvas.drawPath(path, p)
+      p.setShader(null)
+      shader.delete()
+    } else if (fill) {
       p.setColor(fill)
       canvas.drawPath(path, p)
     }
