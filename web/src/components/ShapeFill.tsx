@@ -54,7 +54,7 @@ export function ShapeFill({ style, palette, onChange }: {
                 <ColorField label={i === 0 ? '起点' : '终点'} value={s.color} showPalettes={false} testId={`gradient-color-${i}`} onCommit={(color) => {
                   if (color.trim() && CSS.supports('color', color)) stop(i, { color })
                 }} />
-                <div className="flex min-w-0 flex-col gap-2">
+                <div className="flex min-w-0 flex-col gap-2 [&>label]:h-8 [&>label]:flex-none">
                   <span className="text-xs text-muted">不透明度</span>
                   <NumField label="" ariaLabel={`${i === 0 ? '起点' : '终点'}不透明度`} value={s.opacity} min={0} max={1} scale={100} suffix="%" testId={`gradient-opacity-${i}`} onCommit={(opacity) => stop(i, { opacity })} />
                 </div>
