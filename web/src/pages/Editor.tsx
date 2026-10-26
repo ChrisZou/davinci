@@ -5,6 +5,7 @@ import { navigate } from '../App'
 import { Session, type SaveState } from '../editor/bridge'
 import { IS_MAC, keys as shortcut } from '../editor/keys'
 import { loadFonts } from '../editor/fonts'
+import { copyImageToClipboard } from '../editor/imageClipboard'
 import {
   applyPaste,
   clipText,
@@ -512,7 +513,11 @@ export function Editor({ projectID }: { projectID: string }) {
       <div className="flex min-h-0 flex-1 px-5 pb-5">
         {showPanels && !viewOnly && (
           <aside className="card flex w-[252px] shrink-0 flex-col overflow-hidden">
-            <LayerPanel rows={rows} doc={doc} selected={selected} onSelect={select} onRun={run} />
+            <LayerPanel rows={rows} doc={doc} selected={selected} onSelect={select} onRun={run} onContextMenu={(e, id) => {
+              if (!session) return
+              if (!session.editor.selectionIDs().includes(id)) select([id])
+              setMenu({ x: e.clientX, y: e.clientY, target: id })
+            }} />
           </aside>
         )}
 
@@ -1126,6 +1131,7 @@ function ContextMenu({
   const ids = layers.map((l) => l.id)
   const groups = layers.filter((l) => l.type === 'group')
   const single = layers.length === 1 ? layers[0] : undefined
+  const imageTarget = layers.find((l) => l.id === menu.target && l.type === 'image')
   const allLocked = layers.length > 0 && layers.every((l) => l.locked)
   const allHidden = layers.length > 0 && layers.every((l) => !l.visible)
 
@@ -1147,12 +1153,22 @@ function ContextMenu({
       onLog(shortcut(`✗ 读取剪贴板失败：${e?.message ?? e}（可以直接按 ⌘V）`))
     }
   }
+  const copyImage = async () => {
+    if (!imageTarget?.image?.url) return
+    try {
+      await copyImageToClipboard(imageTarget.image.url)
+      onLog('✓ 已复制图片到剪贴板')
+    } catch (e: any) {
+      onLog(`✗ 复制图片失败：${e?.message ?? e}`)
+    }
+  }
   const z = (type: ZMove) => act(() => host.run(zOrderCommand(editor, ids, type)))
 
   type Entry = { label: string; keys?: string; run: () => void; danger?: boolean; disabled?: boolean } | 'sep'
   const entries: Entry[] = layers.length
     ? [
         { label: '复制', keys: '⌘C', run: act(copy) },
+        ...(imageTarget?.image?.url ? [{ label: '复制图片', run: act(copyImage) }] : []),
         {
           label: '剪切',
           keys: '⌘X',

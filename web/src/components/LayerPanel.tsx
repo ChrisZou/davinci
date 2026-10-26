@@ -14,12 +14,14 @@ export function LayerPanel({
   selected,
   onSelect,
   onRun,
+  onContextMenu,
 }: {
   rows: LayerRow[]
   doc: Document
   selected: string[]
   onSelect: (ids: string[]) => void
   onRun: (cmd: unknown) => void
+  onContextMenu: (event: React.MouseEvent, id: string) => void
 }) {
   const [drag, setDrag] = useState<string | null>(null)
   const [over, setOver] = useState<{ id: string; above: boolean } | null>(null)
@@ -108,6 +110,11 @@ export function LayerPanel({
                 isSel ? 'bg-accent-soft' : 'hover:bg-paper'
               } ${drag === r.id ? 'opacity-40' : ''}`}
               onClick={(e) => click(e, r.id)}
+              onContextMenu={(e) => {
+                if (renaming === r.id) return
+                e.preventDefault()
+                onContextMenu(e, r.id)
+              }}
             >
               {over?.id === r.id && drag && drag !== r.id && (
                 <span
