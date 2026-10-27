@@ -169,7 +169,7 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (standDown(e.target)) return
+    if (e.isComposing || standDown(e.target)) return
     const meta = e.metaKey || e.ctrlKey
     const sel = ed.selectionIDs()
     const key = e.key
@@ -238,6 +238,17 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
         if (groups.length) void runAndSelect(host, ungroupCommand(groups.map((g) => g.id)))
       } else if (sel.length > 1) {
         void runAndSelect(host, { type: 'groupLayers', ids: sel })
+      }
+      return
+    }
+
+    // --- visibility (V keeps hidden layers selected so it can show them again) ---
+    if (!meta && !e.altKey && !e.shiftKey && lower === 'v' && sel.length) {
+      e.preventDefault()
+      if (!e.repeat) {
+        const layers = selectedLayers(ed)
+        const visible = layers.every((l) => !l.visible)
+        if (layers.length) void host.run(each(layers.map((l) => l.id), (id) => ({ type: 'setVisible', id, visible })))
       }
       return
     }

@@ -1202,6 +1202,7 @@ function ContextMenu({
         },
         {
           label: allHidden ? '显示' : '隐藏',
+          keys: 'V',
           run: act(() => host.run({ type: 'batch', commands: ids.map((id) => ({ type: 'setVisible', id, visible: allHidden })) })),
         },
         { label: '删除', keys: '⌫', danger: true, run: act(() => host.run(removeCommand(ids))) },
@@ -1258,6 +1259,7 @@ const SHORTCUTS: [string, [string, string][]][] = [
       ['⌘Z / ⇧⌘Z', '撤销 / 重做'],
       ['⌘C / ⌘X / ⌘V', '复制 / 剪切 / 粘贴（可跨项目）'],
       ['⌘D', '创建副本'],
+      ['V', '显示 / 隐藏图层'],
       ['⌫', '删除'],
       ['⌘G / ⇧⌘G', '编组 / 解散编组'],
       ['⌘] / ⌘[', '上移 / 下移一层'],

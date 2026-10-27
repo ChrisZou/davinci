@@ -149,7 +149,7 @@ export function LayerPanel({
               </span>
               <button
                 className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-faint hover:bg-card hover:text-ink ${r.visible ? 'opacity-0 group-hover:opacity-100' : ''}`}
-                title={r.visible ? '隐藏' : '显示'}
+                title={r.visible ? '隐藏（V）' : '显示（V）'}
                 aria-label={r.visible ? '隐藏' : '显示'}
                 onClick={(e) => {
                   e.stopPropagation()
