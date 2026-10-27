@@ -80,7 +80,15 @@ export function Filmstrip({ project, open, onOpen, onRun, readOnly }: Props) {
   }, [menu])
 
   return (
-    <div className="pointer-events-none absolute inset-x-5 bottom-5 z-10 flex flex-col items-center gap-2" data-testid="filmstrip">
+    <div
+      className="pointer-events-none absolute inset-x-5 bottom-5 z-10 flex flex-col items-center gap-2"
+      data-testid="filmstrip"
+      onContextMenu={(e) => {
+        // Board controls and their menu must not also open the stage's menu.
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+    >
       {open ? (
         <div className="island pointer-events-auto flex max-w-full items-end gap-2 overflow-x-auto rounded-2xl p-2.5">
           {boards.map((b, i) => {
