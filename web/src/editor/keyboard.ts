@@ -203,7 +203,18 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
       return
     }
 
-    // Viewing only: zoom and pan above, nothing that edits below.
+    // Selection is available for inspection too.
+    if (meta && lower === 'a') {
+      e.preventDefault()
+      host.select(ed.selectableIDs())
+      return
+    }
+    if (key === 'Escape') {
+      host.select([])
+      return
+    }
+
+    // Viewing only: navigation and selection above, nothing that edits below.
     if (ed.readOnly) return
 
     // --- history ---
@@ -218,12 +229,7 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
       return
     }
 
-    // --- selection ---
-    if (meta && lower === 'a') {
-      e.preventDefault()
-      host.select(ed.selectableIDs())
-      return
-    }
+    // --- duplicate ---
     if (meta && lower === 'd' && sel.length) {
       e.preventDefault()
       void runAndSelect(host, duplicateCommand(sel))
@@ -295,11 +301,6 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
         host.toggleHelp?.()
         return
       }
-    }
-
-    // --- escape ---
-    if (key === 'Escape') {
-      host.select([])
     }
   }
 

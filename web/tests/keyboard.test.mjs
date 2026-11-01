@@ -21,6 +21,7 @@ function shortcuts(t, layers = [{ id: 'title', visible: true }]) {
   const editor = {
     doc: { layers }, readOnly: false,
     selectionIDs: () => [...state.selected],
+    selectableIDs: () => layers.filter((l) => l.visible !== false).map((l) => l.id),
   }
   const handler = installShortcuts(editor, {
     isEditing: () => state.editing,
@@ -95,6 +96,24 @@ test('holding V does not create repeated visibility changes', (t) => {
   s.key()
   for (let i = 0; i < 5; i++) s.key('v', { repeat: true })
   assert.equal(s.commands.length, 1)
+})
+
+test('read-only inspection allows select all and Escape but blocks editing shortcuts, cut and paste', (t) => {
+  const s = shortcuts(t)
+  s.editor.readOnly = true
+  s.key('Escape')
+  assert.deepEqual(s.state.selected, [])
+  s.key('a', { metaKey: true })
+  assert.deepEqual(s.state.selected, ['title'])
+  for (const key of ['Delete', 'Backspace', 'ArrowRight', 'v', 't']) s.key(key)
+  for (const key of ['d', 'z', 'g', ']']) s.key(key, { metaKey: true })
+  for (const type of ['cut', 'paste']) {
+    s.doc.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), {
+      clipboardData: { files: [], getData: () => 'text', setData() {} },
+    }))
+  }
+  assert.deepEqual(s.commands, [])
+  assert.deepEqual(s.state.selected, ['title'])
 })
 
 test('modified V leaves paste and other key combinations alone', (t) => {

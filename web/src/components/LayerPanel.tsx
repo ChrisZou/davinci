@@ -16,6 +16,7 @@ export function LayerPanel({
   onSelect,
   onRun,
   onContextMenu,
+  readOnly = false,
 }: {
   rows: LayerRow[]
   doc: Document
@@ -23,6 +24,7 @@ export function LayerPanel({
   onSelect: (ids: string[]) => void
   onRun: (cmd: unknown) => void
   onContextMenu: (event: React.MouseEvent, id: string) => void
+  readOnly?: boolean
 }) {
   const [drag, setDrag] = useState<string | null>(null)
   const [over, setOver] = useState<{ id: string; above: boolean } | null>(null)
@@ -47,7 +49,7 @@ export function LayerPanel({
   }
 
   const drop = () => {
-    if (drag && over && drag !== over.id) {
+    if (!readOnly && drag && over && drag !== over.id) {
       // Rows are front-to-back, document indices back-to-front. setZIndex takes
       // the object out and puts it back at the index, so the index depends on
       // whether the dragged row came from below or above the target.
@@ -67,7 +69,7 @@ export function LayerPanel({
         <span className="section-title">图层</span>
         <span className="text-xs text-muted">{selected.length > 1 ? `已选 ${selected.length} / ` : ''}{rows.length} 个</span>
       </h2>
-      {!rows.length && <p className="px-5 text-xs leading-relaxed text-faint">还没有图层。用上方的工具添加，或者把图片拖进画布。</p>}
+      {!readOnly && !rows.length && <p className="px-5 text-xs leading-relaxed text-faint">还没有图层。用上方的工具添加，或者把图片拖进画布。</p>}
       <ul
         className="min-h-0 flex-1 overflow-y-auto px-3 pb-3"
         data-testid="layer-list"
@@ -85,10 +87,11 @@ export function LayerPanel({
           return (
             <li
               key={r.id}
-              draggable={renaming !== r.id}
+              draggable={!readOnly && renaming !== r.id}
               data-layer-name={r.name}
               data-layer-type={r.type}
               onDragStart={(e) => {
+                if (readOnly) { e.preventDefault(); return }
                 setDrag(r.id)
                 e.dataTransfer.effectAllowed = 'move'
               }}
@@ -97,7 +100,7 @@ export function LayerPanel({
                 setOver(null)
               }}
               onDragOver={(e) => {
-                if (!drag) return
+                if (readOnly || !drag) return
                 e.preventDefault()
                 const box = e.currentTarget.getBoundingClientRect()
                 const above = e.clientY < box.top + box.height / 2
@@ -114,7 +117,7 @@ export function LayerPanel({
               onContextMenu={(e) => {
                 if (renaming === r.id) return
                 e.preventDefault()
-                onContextMenu(e, r.id)
+                if (!readOnly) onContextMenu(e, r.id)
               }}
             >
               {over?.id === r.id && drag && drag !== r.id && (
@@ -125,21 +128,21 @@ export function LayerPanel({
               )}
               <Thumb layer={layer} type={r.type} />
               <span className={`flex min-w-0 flex-1 flex-col ${r.visible ? '' : 'opacity-45'}`}>
-                {renaming === r.id ? (
+                {!readOnly && renaming === r.id ? (
                   <RenameBox
                     name={r.name}
                     onDone={(name) => {
                       setRenaming(null)
-                      if (name && name !== r.name) void onRun({ type: 'renameLayer', id: r.id, name })
+                      if (!readOnly && name && name !== r.name) void onRun({ type: 'renameLayer', id: r.id, name })
                     }}
                   />
                 ) : (
                   <span
                     className="truncate text-[13px] font-medium text-ink"
-                    title={`${r.preview}\n双击重命名`}
+                    title={readOnly ? r.preview : `${r.preview}\n双击重命名`}
                     onDoubleClick={(e) => {
                       e.stopPropagation()
-                      setRenaming(r.id)
+                      if (!readOnly) setRenaming(r.id)
                     }}
                   >
                     {r.name}
@@ -147,36 +150,38 @@ export function LayerPanel({
                 )}
                 <span className="truncate text-[11px] text-faint">{kindOf(layer, r)}</span>
               </span>
-              <button
-                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-faint hover:bg-card hover:text-ink ${r.visible ? 'opacity-0 group-hover:opacity-100' : ''}`}
-                title={r.visible ? '隐藏（V）' : '显示（V）'}
-                aria-label={r.visible ? '隐藏' : '显示'}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  void onRun({ type: 'setVisible', id: r.id, visible: !r.visible })
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  {r.visible ? (
-                    <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
-                  ) : (
-                    <path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 5.4-1.6" />
-                  )}
-                </svg>
-              </button>
-              <button
-                className={`-ml-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg hover:bg-card ${r.locked ? 'text-accent' : 'text-faint opacity-0 hover:text-ink group-hover:opacity-100'}`}
-                title={r.locked ? '解锁' : '锁定'}
-                aria-label={r.locked ? '解锁' : '锁定'}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  void onRun({ type: 'setLocked', id: r.id, locked: !r.locked })
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                  <path d={r.locked ? 'M5 11h14v10H5zM8 11V8a4 4 0 0 1 8 0v3' : 'M5 11h14v10H5zM8 11V8a4 4 0 0 1 7.5-2'} />
-                </svg>
-              </button>
+              {!readOnly && <>
+                <button
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-faint hover:bg-card hover:text-ink ${r.visible ? 'opacity-0 group-hover:opacity-100' : ''}`}
+                  title={r.visible ? '隐藏（V）' : '显示（V）'}
+                  aria-label={r.visible ? '隐藏' : '显示'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void onRun({ type: 'setVisible', id: r.id, visible: !r.visible })
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    {r.visible ? (
+                      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
+                    ) : (
+                      <path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 5.4-1.6" />
+                    )}
+                  </svg>
+                </button>
+                <button
+                  className={`-ml-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg hover:bg-card ${r.locked ? 'text-accent' : 'text-faint opacity-0 hover:text-ink group-hover:opacity-100'}`}
+                  title={r.locked ? '解锁' : '锁定'}
+                  aria-label={r.locked ? '解锁' : '锁定'}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void onRun({ type: 'setLocked', id: r.id, locked: !r.locked })
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                    <path d={r.locked ? 'M5 11h14v10H5zM8 11V8a4 4 0 0 1 8 0v3' : 'M5 11h14v10H5zM8 11V8a4 4 0 0 1 7.5-2'} />
+                  </svg>
+                </button>
+              </>}
             </li>
           )
         })}

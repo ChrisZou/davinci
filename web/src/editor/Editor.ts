@@ -141,8 +141,8 @@ function nearest(lines: number[], edges: number[], reach: number): { d: number; 
 export class Editor {
   readonly renderer: Renderer
   /**
-   * Look, don't touch: the canvas still zooms and pans, but nothing can be
-   * selected, moved or edited (a template opened for viewing).
+   * Inspect without editing: selection, zoom and pan remain available, but
+   * layers cannot be moved, resized, rotated or edited.
    */
   readOnly = false
   private ck: CanvasKit
@@ -328,6 +328,7 @@ export class Editor {
    * canvas shows the value from here.
    */
   preview(id: string, key: 'opacity' | 'filters' | 'letterSpacing', value: number | Record<string, number> | null) {
+    if (this.readOnly) return
     const g: Ghost = { ...(this.previews.get(id) ?? {}) }
     if (value === null) {
       if (key === 'opacity') delete g.opacity
@@ -355,9 +356,9 @@ export class Editor {
     return [...this.selection]
   }
 
-  /** Layers a "select all" picks: visible and unlocked. */
+  /** Visible layers; locked layers can also be inspected in read-only mode. */
   selectableIDs(): string[] {
-    return (this.board?.layers ?? []).filter((l) => l.visible !== false && !l.locked).map((l) => l.id)
+    return (this.board?.layers ?? []).filter((l) => l.visible !== false && (this.readOnly || !l.locked)).map((l) => l.id)
   }
 
   select(id: string | null) {
@@ -380,7 +381,7 @@ export class Editor {
     this.render()
   }
 
-  /** The layer under a pointer event (unlocked, visible), if any. */
+  /** The visible layer under a pointer; editing skips locked layers. */
   layerAt(e: { clientX: number; clientY: number }): string | null {
     return this.hit(this.toBoard(this.local(e)))
   }
@@ -390,7 +391,7 @@ export class Editor {
     if (!b) return null
     for (let i = b.layers.length - 1; i >= 0; i--) {
       const l = b.layers[i]
-      if (l.visible === false || l.locked) continue
+      if (l.visible === false || (l.locked && !this.readOnly)) continue
       if (this.contains(l, p)) return l.id
     }
     return null
@@ -414,6 +415,7 @@ export class Editor {
 
   /** Opens a text layer for typing, all of its text selected. */
   editText(id: string) {
+    if (this.readOnly) return
     const l = this.board?.layers.find((x) => x.id === id)
     if (!l || l.type !== 'text' || l.locked) return
     this.finishEditing(true)
@@ -829,7 +831,7 @@ export class Editor {
     if (sel.length === 1 && !this.editing) {
       const l = sel[0]
       outline(l, 1.5)
-      if (!l.locked && !(this.gesture?.kind === 'move' && this.gesture.moved)) {
+      if (!this.readOnly && !l.locked && !(this.gesture?.kind === 'move' && this.gesture.moved)) {
         for (const [, p] of this.handlesOf(l)) this.knob(ctx, p)
       }
     } else if (sel.length > 1) {
@@ -951,7 +953,7 @@ export class Editor {
   }
 
   private handleAt(p: Pt): Handle | null {
-    if (this.selection.length !== 1 || this.editing) return null
+    if (this.readOnly || this.selection.length !== 1 || this.editing) return null
     const l = this.layer(this.selection[0])
     if (!l || l.locked) return null
     for (const [k, q] of this.handlesOf(l)) if (Math.hypot(q.x - p.x, q.y - p.y) <= HANDLE_HIT) return k
@@ -1001,7 +1003,7 @@ export class Editor {
       this.overlay.style.cursor = 'grabbing'
       return
     }
-    if (e.button !== 0 || this.readOnly) return
+    if (e.button !== 0) return
     // Clicking away from a text box closes it (its blur commits).
     if (this.editing) this.editing.ta.blur()
     const p = this.toBoard(s)
@@ -1034,9 +1036,10 @@ export class Editor {
         return
       }
       this.setSelection([...this.selection, id])
-    } else if (!this.selection.includes(id)) {
+    } else if (this.readOnly || !this.selection.includes(id)) {
       this.setSelection([id])
     }
+    if (this.readOnly) return
     const board = this.viewBoard()!
     const moving = board.layers.filter((l) => this.selection.includes(l.id) && !l.locked)
     if (!moving.length) {
@@ -1058,11 +1061,11 @@ export class Editor {
     const g = this.gesture
     const s = this.local(e)
     if (!g) {
-      if (this.panning || this.readOnly) return
+      if (this.panning) return
       const handle = this.handleAt(s)
       const hover = handle ? null : this.hit(this.toBoard(s))
       const l = handle ? this.layer(this.selection[0]) : undefined
-      this.overlay.style.cursor = handle ? this.cursorFor(handle, l?.rotation ?? 0) : hover ? 'move' : ''
+      this.overlay.style.cursor = handle ? this.cursorFor(handle, l?.rotation ?? 0) : hover ? (this.readOnly ? 'pointer' : 'move') : ''
       if (hover !== this.hover) {
         this.hover = hover
         this.render()
@@ -1146,7 +1149,7 @@ export class Editor {
   private commit(cmd: unknown, ids: string[]) {
     this.render()
     const done = () => this.settleIDs(ids)
-    if (!this.cb.onCommit) return done()
+    if (this.readOnly || !this.cb.onCommit) return done()
     void this.cb.onCommit(cmd).then(done, done)
   }
 
@@ -1188,7 +1191,7 @@ export class Editor {
     g.to = p
     const r: Rect = { left: Math.min(g.from.x, p.x), top: Math.min(g.from.y, p.y), right: Math.max(g.from.x, p.x), bottom: Math.max(g.from.y, p.y) }
     const hits = (this.board?.layers ?? [])
-      .filter((l) => l.visible !== false && !l.locked)
+      .filter((l) => l.visible !== false && (this.readOnly || !l.locked))
       .filter((l) => {
         const b = this.boxOf(l)
         return b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top

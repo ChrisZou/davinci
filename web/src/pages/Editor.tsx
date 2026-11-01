@@ -204,6 +204,8 @@ export function Editor({ projectID }: { projectID: string }) {
   // --- commands ---------------------------------------------------------
 
   const run = async (cmd: unknown, quiet = false): Promise<RunResult | undefined> => {
+    // Browsing boards remains available in a template preview; edits do not.
+    if (viewOnly && (cmd as { type?: string } | null)?.type !== 'selectBoard') return
     const s = sessionRef.current
     if (!s) return
     const res = await s.run(cmd)
@@ -372,15 +374,15 @@ export function Editor({ projectID }: { projectID: string }) {
     return () => keys.dispose()
   }, [ready])
 
-  // A template being viewed is look-don't-touch: nothing selected, nothing
-  // movable, no editing shortcuts (zoom and pan still work).
+  // A template preview allows selecting layers for inspection, never editing.
   useEffect(() => {
     const s = sessionRef.current
     if (!ready || !s) return
     s.editor.readOnly = viewOnly
+    // Redraw the selection when switching to editing so its handles appear.
+    s.editor.selectMany(s.editor.selectionIDs())
     if (viewOnly) {
       setEditing(null)
-      hostRef.current.select([])
       setLibraryOpen(false)
     }
   }, [ready, viewOnly])
@@ -505,10 +507,10 @@ export function Editor({ projectID }: { projectID: string }) {
       </header>
 
       <div className={`flex min-h-0 flex-1 px-5 pb-5 ${viewOnly ? 'flex-col md:flex-row' : ''}`}>
-        {showPanels && !viewOnly && (
-          <aside className="card flex w-[252px] shrink-0 flex-col overflow-hidden">
-            <LayerPanel rows={rows} doc={doc} selected={selected} onSelect={select} onRun={run} onContextMenu={(e, id) => {
-              if (!session) return
+        {showPanels && (
+          <aside className={`card flex shrink-0 flex-col overflow-hidden ${viewOnly ? 'mb-4 max-h-[25%] w-full md:mb-0 md:max-h-none md:w-[252px]' : 'w-[252px]'}`}>
+            <LayerPanel rows={rows} doc={doc} selected={selected} onSelect={select} onRun={run} readOnly={viewOnly} onContextMenu={(e, id) => {
+              if (!session || viewOnly) return
               if (!session.editor.selectionIDs().includes(id)) select([id])
               setMenu({ x: e.clientX, y: e.clientY, target: id })
             }} />
@@ -582,14 +584,19 @@ export function Editor({ projectID }: { projectID: string }) {
           )}
         </div>
 
-        {showPanels && viewOnly && coverMetadata && <CoverProperties metadata={coverMetadata} />}
-        {showPanels && !viewOnly && (
-          <aside className={`card flex shrink-0 flex-col overflow-hidden ${rightPanel === 'comments' ? 'w-[320px]' : 'w-[280px]'}`}>
-            <div className="flex shrink-0 gap-1 border-b border-line p-2" aria-label="编辑面板">
-              <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'properties' ? 'bg-paper text-ink' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'properties'} onClick={() => setRightPanel('properties')}>属性</button>
-              <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'comments' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'comments'} onClick={() => setRightPanel('comments')}>AI改图</button>
-            </div>
-            {rightPanel === 'comments' && project ? <CommentsPanel key={projectID} ai={aiComments} board={project.boards.find((b) => b.id === project.active)!} selected={selected} /> : <Properties
+        {showPanels && viewOnly && !selection.length && coverMetadata && <CoverProperties metadata={coverMetadata} />}
+        {showPanels && (!viewOnly || selection.length > 0) && (
+          <aside className={`card flex shrink-0 flex-col overflow-hidden ${viewOnly ? 'mt-4 max-h-[40%] w-full md:ml-4 md:mt-0 md:max-h-none md:w-[300px]' : rightPanel === 'comments' ? 'w-[320px]' : 'w-[280px]'}`}>
+            {viewOnly ? (
+              <div className="shrink-0 border-b border-line px-5 py-4"><h2 className="section-title">属性</h2></div>
+            ) : (
+              <div className="flex shrink-0 gap-1 border-b border-line p-2" aria-label="编辑面板">
+                <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'properties' ? 'bg-paper text-ink' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'properties'} onClick={() => setRightPanel('properties')}>属性</button>
+                <button className={`flex-1 rounded-xl py-2 text-xs font-semibold ${rightPanel === 'comments' ? 'bg-accent-soft text-accent' : 'text-muted hover:bg-paper/60'}`} aria-pressed={rightPanel === 'comments'} onClick={() => setRightPanel('comments')}>AI改图</button>
+              </div>
+            )}
+            {!viewOnly && rightPanel === 'comments' && project ? <CommentsPanel key={projectID} ai={aiComments} board={project.boards.find((b) => b.id === project.active)!} selected={selected} /> : <Properties
+              readOnly={viewOnly}
               doc={doc}
               layer={layer}
               selection={selection}

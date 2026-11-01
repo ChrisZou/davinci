@@ -21,6 +21,8 @@ import { DEFAULT_FONT_SIZE, letterSpacingPx } from '../render/text'
  */
 
 export interface PanelProps {
+  /** Show the same values without enabling edits or local canvas previews. */
+  readOnly?: boolean
   doc: Document
   layer?: Layer
   /** Every selected layer, back-to-front; more than one shows the multi panel. */
@@ -45,16 +47,27 @@ export interface PanelProps {
  * panel shows when nothing is selected (click empty canvas or press Esc).
  */
 export function Properties(props: PanelProps) {
-  const { layer, selection } = props
+  const { layer, selection, readOnly } = props
+  const panelProps: PanelProps = readOnly ? {
+    ...props,
+    onRun: () => {},
+    onRunSelect: () => {},
+    onUpload: async () => null,
+    onPickFromLibrary: undefined,
+    onCrop: () => {},
+    onPreview: () => {},
+  } : props
   return (
     <div className="min-h-0 flex-1 overflow-y-auto" data-testid="properties">
-      {selection.length > 1 ? (
-        <MultiSection {...props} />
-      ) : layer ? (
-        <LayerSection {...props} layer={layer} />
-      ) : (
-        <CanvasSection {...props} />
-      )}
+      <fieldset disabled={readOnly} className="m-0 min-w-0 border-0 p-0" aria-label={selection.length ? '图层属性' : '画布属性'}>
+        {selection.length > 1 ? (
+          <MultiSection {...panelProps} />
+        ) : layer ? (
+          <LayerSection {...panelProps} layer={layer} />
+        ) : (
+          <CanvasSection {...panelProps} />
+        )}
+      </fieldset>
     </div>
   )
 }
