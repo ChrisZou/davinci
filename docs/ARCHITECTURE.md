@@ -89,8 +89,8 @@ server → page   {"type":"doc","document":…,"revision":n,"origin":"c7","comma
 server → page   {"type":"result","reqId":"r1","ok":true,"data":…,"document":…,"revision":n,"history":{…}}
 ```
 
-`origin` 是连接的名字（CLI/HTTP 为空）。页面据此区分"我自己的改动"和"别人的改动"，
-后者会在画布上方提示"命令行刚改了……"并给出撤回按钮。`davinci watch` 也是这个流的听众。
+`origin` 是连接的名字（CLI/HTTP 为空）。CLI/HTTP 修改会直接同步到画布，并与界面操作共用撤销历史。
+`davinci watch` 也是这个流的听众。
 
 ## 文档模型
 

@@ -42,8 +42,6 @@ export interface SessionCallbacks {
   onView?: () => void
   /** Undo / redo became (un)available. */
   onHistory?: () => void
-  /** Someone else (the CLI, a skill, another tab) changed the project. */
-  onRemoteCommand?: (cmd: unknown) => void
   /** A picture was double-clicked on the canvas. */
   onImageOpen?: (layer: Layer) => void
 }
@@ -57,8 +55,6 @@ interface Envelope {
   error?: string
   document?: unknown
   revision?: number
-  origin?: string
-  command?: unknown
   history?: { canUndo: boolean; canRedo: boolean }
   message?: string
 }
@@ -76,8 +72,6 @@ export class Session {
   private editorInstance?: Editor
   private socket?: WebSocket
   private revision = 0
-  /** This connection's name on the server, to tell our own edits from others'. */
-  private origin = ''
   private seq = 0
   private pending = new Map<string, (r: RunResult) => void>()
   private outbox: string[] = []
@@ -188,7 +182,6 @@ export class Session {
   private onMessage(env: Envelope) {
     switch (env.type) {
       case 'hello':
-        this.origin = env.origin ?? ''
         this.revision = 0
         this.adopt(env)
         this.cb.onSaveState?.('saved')
@@ -196,11 +189,9 @@ export class Session {
         this.firstHello?.()
         this.firstHello = undefined
         break
-      case 'doc': {
-        const fresh = this.adopt(env)
-        if (fresh && env.command && env.origin !== this.origin) this.cb.onRemoteCommand?.(env.command)
+      case 'doc':
+        this.adopt(env)
         break
-      }
       case 'comment':
         break
       case 'result':

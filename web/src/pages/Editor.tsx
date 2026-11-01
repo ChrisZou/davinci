@@ -54,10 +54,8 @@ import type { LibraryItem } from '../api'
 
 /** The one-line notice at the bottom of the stage. */
 interface Notice {
-  kind: 'remote' | 'error' | 'info'
+  kind: 'error' | 'info'
   text: string
-  /** Offer to take the change back (a command-line edit that just landed). */
-  undo?: boolean
 }
 
 interface MenuState {
@@ -153,14 +151,6 @@ export function Editor({ projectID }: { projectID: string }) {
           onLog: addLog,
           onView: () => setZoom(Math.round(session.editor.zoom * 100)),
           onHistory: () => setHistoryTick((t) => t + 1),
-          // An edit from the command line (a skill, the CLI) lands live on this
-          // page; say what it touched and offer to take it back — the one place
-          // the page mentions that anyone else is working on the design.
-          onRemoteCommand: (cmd) => {
-            const type = (cmd as any)?.type
-            if (type === 'undo' || type === 'redo') return
-            notify({ kind: 'remote', text: describeRemote(cmd, session.editor.doc), undo: true }, 6000)
-          },
           // Double-clicking a picture opens the crop dialog.
           onImageOpen: (l) => {
             if (!l.locked) setCropFor(l)
@@ -182,7 +172,7 @@ export function Editor({ projectID }: { projectID: string }) {
       sessionRef.current?.destroy()
       sessionRef.current = null
     }
-  }, [projectID, addLog, notify])
+  }, [projectID, addLog])
 
   // The board strip takes room under the page; fit-to-screen keeps clear of it.
   useEffect(() => {
@@ -585,21 +575,9 @@ export function Editor({ projectID }: { projectID: string }) {
             >
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${notice.kind === 'info' ? 'bg-ok' : 'bg-accent'}`} />
               <span className={`truncate text-[13px] ${notice.kind === 'error' ? 'text-accent' : 'text-ink-2'}`}>{notice.text}</span>
-              {notice.undo ? (
-                <button
-                  className="h-7 shrink-0 rounded-full bg-paper px-3 text-xs font-bold text-accent hover:bg-paper-deep"
-                  onClick={() => {
-                    notify(null)
-                    void run({ type: 'undo' })
-                  }}
-                >
-                  撤回
-                </button>
-              ) : (
-                <button className="icon-btn h-7 w-7 shrink-0 text-faint" aria-label="关闭提示" onClick={() => notify(null)}>
-                  <Icon d="M6 6l12 12M18 6 6 18" size={13} />
-                </button>
-              )}
+              <button className="icon-btn h-7 w-7 shrink-0 text-faint" aria-label="关闭提示" onClick={() => notify(null)}>
+                <Icon d="M6 6l12 12M18 6 6 18" size={13} />
+              </button>
             </div>
           )}
         </div>
@@ -665,27 +643,6 @@ export function Editor({ projectID }: { projectID: string }) {
       {help && <HelpDialog onClose={() => setHelp(false)} />}
     </div>
   )
-}
-
-/** What a command from the command line did, in a few words. */
-function describeRemote(raw: unknown, doc: Document | null): string {
-  let cmd: any = raw
-  if (typeof raw === 'string') {
-    try {
-      cmd = JSON.parse(raw)
-    } catch {
-      return '命令行刚改了画布'
-    }
-  }
-  const nameOf = (ref: unknown) => doc?.layers.find((l) => l.id === ref || l.name === ref)?.name ?? String(ref)
-  if (cmd?.type === 'batch') return `命令行刚做了 ${Array.isArray(cmd.commands) ? cmd.commands.length : ''} 步修改`
-  const added: Record<string, string> = { addText: '文字', addImage: '图片', addShape: '形状', insertLayers: '图层' }
-  if (added[cmd?.type]) return `命令行刚添加了${added[cmd.type]}`
-  if (cmd?.type === 'applyPalette') return '命令行刚应用了配色'
-  if (cmd?.type === 'removeLayer') return `命令行刚删除了「${cmd.id}」`
-  if (cmd?.id) return `命令行刚改了「${nameOf(cmd.id)}」`
-  if (Array.isArray(cmd?.ids)) return `命令行刚改了 ${cmd.ids.length} 个图层`
-  return '命令行刚改了画布'
 }
 
 /** A file's pixel size, read before upload so the layer can be fitted at once. */
