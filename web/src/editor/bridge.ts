@@ -89,7 +89,7 @@ export class Session {
   }
 
   /** Builds the canvas and waits for the server's copy of the project. */
-  async open(container: HTMLElement) {
+  async open(container: HTMLElement, readOnly = false) {
     this.editorInstance = await Editor.create(container, {
       onSelection: (ids) => this.cb.onSelection?.(ids),
       onSelectionFrame: (frame) => this.cb.onSelectionFrame?.(frame),
@@ -98,6 +98,8 @@ export class Session {
       onCommit: (cmd) => this.run(cmd),
       onImageOpen: (l) => this.cb.onImageOpen?.(l),
     })
+    // Set the mode before the first document arrives and becomes interactive.
+    this.editorInstance.readOnly = readOnly
     ;(window as any).davinci = { session: this, editor: this.editorInstance }
     const ready = new Promise<void>((resolve) => (this.firstHello = resolve))
     this.connect()
@@ -125,6 +127,9 @@ export class Session {
       }
     }
     if (Array.isArray(cmd)) cmd = { type: 'batch', commands: cmd }
+    if (this.editorInstance?.readOnly && (cmd as { type?: string } | null)?.type !== 'selectBoard') {
+      return Promise.resolve({ ok: false, error: '请先点击「编辑封面」' })
+    }
     const reqId = `r${++this.seq}`
     this.cb.onSaveState?.('saving')
     return new Promise<RunResult>((resolve) => {

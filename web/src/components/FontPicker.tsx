@@ -9,7 +9,13 @@ import { fontStack } from '../editor/fonts'
  * hidden until "显示隐藏的字体"; any font can be starred or hidden by hand.
  * Stars and hides live on the server, so the CLI lists fonts the same way.
  */
-export function FontPicker({ value, onChange }: { value: string; onChange: (family: string) => void }) {
+export function FontPicker({ value, onChange, readOnly = false, disabled = false }: {
+  value: string
+  onChange: (family: string) => void
+  readOnly?: boolean
+  disabled?: boolean
+}) {
+  const inactive = readOnly || disabled
   const [fonts, setFonts] = useState<FontInfo[]>([])
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -24,6 +30,11 @@ export function FontPicker({ value, onChange }: { value: string; onChange: (fami
   }, [])
 
   useEffect(() => {
+    if (inactive) {
+      setOpen(false)
+      setQuery('')
+      return
+    }
     if (!open) return
     // The list floats over the page (the side panel clips anything wider
     // than itself), pinned under the button's right edge.
@@ -42,7 +53,7 @@ export function FontPicker({ value, onChange }: { value: string; onChange: (fami
       window.removeEventListener('mousedown', onDown)
       window.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, inactive])
 
   const q = query.trim().toLowerCase()
   const { favorites, rest, hiddenCount } = useMemo(() => {
@@ -55,10 +66,13 @@ export function FontPicker({ value, onChange }: { value: string; onChange: (fami
   }, [fonts, q, showHidden])
 
   const current = fonts.find((f) => f.family === value)
+  const name = value ? (current && chineseName(current)) || value : '默认字体'
   const setPref = (family: string, pref: { favorite?: boolean; hidden?: boolean }) => {
+    if (inactive) return
     void api.setFontPref(family, pref).then(setFonts)
   }
   const pick = (family: string) => {
+    if (inactive) return
     setOpen(false)
     setQuery('')
     onChange(family)
@@ -92,17 +106,27 @@ export function FontPicker({ value, onChange }: { value: string; onChange: (fami
     </div>
   )
 
+  // A value to inspect, in the UI font: decorative faces can obscure their own
+  // names. This branch also unmounts an open portal when editing is disabled.
+  if (inactive) return (
+    <div className="flex min-h-9 items-baseline gap-3 rounded-[10px] bg-paper px-3 py-2" data-testid="text-font" role="group" aria-label="字体">
+      <span className="shrink-0 text-xs text-muted">字体</span>
+      <span className="min-w-0 flex-1 break-words text-right text-[13px] text-ink" title={value || '默认字体'}>{name}</span>
+    </div>
+  )
+
   return (
     <div className="relative" ref={box}>
       <button
         className="flex h-9 w-full items-center justify-between rounded-[10px] bg-paper pl-3 pr-3 text-[13px] text-ink outline-none focus:ring-2 focus:ring-accent/30"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { if (!inactive) setOpen((v) => !v) }}
+        aria-label="字体"
         aria-haspopup="listbox"
         aria-expanded={open}
         data-testid="text-font"
       >
         <span className="truncate" style={value ? { fontFamily: fontStack(value) } : undefined}>
-          {value ? (current && chineseName(current)) || value : '默认字体'}
+          {name}
         </span>
         <svg className="shrink-0 text-faint" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="m6 9 6 6 6-6" />

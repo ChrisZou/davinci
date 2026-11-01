@@ -76,7 +76,7 @@ export function Editor({ projectID }: { projectID: string }) {
   const [name, setName] = useState('')
   const [isTemplate, setIsTemplate] = useState(false)
   const [coverMetadata, setCoverMetadata] = useState<CoverMetadata | null>(null)
-  /** A template opens for viewing; 编辑模板 switches it to normal editing. */
+  /** A template opens for viewing; 编辑封面 switches it to normal editing. */
   const [editTemplate, setEditTemplate] = useState(() => new URLSearchParams(location.search).has('edit'))
   const [starting, setStarting] = useState(false)
   const viewOnly = isTemplate && !editTemplate
@@ -159,7 +159,7 @@ export function Editor({ projectID }: { projectID: string }) {
         sessionRef.current = session
         const stage = stageRef.current
         if (!stage) throw new Error('canvas container never rendered')
-        await session.open(stage)
+        await session.open(stage, p.kind === 'template' && !editTemplate)
         setRows(session.editor.layerRows())
         setZoom(Math.round(session.editor.zoom * 100))
         if (alive) setReady(true)
@@ -226,6 +226,7 @@ export function Editor({ projectID }: { projectID: string }) {
    * drop the command it was about to run.
    */
   const upload = async (file: File): Promise<string | null> => {
+    if (viewOnly) return null
     try {
       return await api.uploadAsset(file)
     } catch (e: any) {
@@ -241,6 +242,7 @@ export function Editor({ projectID }: { projectID: string }) {
    * canvas centre.
    */
   const addImageFiles = async (files: File[], at?: { x: number; y: number }) => {
+    if (viewOnly) return
     const ed = sessionRef.current?.editor
     const d = ed?.doc
     if (!ed || !d || !files.length) return
@@ -384,6 +386,11 @@ export function Editor({ projectID }: { projectID: string }) {
     if (viewOnly) {
       setEditing(null)
       setLibraryOpen(false)
+      setReplaceFor(null)
+      setCropFor(null)
+      setPaletteOpen(false)
+      setMenu(null)
+      setDropping(false)
     }
   }, [ready, viewOnly])
 
@@ -471,7 +478,7 @@ export function Editor({ projectID }: { projectID: string }) {
             {viewOnly ? (
               <div className="island absolute right-5 top-4 flex h-[52px] items-center gap-2 px-2">
                 <button className="btn-ghost" title="直接修改模板本身" onClick={() => setEditTemplate(true)} data-testid="edit-template">
-                  编辑模板
+                  编辑封面
                 </button>
                 <button className="btn-primary" disabled={starting} title="把模板整份复制成一个新作品，在副本上改" onClick={() => void useThisTemplate()} data-testid="use-template">
                   {starting ? '新建中…' : '使用此模板'}
@@ -615,7 +622,7 @@ export function Editor({ projectID }: { projectID: string }) {
         )}
       </div>
 
-      {replaceFor && showPanels ? (
+      {!viewOnly && (replaceFor && showPanels ? (
         <LibraryPanel
           mode="replace"
           onInsert={(it) => {
@@ -627,15 +634,15 @@ export function Editor({ projectID }: { projectID: string }) {
         />
       ) : (
         libraryOpen && showPanels && <LibraryPanel onInsert={(it) => void insertLibraryItem(it)} onClose={() => setLibraryOpen(false)} />
-      )}
+      ))}
       {paletteOpen && showPanels && !viewOnly && <PalettePanel project={projectID} board={project?.active} onClose={() => setPaletteOpen(false)} onApply={async (id) => {
         const result = await run({ type: 'applyPalette', id, board: project?.active })
         if (!result?.ok) throw new Error(result?.error ?? '应用失败')
       }} />}
-      {menu && session && (
+      {!viewOnly && menu && session && (
         <ContextMenu menu={menu} editor={session.editor} doc={doc} host={host} onCrop={setCropFor} onLog={addLog} onClose={() => setMenu(null)} />
       )}
-      {cropFor && doc && (
+      {!viewOnly && cropFor && doc && (
         <CropDialog
           layer={cropFor}
           canvasRatio={doc.canvas.width / doc.canvas.height}

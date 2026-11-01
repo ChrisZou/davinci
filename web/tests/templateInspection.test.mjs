@@ -6,7 +6,7 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 const require = createRequire(import.meta.url)
-async function load(entry, react = React) {
+async function load(entry, react = React, modules = {}) {
   const { outputFiles } = await build({
     entryPoints: [entry], bundle: true, write: false, platform: 'node', format: 'cjs', external: ['react', 'react-dom'],
     plugins: [{ name: 'canvas-loader-stub', setup(b) {
@@ -15,17 +15,18 @@ async function load(entry, react = React) {
     } }],
   })
   const module = { exports: {} }
-  new Function('require', 'module', 'exports', outputFiles[0].text)((name) => name === 'react' ? react : require(name), module, module.exports)
+  new Function('require', 'module', 'exports', outputFiles[0].text)((name) => name === 'react' ? react : modules[name] ?? require(name), module, module.exports)
   return module.exports
 }
 
 const { Editor } = await load('src/editor/Editor.ts')
+const { Session } = await load('src/editor/bridge.ts')
 const { Properties } = await load('src/components/Properties.tsx', {
   ...React,
   useSyncExternalStore: (subscribe, getSnapshot) => React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot),
 })
 const layers = [
-  { id: 'title', name: '标题', type: 'text', text: '模板标题', x: 20, y: 20, width: 100, height: 80, rotation: 0, opacity: 1, visible: true, style: { fontSize: 24, fill: '#111111' } },
+  { id: 'title', name: '标题', type: 'text', text: '模板标题', x: 20, y: 20, width: 100, height: 80, rotation: 0, opacity: 1, visible: true, style: { fontFamily: 'PingFang SC', fontSize: 24, fill: '#111111' } },
   { id: 'shape', name: '矩形', type: 'shape', shape: { kind: 'rect' }, x: 180, y: 20, width: 100, height: 80, rotation: 0, opacity: 1, visible: true, style: { fill: '#c23a22' } },
   { id: 'locked', name: '锁定', type: 'image', x: 20, y: 180, width: 100, height: 80, rotation: 0, opacity: 1, visible: true, locked: true },
 ]
@@ -163,7 +164,7 @@ test('layer list keeps selection and range modifiers while disabling rename, reo
 test('properties keep the same values but disable controls and all mutation callbacks in read-only mode', async () => {
   const calls = []
   const callbacks = Object.fromEntries(['onRun', 'onRunSelect', 'onUpload', 'onPickFromLibrary', 'onCrop', 'onPreview'].map((key) => [key, (...args) => calls.push([key, ...args])]))
-  for (const selection of [layers.slice(0, 1), layers.slice(1, 2), layers.slice(2), layers]) {
+  for (const selection of [[], layers.slice(0, 1), layers.slice(1, 2), layers.slice(2), layers]) {
     const props = { doc, selection, layer: selection.length === 1 ? selection[0] : undefined, ...callbacks }
     const tree = Properties({ ...props, readOnly: true })
     assert.equal(tree.props.children.type, 'fieldset')
@@ -178,5 +179,134 @@ test('properties keep the same values but disable controls and all mutation call
     assert.match(html, /<fieldset disabled=""/)
     for (const layer of selection) assert.ok(html.includes(layer.name))
     if (selection.length === 1) assert.match(html, new RegExp(`data-testid="layer-x"[^>]*value="${selection[0].x}"`))
+    if (props.layer?.type === 'text') {
+      assert.match(html, /<div[^>]*data-testid="text-font"[^>]*aria-label="字体"/)
+      assert.match(html, />PingFang SC<\/span>/)
+      assert.doesNotMatch(html, /<button[^>]*data-testid="text-font"|aria-haspopup="listbox"/)
+      assert.match(renderToStaticMarkup(Properties(props)), /<button[^>]*data-testid="text-font"/)
+    }
   }
+})
+
+// Keep component state across renders so the test can disable an already open
+// portal, not just check the first render's fieldset attribute.
+async function fontPicker() {
+  const state = [], effects = [], cleanups = []
+  let cursor = 0
+  const { FontPicker } = await load('src/components/FontPicker.tsx', {
+    ...React,
+    useState(initial) {
+      const i = cursor++
+      if (!(i in state)) state[i] = initial
+      return [state[i], (next) => { state[i] = typeof next === 'function' ? next(state[i]) : next }]
+    },
+    useRef(initial) { return state[cursor++] ??= { current: initial } },
+    useMemo(fn) { return fn() },
+    useEffect(effect, deps) {
+      const i = cursor++
+      if (!state[i] || deps.some((v, n) => v !== state[i][n])) {
+        state[i] = deps
+        effects.push(() => { cleanups[i]?.(); cleanups[i] = effect() })
+      }
+    },
+  }, { 'react-dom': { createPortal: (content) => React.createElement('test-portal', null, content) } })
+  return {
+    render(props) {
+      cursor = 0
+      const tree = FontPicker(props)
+      // React attaches the trigger ref before running effects.
+      if (tree.ref) tree.ref.current = { getBoundingClientRect: () => ({ bottom: 36, right: 300 }) }
+      effects.splice(0).forEach((effect) => effect())
+      return tree
+    },
+    dispose() { cleanups.forEach((cleanup) => cleanup?.()) },
+  }
+}
+
+test('font inspection displays Chinese names, unknown families and defaults without any picker interaction', async (t) => {
+  const requests = [], changes = []
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    requests.push(url)
+    return new Response(JSON.stringify({ fonts: [{ family: 'PingFang SC', aliases: ['蘋方-簡', '苹方-简'] }] }))
+  })
+  const picker = await fontPicker()
+  t.after(() => picker.dispose())
+  const props = { value: 'PingFang SC', readOnly: true, onChange: (value) => changes.push(value) }
+  assert.match(renderToStaticMarkup(picker.render(props)), />PingFang SC<\/span>/)
+  await new Promise(setImmediate)
+  for (const mode of [{ readOnly: true }, { disabled: true }]) {
+    for (const [value, expected] of [['PingFang SC', '苹方-简'], ['Unknown Custom Font', 'Unknown Custom Font'], ['', '默认字体']]) {
+      const tree = picker.render({ ...props, readOnly: false, ...mode, value })
+      const html = renderToStaticMarkup(tree)
+      assert.ok(html.includes(`>${expected}</span>`))
+      assert.doesNotMatch(html, /<button|<input|<svg|listbox|font-family|test-portal/)
+      assert.ok(nodes(tree).every((n) => !n.props.onClick && !n.props.onKeyDown && !n.props.onChange && n.props.tabIndex === undefined))
+    }
+  }
+  assert.deepEqual(changes, [])
+  assert.deepEqual(requests, ['/api/fonts'])
+})
+
+test('turning off editing removes an open font portal; enabling it again preserves font selection', async (t) => {
+  const win = Object.assign(new EventTarget(), { innerWidth: 1200, innerHeight: 900 })
+  const previous = { window: globalThis.window, document: globalThis.document }
+  globalThis.window = win
+  globalThis.document = { body: {} }
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key]
+      else globalThis[key] = value
+    }
+  })
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({ fonts: [{ family: 'PingFang SC', aliases: ['苹方-简'] }] })))
+  const picker = await fontPicker()
+  t.after(() => picker.dispose())
+  const changes = []
+  const props = { value: 'PingFang SC', onChange: (value) => changes.push(value) }
+  const trigger = (tree) => nodes(tree).find((n) => n.type === 'button' && n.props['data-testid'] === 'text-font')
+  const open = () => {
+    trigger(picker.render(props)).props.onClick()
+    picker.render(props)
+    return picker.render(props)
+  }
+  picker.render(props)
+  await new Promise(setImmediate)
+  for (const mode of [{ readOnly: true }, { disabled: true }]) {
+    assert.ok(nodes(open()).some((n) => n.props.role === 'listbox'))
+    const tree = picker.render({ ...props, ...mode })
+    assert.doesNotMatch(renderToStaticMarkup(tree), /<button|test-portal|listbox/)
+    assert.deepEqual(changes, [])
+    assert.equal(trigger(picker.render(props)).props['aria-expanded'], false)
+  }
+  const choice = nodes(open()).find((n) => n.type === 'button' && n.props.title === 'PingFang SC')
+  choice.props.onClick()
+  assert.deepEqual(changes, ['PingFang SC'])
+  assert.equal(trigger(picker.render(props)).props['aria-expanded'], false)
+})
+
+test('read-only sessions block mutation commands before transport, including JSON and batches', async (t) => {
+  const previous = globalThis.window
+  globalThis.window = { setTimeout, clearTimeout }
+  t.after(() => { if (previous === undefined) delete globalThis.window; else globalThis.window = previous })
+  const session = new Session('template')
+  session.editorInstance = { readOnly: true, endPreview() {} }
+  const sent = []
+  session.send = (message) => {
+    sent.push(message.command)
+    session.pending.get(message.reqId)({ ok: true })
+  }
+  for (const cmd of [
+    { type: 'updateLayer', id: 'title', props: { fontFamily: 'Songti SC' } },
+    { type: 'cropImage', id: 'photo' }, { type: 'replaceImage', id: 'photo', url: '/assets/new.png' },
+    { type: 'setZIndex', id: 'title', index: 0 }, { type: 'undo' }, { type: 'redo' },
+  ]) {
+    for (const raw of [cmd, JSON.stringify(cmd), [cmd], { type: 'batch', commands: [cmd] }]) {
+      assert.equal((await session.run(raw)).ok, false)
+    }
+  }
+  assert.deepEqual(sent, [])
+  assert.equal((await session.run({ type: 'selectBoard', id: 'b2' })).ok, true)
+  session.editorInstance.readOnly = false
+  assert.equal((await session.run({ type: 'setText', id: 'title', text: '已编辑' })).ok, true)
+  assert.deepEqual(sent.map((cmd) => cmd.type), ['selectBoard', 'setText'])
 })

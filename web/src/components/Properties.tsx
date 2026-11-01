@@ -58,7 +58,7 @@ export function Properties(props: PanelProps) {
     onPreview: () => {},
   } : props
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto" data-testid="properties">
+    <div className="min-h-0 flex-1 overflow-y-auto" data-testid="properties" data-readonly={readOnly || undefined}>
       <fieldset disabled={readOnly} className="m-0 min-w-0 border-0 p-0" aria-label={selection.length ? '图层属性' : '画布属性'}>
         {selection.length > 1 ? (
           <MultiSection {...panelProps} />
@@ -738,7 +738,7 @@ function LayerSection(props: PanelProps & { layer: Layer }) {
         </div>
       </Section>
 
-      {layer.type === 'text' && <TextSections key={layer.id} layer={layer} patch={patch} onRun={onRun} onPreview={props.onPreview} palette={palette} />}
+      {layer.type === 'text' && <TextSections key={layer.id} layer={layer} readOnly={props.readOnly} patch={patch} onRun={onRun} onPreview={props.onPreview} palette={palette} />}
       {layer.type === 'image' && <ImageSections {...props} layer={layer} />}
       {layer.type === 'shape' && layer.shape?.kind === 'line' && <LineSection layer={layer} onRun={onRun} palette={palette} />}
       {layer.type === 'shape' && layer.shape?.kind !== 'line' && <ShapeSection layer={layer} onRun={onRun} palette={palette} />}
@@ -859,12 +859,14 @@ function PresetTile({ preset, onClick }: { preset: TextPreset; onClick: () => vo
 
 function TextSections({
   layer,
+  readOnly,
   patch,
   onRun,
   onPreview,
   palette,
 }: {
   layer: Layer
+  readOnly?: boolean
   patch: (props: Record<string, unknown>) => void
   onRun: (cmd: unknown) => void
   onPreview: PanelProps['onPreview']
@@ -890,7 +892,7 @@ function TextSections({
             if (text !== layer.text) onRun({ type: 'setText', id: layer.id, text })
           }}
         />
-        <FontPicker value={String(style.fontFamily ?? '')} onChange={(fontFamily) => patch({ fontFamily })} />
+        <FontPicker value={String(style.fontFamily ?? '')} readOnly={readOnly} onChange={(fontFamily) => patch({ fontFamily })} />
         <Grid2>
           <NumField label="字号" value={Number(style.fontSize ?? 48)} min={1} testId="text-size" onCommit={(fontSize) => patch({ fontSize })} />
           <NumField label="行高" value={Number(style.lineHeight ?? 1.2)} step={0.05} min={0.5} max={4} onCommit={(lineHeight) => patch({ lineHeight })} />
