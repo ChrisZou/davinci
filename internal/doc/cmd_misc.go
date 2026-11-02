@@ -14,8 +14,8 @@ import (
 
 func init() {
 	define(Spec{
-		Type: "listLayers", Summary: "列出全部图层（从最上层到最底层）",
-		Returns: "{ layers: LayerRow[], count } — front to back", ReadOnly: true,
+		Type: "listLayers", Summary: "列出全部图层（从最上层到最底层，末尾含虚拟「背景」）",
+		Returns: "{ layers: LayerRow[], count } — front to back；最后一项 type=background、id=__background", ReadOnly: true,
 		Run: func(c *Ctx, _ map[string]any) (any, error) {
 			rows := Rows(c.B)
 			return map[string]any{"count": len(rows), "order": "front to back", "layers": rows}, nil

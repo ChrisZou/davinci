@@ -19,6 +19,7 @@ davinci -p <项目> exec --file cover.json          # 从文件读（长的一�
 |---|---|---|
 | `setCanvasSize` | `width` `height` 或 `preset` | 改尺寸，图层不动 |
 | `setBackground` | `color` 或 `image` | 纯色（`transparent` 为透明）或背景图（cover 铺满） |
+| `setBackgroundVisible` | `visible` | 显示/隐藏画布背景（图层列表「背景」行）；省略则切换。也可用 `setVisible` + `id:"__background"` |
 
 ## 画板
 
@@ -68,7 +69,7 @@ davinci -p <项目> exec --file cover.json          # 从文件读（长的一�
 | 命令 | 参数 | 说明 |
 |---|---|---|
 | `updateLayer` | `id* props*{}` | 位置/尺寸/旋转/不透明度/显隐/锁定 + 样式键，一次改多个 |
-| `setOpacity` / `setVisible` / `setLocked` | `id*` + 值 | |
+| `setOpacity` / `setVisible` / `setLocked` | `id*` + 值 | `setVisible` 的 id 也可为 `__background` / `背景` |
 | `renameLayer` | `id* name*` | 名称唯一 |
 | `removeLayer` | `id*` | |
 

@@ -1,6 +1,6 @@
 import type { Canvas, CanvasKit, GrDirectContext, Paint, Shader, Surface } from 'canvaskit-wasm'
 import type { Board, Document, Layer, LayerRow, ProjectDoc } from '../types'
-import { boardDocument } from '../types'
+import { BACKGROUND_ID, boardDocument, canvasBackgroundVisible } from '../types'
 import type { Renderer } from '../render/renderer'
 import { parseColour } from '../render/renderer'
 import { letterSpacingPx } from '../render/text'
@@ -298,10 +298,11 @@ export class Editor {
     return this.viewBoard()?.layers.find((l) => l.id === id)
   }
 
-  /** Layer rows for the panel, front to back. */
+  /** Layer rows for the panel, front to back, with virtual「背景」at the end. */
   layerRows(): LayerRow[] {
-    const layers = this.board?.layers ?? []
-    return layers
+    const board = this.board
+    const layers = board?.layers ?? []
+    const rows: LayerRow[] = layers
       .map((l, i) => ({
         id: l.id,
         name: l.name,
@@ -318,6 +319,25 @@ export class Editor {
         index: i,
       }))
       .reverse()
+    if (board) {
+      const c = board.canvas
+      rows.push({
+        id: BACKGROUND_ID,
+        name: '背景',
+        type: 'background',
+        x: 0,
+        y: 0,
+        width: c.width,
+        height: c.height,
+        rotation: 0,
+        opacity: 1,
+        visible: canvasBackgroundVisible(c),
+        locked: true,
+        preview: c.backgroundImage || c.background || '',
+        index: -1,
+      })
+    }
+    return rows
   }
 
   // --- live previews -----------------------------------------------------
@@ -370,6 +390,11 @@ export class Editor {
    * layer panel does it) — that is how the human gets at their properties.
    */
   selectMany(ids: string[]) {
+    // Background is exclusive: picking it clears ordinary layers (and shows canvas props).
+    if (ids.length === 1 && ids[0] === BACKGROUND_ID) {
+      this.setSelection([BACKGROUND_ID])
+      return
+    }
     const have = new Set((this.board?.layers ?? []).map((l) => l.id))
     this.setSelection(ids.filter((id) => have.has(id)))
   }
@@ -740,7 +765,8 @@ export class Editor {
     c.drawRect(ck.XYWHRect(this.tx, this.ty + 12, W * this.z, H * this.z), p)
     p.setMaskFilter(null)
     blur.delete()
-    if (!parseColour(ck, board.canvas.background) && this.checker) {
+    const hideBg = !canvasBackgroundVisible(board.canvas)
+    if ((hideBg || !parseColour(ck, board.canvas.background)) && this.checker) {
       p.setShader(this.checker)
       c.drawRect(pageRect(), p)
       p.setShader(null)

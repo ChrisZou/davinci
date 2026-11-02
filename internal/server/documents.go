@@ -37,20 +37,18 @@ type LayerRow struct {
 // board picks one board of the project (id, name or 1-based number); empty
 // means the active board.
 func LayerRows(doc json.RawMessage, board string) ([]LayerRow, error) {
-	raw, err := boardLayers(doc, board)
+	canvas, raw, err := pickBoard(doc, board)
 	if err != nil {
 		return nil, err
 	}
-	var d struct {
-		Layers []map[string]any
-	}
+	var layers []map[string]any
 	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &d.Layers); err != nil {
+		if err := json.Unmarshal(raw, &layers); err != nil {
 			return nil, err
 		}
 	}
-	out := make([]LayerRow, 0, len(d.Layers))
-	for i, l := range d.Layers {
+	out := make([]LayerRow, 0, len(layers)+1)
+	for i, l := range layers {
 		out = append(out, LayerRow{
 			ID:       str(l["id"]),
 			Name:     str(l["name"]),
@@ -73,6 +71,18 @@ func LayerRows(doc json.RawMessage, board string) ([]LayerRow, error) {
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 		out[i], out[j] = out[j], out[i]
 	}
+	// Virtual「背景」row at the back (end of front-to-back list).
+	bgVisible := canvas.BackgroundVisible == nil || *canvas.BackgroundVisible
+	preview := canvas.Background
+	if canvas.BackgroundImage != "" {
+		preview = canvas.BackgroundImage
+	}
+	out = append(out, LayerRow{
+		ID: "__background", Name: "背景", Type: "background",
+		Width: float64(canvas.Width), Height: float64(canvas.Height),
+		Opacity: 1, Visible: bgVisible, Locked: true,
+		Index: -1, Preview: preview,
+	})
 	return out, nil
 }
 

@@ -62,8 +62,8 @@ func TestTemplatesAreProjectsOfAnotherKind(t *testing.T) {
 	if tpl["kind"] != KindTemplate || tpl["width"].(float64) != 621 || tpl["height"].(float64) != 828 {
 		t.Fatalf("template = %v", tpl)
 	}
-	// The picture is an ordinary layer filling the canvas.
-	if l := h.layers(id); len(l) != 1 || l[0].Type != "image" {
+	// The picture is an ordinary layer filling the canvas (+ virtual 背景).
+	if l := h.layers(id); len(l) != 2 || l[0].Type != "image" || l[1].Type != "background" {
 		t.Fatalf("layers = %+v", l)
 	}
 
@@ -127,15 +127,15 @@ func TestDuplicateTemplateIntoDesign(t *testing.T) {
 	if p.Kind != KindDesign || p.Name != "我的新封面" || p.Width != 600 || len(p.Tags) != 0 || p.Note != "" || p.Link != "" || p.Source != "" || p.Author != "" || p.Likes != 0 || p.TemplateID != id {
 		t.Fatalf("copy = %+v", p)
 	}
-	if l := h.layers(p.ID); len(l) != 2 {
-		t.Fatalf("copy has %d layers, want 2", len(l))
+	if l := h.layers(p.ID); len(l) != 3 {
+		t.Fatalf("copy has %d layers, want 2 real + background", len(l))
 	}
 	// Editing the copy leaves the template alone.
 	if ok, msg := h.exec(p.ID, map[string]any{"type": "addText", "text": "再加一行"}); !ok {
 		t.Fatalf("addText on copy: %s", msg)
 	}
-	if l := h.layers(id); len(l) != 2 {
-		t.Errorf("template has %d layers after editing the copy, want 2", len(l))
+	if l := h.layers(id); len(l) != 3 {
+		t.Errorf("template has %d layers after editing the copy, want 2 real + background", len(l))
 	}
 
 	// Copying within the template library keeps the tags and note.

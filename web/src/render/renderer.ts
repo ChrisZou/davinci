@@ -1,5 +1,6 @@
 import type { Canvas, CanvasKit, Image, ImageFilter, Paint } from 'canvaskit-wasm'
 import type { Board, Layer } from '../types'
+import { canvasBackgroundVisible } from '../types'
 import { contentMatrix, frameOf, membersBox, type Frame, type Mat } from './geometry'
 import { FONT_SIZE_MULT, FontCache, layoutText, letterSpacingPx, numericWeight, textBackgroundPadding, textFaces, type Face, type FaceLookup, type TextLayout } from './text'
 import { gradientLine, readGradient } from './gradient'
@@ -205,7 +206,7 @@ export class Renderer implements FaceLookup {
   /** Draws a board at 1 unit = 1 board pixel into the canvas's current transform. */
   draw(canvas: Canvas, board: Pick<Board, 'canvas' | 'layers'>, opts: DrawOptions = {}) {
     const { width, height } = board.canvas
-    if (!opts.transparent) this.drawBackground(canvas, board.canvas, width, height)
+    if (!opts.transparent && canvasBackgroundVisible(board.canvas)) this.drawBackground(canvas, board.canvas, width, height)
     for (const l of board.layers) {
       if (opts.only && !opts.only.has(l.id)) continue
       if (opts.hide?.has(l.id)) continue

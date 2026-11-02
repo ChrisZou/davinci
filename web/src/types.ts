@@ -6,6 +6,22 @@
 
 export type LayerType = 'text' | 'image' | 'shape' | 'group'
 
+/** Layer panel / listings; includes the virtual canvas background row. */
+export type LayerRowType = LayerType | 'background'
+
+/** Reserved id of the virtual「背景」row (not a real Layer). */
+export const BACKGROUND_ID = '__background'
+
+export function isBackgroundID(id: string | null | undefined): boolean {
+  const s = String(id ?? '').trim()
+  return s === BACKGROUND_ID || s === 'background' || s === '背景'
+}
+
+/** Omit or true = shown; false = board draws without colour/image. */
+export function canvasBackgroundVisible(canvas: { backgroundVisible?: boolean } | null | undefined): boolean {
+  return canvas?.backgroundVisible !== false
+}
+
 export interface TextStyle {
   fontFamily?: string
   fontSize?: number
@@ -135,6 +151,8 @@ export interface Document {
     height: number
     background?: string
     backgroundImage?: string
+    /** false hides colour/image; omit/true = visible (older docs). */
+    backgroundVisible?: boolean
   }
   layers: Layer[]
 }
@@ -143,7 +161,7 @@ export interface Document {
 export interface LayerRow {
   id: string
   name: string
-  type: LayerType
+  type: LayerRowType
   x: number
   y: number
   width: number
@@ -154,7 +172,7 @@ export interface LayerRow {
   locked: boolean
   /** Short human summary: the text, or the image url tail, or the fill colour. */
   preview: string
-  /** Index in the layers array (0 = back). */
+  /** Index in the layers array (0 = back). Virtual background uses -1. */
   index: number
 }
 

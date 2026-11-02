@@ -186,15 +186,33 @@ func init() {
 	})
 
 	define(Spec{
-		Type: "setVisible", Summary: "显示 / 隐藏图层",
+		Type: "setVisible", Summary: "显示 / 隐藏图层；id 为 __background / background / 背景 时切换画布背景显隐",
 		Params: []Param{REF, {Name: "visible", Type: "boolean", Desc: "true 显示", Required: true}},
 		Run: func(c *Ctx, cmd map[string]any) (any, error) {
+			if IsBackgroundRef(str(cmd["id"])) {
+				vis := boolean(cmd["visible"], !CanvasBackgroundVisible(c.B.Canvas))
+				SetCanvasBackgroundVisible(&c.B.Canvas, vis)
+				return map[string]any{"id": BackgroundLayerID, "name": "背景", "visible": vis}, nil
+			}
 			l, err := c.layer(cmd["id"])
 			if err != nil {
 				return nil, err
 			}
 			l.Visible = boolean(cmd["visible"], !l.Visible)
 			return map[string]any{"id": l.ID, "name": l.Name, "visible": l.Visible}, nil
+		},
+	})
+
+	define(Spec{
+		Type: "setBackgroundVisible", Summary: "显示 / 隐藏画布背景（图层列表「背景」行）",
+		Params: []Param{{Name: "visible", Type: "boolean", Desc: "true 显示；省略则切换当前状态"}},
+		Run: func(c *Ctx, cmd map[string]any) (any, error) {
+			vis := !CanvasBackgroundVisible(c.B.Canvas)
+			if has(cmd, "visible") {
+				vis = boolean(cmd["visible"], true)
+			}
+			SetCanvasBackgroundVisible(&c.B.Canvas, vis)
+			return map[string]any{"id": BackgroundLayerID, "name": "背景", "visible": vis}, nil
 		},
 	})
 

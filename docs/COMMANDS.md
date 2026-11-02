@@ -72,6 +72,7 @@ AI 猜错参数名是常事（`scale` vs `multiplier`），静默忽略会得到
 |---|---|---|
 | `setCanvasSize` | `width` `height` `preset` | 改画布尺寸，图层不动。给 `preset`（`xhs-3-4` 等）就忽略宽高 |
 | `setBackground` | `color` `image` | 纯色或图片背景（图片按 cover 铺满）；`color` 支持 `transparent` |
+| `setBackgroundVisible` | `visible` | 隐藏/显示画布背景（图层列表「背景」）；也可用 setVisible + id `__background` |
 
 ```bash
 davinci canvas size --w 1242 --h 1656

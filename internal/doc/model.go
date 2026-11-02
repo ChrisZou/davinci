@@ -34,6 +34,10 @@ type Canvas struct {
 	Height          float64 `json:"height"`
 	Background      string  `json:"background,omitempty"`
 	BackgroundImage string  `json:"backgroundImage,omitempty"`
+	// BackgroundVisible hides the board colour/image when false. Nil/true = shown
+	// (omitted in older documents). Not a real layer — the editor lists it as a
+	// virtual「背景」row so it can be toggled like other layers.
+	BackgroundVisible *bool `json:"backgroundVisible,omitempty"`
 }
 
 // Layer is one element on a board.

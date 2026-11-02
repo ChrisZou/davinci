@@ -411,3 +411,40 @@ func TestImageStroke(t *testing.T) {
 		t.Fatalf("stroke none = %v", l.Style)
 	}
 }
+
+func TestBackgroundVisibleToggleAndList(t *testing.T) {
+	e, _ := engine(t)
+	rows := Rows(e.p.ActiveBoard())
+	if len(rows) != 1 || rows[0].Type != "background" || !rows[0].Visible {
+		t.Fatalf("empty board rows = %+v", rows)
+	}
+	run(t, e, `{"type":"addText","text":"hi","name":"字"}`)
+	rows = Rows(e.p.ActiveBoard())
+	if len(rows) != 2 || rows[0].Name != "字" || rows[1].ID != BackgroundLayerID {
+		t.Fatalf("rows = %+v", rows)
+	}
+	run(t, e, `{"type":"setBackgroundVisible","visible":false}`)
+	b := e.p.ActiveBoard()
+	if CanvasBackgroundVisible(b.Canvas) {
+		t.Fatal("background should be hidden")
+	}
+	if Rows(b)[1].Visible {
+		t.Fatal("listed background should be hidden")
+	}
+	run(t, e, `{"type":"setVisible","id":"__background","visible":true}`)
+	if !CanvasBackgroundVisible(e.p.ActiveBoard().Canvas) {
+		t.Fatal("background should be visible again")
+	}
+	run(t, e, `{"type":"setVisible","id":"背景","visible":false}`)
+	if CanvasBackgroundVisible(e.p.ActiveBoard().Canvas) {
+		t.Fatal("背景 alias should hide")
+	}
+	// setBackground must not wipe visibility flag unexpectedly — visibility is independent
+	run(t, e, `{"type":"setBackground","color":"#ff0000"}`)
+	if CanvasBackgroundVisible(e.p.ActiveBoard().Canvas) {
+		t.Fatal("hiding should persist across setBackground")
+	}
+	if e.p.ActiveBoard().Canvas.Background != "#ff0000" {
+		t.Fatalf("background colour = %q", e.p.ActiveBoard().Canvas.Background)
+	}
+}

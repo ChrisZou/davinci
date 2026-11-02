@@ -1,5 +1,6 @@
 import type { Editor } from './Editor'
 import type { Layer } from '../types'
+import { BACKGROUND_ID, canvasBackgroundVisible, isBackgroundID } from '../types'
 
 /**
  * Keyboard shortcuts and the clipboard.
@@ -252,9 +253,14 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
     if (!meta && !e.altKey && !e.shiftKey && lower === 'v' && sel.length) {
       e.preventDefault()
       if (!e.repeat) {
-        const layers = selectedLayers(ed)
-        const visible = layers.every((l) => !l.visible)
-        if (layers.length) void host.run(each(layers.map((l) => l.id), (id) => ({ type: 'setVisible', id, visible })))
+        if (sel.length === 1 && isBackgroundID(sel[0])) {
+          const show = !canvasBackgroundVisible(ed.doc?.canvas)
+          void host.run({ type: 'setVisible', id: BACKGROUND_ID, visible: show })
+        } else {
+          const layers = selectedLayers(ed)
+          const visible = layers.every((l) => !l.visible)
+          if (layers.length) void host.run(each(layers.map((l) => l.id), (id) => ({ type: 'setVisible', id, visible })))
+        }
       }
       return
     }
@@ -262,7 +268,8 @@ export function installShortcuts(ed: Editor, host: ShortcutHost): Shortcuts {
     // --- delete ---
     if ((key === 'Backspace' || key === 'Delete') && sel.length) {
       e.preventDefault()
-      removeSelected(sel)
+      const ids = sel.filter((id) => !isBackgroundID(id))
+      if (ids.length) removeSelected(ids)
       return
     }
 

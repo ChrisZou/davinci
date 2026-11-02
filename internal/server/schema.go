@@ -28,8 +28,11 @@ type docShape struct {
 }
 
 type canvasShape struct {
-	Width  int `json:"width"`
-	Height int `json:"height"`
+	Width             int    `json:"width"`
+	Height            int    `json:"height"`
+	Background        string `json:"background"`
+	BackgroundImage   string `json:"backgroundImage"`
+	BackgroundVisible *bool  `json:"backgroundVisible"`
 }
 
 // canvasSizeOf reads the project's size — that of its first board, which is
@@ -80,19 +83,18 @@ func Boards(doc json.RawMessage) []BoardInfo {
 	return out
 }
 
-// boardLayers returns the layers array of one board: the one named by ref (id
-// with or without its "board_", name or 1-based number), or the active board
-// when ref is empty.
-func boardLayers(doc json.RawMessage, ref string) (json.RawMessage, error) {
+
+// pickBoard returns one board's canvas and layers JSON (active board when ref is empty).
+func pickBoard(doc json.RawMessage, ref string) (canvasShape, json.RawMessage, error) {
 	var d docShape
 	if err := json.Unmarshal(doc, &d); err != nil {
-		return nil, err
+		return canvasShape{}, nil, err
 	}
 	if len(d.Boards) == 0 {
 		if ref != "" && ref != "1" && ref != "画板 1" {
-			return nil, fmt.Errorf("no board %q — this project has one board", ref)
+			return canvasShape{}, nil, fmt.Errorf("no board %q — this project has one board", ref)
 		}
-		return d.Layers, nil
+		return d.Canvas, d.Layers, nil
 	}
 	pick := -1
 	if ref == "" {
@@ -119,9 +121,18 @@ func boardLayers(doc json.RawMessage, ref string) (json.RawMessage, error) {
 		for i, b := range d.Boards {
 			names = append(names, fmt.Sprintf("%d:%s[%s]", i+1, b.Name, b.ID))
 		}
-		return nil, fmt.Errorf("no board %q — boards: %s", ref, strings.Join(names, ", "))
+		return canvasShape{}, nil, fmt.Errorf("no board %q — boards: %s", ref, strings.Join(names, ", "))
 	}
-	return d.Boards[pick].Layers, nil
+	b := d.Boards[pick]
+	return b.Canvas, b.Layers, nil
+}
+
+// boardLayers returns the layers array of one board: the one named by ref (id
+// with or without its "board_", name or 1-based number), or the active board
+// when ref is empty.
+func boardLayers(doc json.RawMessage, ref string) (json.RawMessage, error) {
+	_, layers, err := pickBoard(doc, ref)
+	return layers, err
 }
 
 // loadDocument reads a project's document and revision, falling back to a fresh

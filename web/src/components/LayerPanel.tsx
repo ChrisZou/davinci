@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { Document, Layer, LayerRow } from '../types'
+import { BACKGROUND_ID, isBackgroundID } from '../types'
 import { gradientCSS, readGradient } from '../render/gradient'
 
 /**
@@ -33,29 +34,40 @@ export function LayerPanel({
   const anchor = useRef<string | null>(null)
 
   const click = (e: React.MouseEvent, id: string) => {
-    if (e.shiftKey && anchor.current && rows.some((r) => r.id === anchor.current)) {
-      const a = rows.findIndex((r) => r.id === anchor.current)
-      const b = rows.findIndex((r) => r.id === id)
-      const [lo, hi] = a < b ? [a, b] : [b, a]
-      onSelect(rows.slice(lo, hi + 1).map((r) => r.id))
+    // Background is not a real layer: select it alone so Properties shows canvas.
+    if (isBackgroundID(id)) {
+      anchor.current = id
+      onSelect([BACKGROUND_ID])
       return
+    }
+    if (e.shiftKey && anchor.current && rows.some((r) => r.id === anchor.current) && !isBackgroundID(anchor.current)) {
+      const stack = rows.filter((r) => r.type !== 'background')
+      const a = stack.findIndex((r) => r.id === anchor.current)
+      const b = stack.findIndex((r) => r.id === id)
+      if (a >= 0 && b >= 0) {
+        const [lo, hi] = a < b ? [a, b] : [b, a]
+        onSelect(stack.slice(lo, hi + 1).map((r) => r.id))
+        return
+      }
     }
     anchor.current = id
     if (e.metaKey || e.ctrlKey) {
-      onSelect(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id])
+      onSelect(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected.filter((x) => !isBackgroundID(x)), id])
       return
     }
     onSelect([id])
   }
 
   const drop = () => {
-    if (!readOnly && drag && over && drag !== over.id) {
+    if (!readOnly && drag && over && drag !== over.id && !isBackgroundID(drag) && !isBackgroundID(over.id)) {
       // Rows are front-to-back, document indices back-to-front. setZIndex takes
       // the object out and puts it back at the index, so the index depends on
-      // whether the dragged row came from below or above the target.
-      const n = rows.length
-      const from = n - 1 - rows.findIndex((r) => r.id === drag)
-      const to = n - 1 - rows.findIndex((r) => r.id === over.id)
+      // whether the dragged row came from below or above the target. The
+      // virtual「背景」row is not part of that stack.
+      const stack = rows.filter((r) => r.type !== 'background')
+      const n = stack.length
+      const from = n - 1 - stack.findIndex((r) => r.id === drag)
+      const to = n - 1 - stack.findIndex((r) => r.id === over.id)
       const index = over.above ? (from < to ? to : to + 1) : from < to ? to - 1 : to
       if (index !== from) void onRun({ type: 'setZIndex', id: drag, index })
     }
@@ -87,11 +99,11 @@ export function LayerPanel({
           return (
             <li
               key={r.id}
-              draggable={!readOnly && renaming !== r.id}
+              draggable={!readOnly && renaming !== r.id && r.type !== 'background'}
               data-layer-name={r.name}
               data-layer-type={r.type}
               onDragStart={(e) => {
-                if (readOnly) { e.preventDefault(); return }
+                if (readOnly || r.type === 'background') { e.preventDefault(); return }
                 setDrag(r.id)
                 e.dataTransfer.effectAllowed = 'move'
               }}
@@ -100,7 +112,7 @@ export function LayerPanel({
                 setOver(null)
               }}
               onDragOver={(e) => {
-                if (readOnly || !drag) return
+                if (readOnly || !drag || r.type === 'background' || isBackgroundID(drag)) return
                 e.preventDefault()
                 const box = e.currentTarget.getBoundingClientRect()
                 const above = e.clientY < box.top + box.height / 2
@@ -115,7 +127,7 @@ export function LayerPanel({
               } ${drag === r.id ? 'opacity-40' : ''}`}
               onClick={(e) => click(e, r.id)}
               onContextMenu={(e) => {
-                if (renaming === r.id) return
+                if (renaming === r.id || r.type === 'background') return
                 e.preventDefault()
                 if (!readOnly) onContextMenu(e, r.id)
               }}
@@ -126,7 +138,7 @@ export function LayerPanel({
                   data-testid="drop-indicator"
                 />
               )}
-              <Thumb layer={layer} type={r.type} />
+              <Thumb layer={layer} type={r.type} canvas={doc.canvas} />
               <span className={`flex min-w-0 flex-1 flex-col ${r.visible ? '' : 'opacity-45'}`}>
                 {!readOnly && renaming === r.id ? (
                   <RenameBox
@@ -142,19 +154,20 @@ export function LayerPanel({
                     title={readOnly ? r.preview : `${r.preview}\n双击重命名`}
                     onDoubleClick={(e) => {
                       e.stopPropagation()
-                      if (!readOnly) setRenaming(r.id)
+                      if (!readOnly && r.type !== 'background') setRenaming(r.id)
                     }}
                   >
                     {r.name}
                   </span>
                 )}
-                <span className="truncate text-[11px] text-faint">{kindOf(layer, r)}</span>
+                {kindOf(layer, r) ? <span className="truncate text-[11px] text-faint">{kindOf(layer, r)}</span> : null}
               </span>
               {!readOnly && <>
                 <button
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-faint hover:bg-card hover:text-ink ${r.visible ? 'opacity-0 group-hover:opacity-100' : ''}`}
                   title={r.visible ? '隐藏（V）' : '显示（V）'}
                   aria-label={r.visible ? '隐藏' : '显示'}
+                  data-testid={r.type === 'background' ? 'background-visibility' : undefined}
                   onClick={(e) => {
                     e.stopPropagation()
                     void onRun({ type: 'setVisible', id: r.id, visible: !r.visible })
@@ -168,6 +181,7 @@ export function LayerPanel({
                     )}
                   </svg>
                 </button>
+                {r.type !== 'background' && (
                 <button
                   className={`-ml-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg hover:bg-card ${r.locked ? 'text-accent' : 'text-faint opacity-0 hover:text-ink group-hover:opacity-100'}`}
                   title={r.locked ? '解锁' : '锁定'}
@@ -181,6 +195,7 @@ export function LayerPanel({
                     <path d={r.locked ? 'M5 11h14v10H5zM8 11V8a4 4 0 0 1 8 0v3' : 'M5 11h14v10H5zM8 11V8a4 4 0 0 1 7.5-2'} />
                   </svg>
                 </button>
+                )}
               </>}
             </li>
           )
@@ -192,6 +207,7 @@ export function LayerPanel({
 
 /** The row's second line: what kind of layer, and anything unusual about it. */
 function kindOf(layer: Layer | undefined, r: LayerRow): string {
+  if (r.type === 'background') return r.visible ? '' : '已隐藏'
   const base =
     r.type === 'text' ? '文字' : r.type === 'image' ? '图片' : r.type === 'group' ? `编组 · ${layer?.children?.length ?? 0} 个` : ({ rect: '矩形', ellipse: '椭圆', triangle: '三角形', line: '直线' } as Record<string, string>)[layer?.shape?.kind ?? 'rect'] ?? '形状'
   const flags = [r.locked ? '已锁定' : '', r.visible ? '' : '已隐藏'].filter(Boolean)
@@ -228,9 +244,22 @@ function RenameBox({ name, onDone }: { name: string; onDone: (name: string) => v
  * text's first letter in its colour. Drawn from the document rather than
  * rendered, so it costs nothing on every edit.
  */
-function Thumb({ layer, type }: { layer?: Layer; type: Layer['type'] }) {
+function Thumb({ layer, type, canvas }: { layer?: Layer; type: LayerRow['type']; canvas?: Document['canvas'] }) {
   const style = (layer?.style ?? {}) as Record<string, any>
   const box = 'dv-checker flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line'
+  if (type === 'background') {
+    if (canvas?.backgroundImage) {
+      return (
+        <span className={box}>
+          <img src={canvas.backgroundImage} alt="" className="h-full w-full object-cover" draggable={false} />
+        </span>
+      )
+    }
+    const color = canvas?.background && canvas.background !== 'transparent' && canvas.background !== 'none' ? canvas.background : undefined
+    return (
+      <span className={box} style={color ? { background: color } : undefined} data-testid="background-thumb" />
+    )
+  }
   if (type === 'image' && layer?.image?.url) {
     return (
       <span className={box}>

@@ -171,11 +171,14 @@ func TestBrokenImageSurvivesAnImport(t *testing.T) {
 	})
 
 	rows := h.layers(id)
-	if len(rows) != 1 {
-		t.Fatalf("want 1 layer, got %v", names(rows))
+	if len(rows) != 2 {
+		t.Fatalf("want image + background, got %v", names(rows))
 	}
 	if rows[0].Type != "image" {
 		t.Errorf("a missing URL is a broken reference, not a shape: type = %q, want image", rows[0].Type)
+	}
+	if rows[1].Type != "background" {
+		t.Errorf("background row missing: %v", names(rows))
 	}
 }
 
@@ -203,7 +206,7 @@ func TestAnUnrunnableCommandIsRefused(t *testing.T) {
 		t.Error("the refusal carried no reason, so there is nothing for the caller to act on")
 	}
 	rows := h.layers(id)
-	if len(rows) != 1 || rows[0].Type != "image" {
+	if len(rows) != 2 || rows[0].Type != "image" || rows[1].Type != "background" {
 		t.Errorf("a refused command must not disturb the stored layer: %v", names(rows))
 	}
 }
@@ -227,7 +230,7 @@ func TestLayerRowsAreFrontToBack(t *testing.T) {
 	})
 
 	got := names(h.layers(id))
-	want := []string{"顶层", "中层", "底层"} // front first
+	want := []string{"顶层", "中层", "底层", "背景"} // front first, virtual background last
 	if fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("layer rows = %v, want %v (front-to-back)", got, want)
 	}

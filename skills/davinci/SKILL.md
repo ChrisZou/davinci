@@ -197,6 +197,7 @@ davinci tpl move <作品>                 # 用户让你把某个作品放进模
 
 ```bash
 davinci -p <项目> layers            # 图层列表：id、名称、位置、尺寸（最上层在前）
+  # 列表末尾有虚拟「背景」行（id=__background）；隐藏：exec '{"type":"setBackgroundVisible","visible":false}'
 davinci -p <项目> doc               # 整份文档 JSON（样式细节都在里面）
 ```
 

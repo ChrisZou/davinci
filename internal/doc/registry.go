@@ -128,6 +128,46 @@ func (c *Ctx) insert(l *Layer, at int) {
 	c.B.Layers[at] = l
 }
 
+// BackgroundLayerID is the reserved id of the virtual canvas-background row
+// in layer listings. It is not a Layer; setVisible / setBackgroundVisible
+// accept it to toggle Canvas.BackgroundVisible.
+const BackgroundLayerID = "__background"
+
+// CanvasBackgroundVisible is true unless the board explicitly hid its background.
+func CanvasBackgroundVisible(c Canvas) bool {
+	return c.BackgroundVisible == nil || *c.BackgroundVisible
+}
+
+// SetCanvasBackgroundVisible stores the show/hide flag on the canvas.
+func SetCanvasBackgroundVisible(c *Canvas, visible bool) {
+	v := visible
+	c.BackgroundVisible = &v
+}
+
+// IsBackgroundRef reports whether id names the virtual background row.
+func IsBackgroundRef(id string) bool {
+	s := strings.TrimSpace(id)
+	return s == BackgroundLayerID || s == "background" || s == "背景"
+}
+
+// BackgroundRow is the synthetic listing row for the board background.
+func BackgroundRow(b *Board) LayerRow {
+	preview := b.Canvas.Background
+	if b.Canvas.BackgroundImage != "" {
+		u := b.Canvas.BackgroundImage
+		if r := []rune(u); len(r) > 48 {
+			u = "…" + string(r[len(r)-47:])
+		}
+		preview = u
+	}
+	return LayerRow{
+		ID: BackgroundLayerID, Name: "背景", Type: "background",
+		Width: round(b.Canvas.Width), Height: round(b.Canvas.Height),
+		Opacity: 1, Visible: CanvasBackgroundVisible(b.Canvas), Locked: true,
+		Preview: preview, Index: -1,
+	}
+}
+
 // LayerRow is a layer as listings report it.
 type LayerRow struct {
 	ID       string  `json:"id"`
@@ -146,9 +186,9 @@ type LayerRow struct {
 	Index int `json:"index"`
 }
 
-// Rows lists a board's layers front to back.
+// Rows lists a board's layers front to back, then the virtual「背景」row.
 func Rows(b *Board) []LayerRow {
-	out := make([]LayerRow, 0, len(b.Layers))
+	out := make([]LayerRow, 0, len(b.Layers)+1)
 	for i := len(b.Layers) - 1; i >= 0; i-- {
 		l := b.Layers[i]
 		out = append(out, LayerRow{
@@ -158,6 +198,7 @@ func Rows(b *Board) []LayerRow {
 			Preview: Preview(l), Index: i,
 		})
 	}
+	out = append(out, BackgroundRow(b))
 	return out
 }
 

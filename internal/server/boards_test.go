@@ -21,12 +21,12 @@ func TestBoardsOfProject(t *testing.T) {
 	}
 	// No board named: the active one.
 	rows, err := LayerRows(doc, "")
-	if err != nil || len(rows) != 1 || rows[0].ID != "i2" {
+	if err != nil || len(rows) != 2 || rows[0].ID != "i2" || rows[1].ID != "__background" {
 		t.Fatalf("active rows = %+v, %v", rows, err)
 	}
 	for _, ref := range []string{"b1", "设计稿", "1"} {
 		rows, err := LayerRows(doc, ref)
-		if err != nil || len(rows) != 2 || rows[0].ID != "i1" {
+		if err != nil || len(rows) != 3 || rows[0].ID != "i1" || rows[2].Type != "background" {
 			t.Fatalf("rows(%q) = %+v, %v", ref, rows, err)
 		}
 	}
@@ -43,7 +43,7 @@ func TestBoardsOfLegacyDocument(t *testing.T) {
 	if bs := Boards(doc); len(bs) != 1 || bs[0].Layers != 1 || !bs[0].Active {
 		t.Fatalf("boards = %+v", bs)
 	}
-	if rows, err := LayerRows(doc, ""); err != nil || len(rows) != 1 {
+	if rows, err := LayerRows(doc, ""); err != nil || len(rows) != 2 || rows[1].Type != "background" {
 		t.Fatalf("rows = %+v, %v", rows, err)
 	}
 }
