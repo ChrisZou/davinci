@@ -166,7 +166,7 @@ func (s *Store) initSchema() error {
 				ErrIncompatibleDB, filepath.Join(s.dir, "davinci.db"), missing(cols), keys(cols))
 		}
 	}
-	for _, ddl := range []string{projectsDDL, assetsDDL, fontsDDL, metaDDL, palettesDDL} {
+	for _, ddl := range []string{projectsDDL, assetsDDL, fontsDDL, metaDDL, palettesDDL, favoriteColorsDDL} {
 		if _, err := s.db.Exec(ddl); err != nil {
 			return fmt.Errorf("create tables: %w", err)
 		}

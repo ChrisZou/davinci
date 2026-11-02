@@ -27,6 +27,9 @@ func (s *Server) registerAPI(e *echo.Echo) {
 	api.GET("/fonts/face", s.handleFontFace)
 	api.PUT("/fonts/prefs", s.handleFontPrefs)
 	api.POST("/fonts", s.handleUploadFont)
+	for _, route := range favoriteColorRoutes {
+		api.Add(route.Method, route.Path, route.handler(s))
+	}
 	api.POST("/assets", s.handleUploadAsset)
 
 	api.GET("/projects", s.handleListProjects)
@@ -67,6 +70,7 @@ func (s *Server) handleHealth(c echo.Context) error {
 func (s *Server) handleSchema(c echo.Context) error {
 	schema := doc.Schema()
 	routes := append([]paletteRoute(nil), paletteRoutes...)
+	routes = append(routes, favoriteColorRoutes...)
 	for i := range routes {
 		routes[i].Path = "/api" + routes[i].Path
 	}

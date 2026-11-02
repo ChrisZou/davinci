@@ -1,5 +1,6 @@
-import { usePalettes } from './paletteState'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useFavoriteColors } from './favoriteColorState'
+import { normalizeColor } from './colorValue'
 
 /**
  * Field primitives for the panels.
@@ -112,20 +113,14 @@ export function NumField({
   )
 }
 
-/**
- * A colour: a round swatch that opens the picker, the value as text, and —
- * when the panel passes the colours already in the design — a row of those
- * as one-click swatches, because a cover rarely wants a colour it does not
- * already have.
- */
+/** A colour picker with a shared, persistent collection of individual colours. */
 export function ColorField({
   label,
   value,
   onCommit,
   testId,
   allowNone,
-  palette,
-  showPalettes = true,
+  showFavorites = true,
 }: {
   label: string
   value: string
@@ -137,18 +132,14 @@ export function ColorField({
    * button that commits "".
    */
   allowNone?: boolean
-  /** Colours already used in the document, offered as swatches. */
-  palette?: string[]
-  /** Compact controls (such as gradient endpoints) can omit palette suggestions. */
-  showPalettes?: boolean
+  /** Compact controls (such as gradient endpoints) can omit the swatch row. */
+  showFavorites?: boolean
 }) {
-  const { items: savedPalettes } = usePalettes()
-  const [expanded, setExpanded] = useState(false)
-  const mine = [...(savedPalettes ?? [])].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || a.id.localeCompare(b.id))
+  const favorites = useFavoriteColors()
+  const [saveError, setSaveError] = useState('')
   const none = !value || value === 'transparent' || value === 'none'
-  // The colour input only understands #rrggbb, so anything else (transparent, a
-  // shorthand, an rgba() shadow) is shown as black and typed into the text box.
-  const hex = /^#[0-9a-f]{6}$/i.test(value) ? value : none ? '#ffffff' : '#000000'
+  // The native picker needs six-digit hex; the text field preserves alpha.
+  const hex = normalizeColor(value)?.slice(0, 7) ?? (none ? '#ffffff' : '#000000')
   const [draft, setDraft] = useState(none ? '' : value)
   const timer = useRef<number | undefined>(undefined)
   useEffect(() => {
@@ -166,7 +157,10 @@ export function ColorField({
     setDraft(next)
     onCommit(next)
   }
-  const swatches = (palette ?? []).filter((c) => c.toLowerCase() !== value.toLowerCase()).slice(0, 7)
+  const color = normalizeColor(draft)
+  const swatches = favorites.colors ?? []
+  const starred = color !== null && swatches.includes(color)
+  const favoriteLabel = starred ? '取消收藏' : '收藏颜色'
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -186,17 +180,37 @@ export function ColorField({
             style={none ? undefined : { background: value }}
           />
         </label>
-        <input
-          className="h-8 min-w-0 flex-1 rounded-[10px] bg-paper px-3 text-[13px] text-ink outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
-          value={draft}
-          aria-label={`${label}（色值）`}
-          placeholder={allowNone ? '无' : ''}
-          onChange={(e) => set(e.target.value)}
-          onBlur={() => {
-            window.clearTimeout(timer.current)
-            if (draft !== (none ? '' : value)) onCommit(draft)
-          }}
-        />
+        <div className="relative flex min-w-0 flex-1 items-center rounded-[10px] bg-paper focus-within:ring-2 focus-within:ring-accent/30">
+          <input
+            className="h-8 w-full min-w-0 rounded-[10px] bg-transparent pl-3 pr-9 text-[13px] text-ink outline-none placeholder:text-faint"
+            value={draft}
+            aria-label={`${label}（色值）`}
+            placeholder={allowNone ? '无' : ''}
+            onChange={(e) => set(e.target.value)}
+            onBlur={() => {
+              window.clearTimeout(timer.current)
+              if (draft !== (none ? '' : value)) onCommit(draft)
+            }}
+          />
+          <button
+            type="button"
+            title={favoriteLabel}
+            aria-label={`${favoriteLabel} ${label}${color ? ` ${color}` : ''}`}
+            aria-pressed={starred}
+            data-testid="favorite-color"
+            disabled={!color || favorites.colors === null || favorites.saving}
+            className={`absolute right-1 flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-card disabled:cursor-default disabled:opacity-30 ${starred ? 'text-accent' : 'text-faint hover:text-ink'}`}
+            onClick={() => {
+              if (!color) return
+              setSaveError('')
+              void favorites.setFavorite(color, !starred).catch(() => setSaveError('收藏失败，请重试'))
+            }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill={starred ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
+              <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" />
+            </svg>
+          </button>
+        </div>
         {allowNone && !none && (
           <button type="button" title="去掉颜色" aria-label="去掉颜色" className="icon-btn h-8 w-8 shrink-0 text-faint" onClick={() => now('')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -205,37 +219,22 @@ export function ColorField({
           </button>
         )}
       </div>
-      {showPalettes && swatches.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+      {favorites.error && <button type="button" className="text-left text-xs text-accent" onClick={() => { void favorites.reload() }}>{favorites.error}</button>}
+      {saveError && <span role="alert" className="text-xs text-accent">{saveError}</span>}
+      {showFavorites && swatches.length > 0 && (
+        <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto p-0.5" role="group" aria-label="收藏的颜色">
           {swatches.map((c) => (
             <button
               key={c}
               type="button"
               title={c}
-              aria-label={`用 ${c}`}
-              className="h-6 w-6 rounded-full border border-line-strong transition-transform hover:scale-110"
+              aria-label={`使用收藏颜色 ${c}`}
+              aria-pressed={c === color}
+              className={`h-6 w-6 shrink-0 rounded-full border border-line-strong transition-transform hover:scale-110 ${c === color ? 'ring-1 ring-accent ring-offset-1' : ''}`}
               style={{ background: c }}
               onClick={() => now(c)}
             />
           ))}
-        </div>
-      )}
-      {showPalettes && mine.length > 0 && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between text-[11px] text-muted">
-            <span>我的配色</span>
-            {mine.length > 3 && <button type="button" aria-expanded={expanded} className="hover:text-ink" onClick={() => setExpanded(!expanded)}>{expanded ? '收起' : '更多'}</button>}
-          </div>
-          <div className="flex max-h-40 flex-col gap-1 overflow-y-auto">
-            {(expanded ? mine : mine.slice(0, 3)).map((p) => (
-              <div key={p.id} role="group" aria-label={p.name} title={p.name} className="flex items-center gap-1.5">
-                {(['bg', 'text', 'highlight', 'text2', 'accent'] as const).map((key, i) => {
-                  const label = `${p.name} · ${['背景', '主文字', '高亮', '次文字', '点缀'][i]} ${p[key]}`
-                  return <button key={key} type="button" title={label} aria-label={label} className="h-5 w-5 shrink-0 rounded border border-line-strong hover:scale-110" style={{ background: p[key] }} onClick={() => now(p[key])} />
-                })}
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

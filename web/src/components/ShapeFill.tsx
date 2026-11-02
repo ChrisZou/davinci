@@ -3,9 +3,8 @@ import type { LinearGradient, ShapeStyle } from '../types'
 import { gradientCSS, readGradient } from '../render/gradient'
 import { ColorField, NumField, Segmented } from './fields'
 
-export function ShapeFill({ style, palette, onChange }: {
+export function ShapeFill({ style, onChange }: {
   style: ShapeStyle
-  palette: string[]
   onChange: (props: Record<string, unknown>) => void
 }) {
   const gradient = readGradient(style.fillGradient)
@@ -51,7 +50,7 @@ export function ShapeFill({ style, palette, onChange }: {
           <div className="flex flex-col gap-3">
             {gradient.stops.map((s, i) => (
               <div key={i} className="grid grid-cols-[minmax(0,1fr)_80px] items-start gap-2">
-                <ColorField label={i === 0 ? '起点' : '终点'} value={s.color} showPalettes={false} testId={`gradient-color-${i}`} onCommit={(color) => {
+                <ColorField label={i === 0 ? '起点' : '终点'} value={s.color} showFavorites={false} testId={`gradient-color-${i}`} onCommit={(color) => {
                   if (color.trim() && CSS.supports('color', color)) stop(i, { color })
                 }} />
                 <div className="flex min-w-0 flex-col gap-2 [&>label]:h-8 [&>label]:flex-none">
@@ -77,7 +76,7 @@ export function ShapeFill({ style, palette, onChange }: {
           </div>
         </>
       ) : (
-        <ColorField label="颜色" palette={palette} value={style.fill ?? '#000000'} testId="shape-fill" onCommit={(fill) => onChange({ fill })} />
+        <ColorField label="颜色" value={style.fill ?? '#000000'} testId="shape-fill" onCommit={(fill) => onChange({ fill })} />
       )}
     </div>
   )

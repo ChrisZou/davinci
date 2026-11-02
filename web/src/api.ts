@@ -113,6 +113,14 @@ export interface PaletteDraft extends PaletteColors { name: string; imageUrl?: s
 export interface Palette extends PaletteDraft { id: string; createdAt: string; updatedAt: string }
 
 export const api = {
+  async favoriteColors() {
+    return (await asJSON<{ colors: string[] }>(await fetch(`${base}/api/colors/favorites`))).colors
+  },
+  async setFavoriteColor(color: string, favorite: boolean) {
+    return (await asJSON<{ colors: string[] }>(await fetch(`${base}/api/colors/favorites`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ color, favorite }),
+    }))).colors
+  },
   async palettes() {
     return (await asJSON<{ palettes: Palette[] }>(await fetch('/api/palettes'))).palettes
   },

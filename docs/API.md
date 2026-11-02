@@ -47,6 +47,8 @@ curl -s localhost:7789/api/schema | jq '.commands[] | {type, summary}'
 | GET | `/api/fonts` | 字体族（收藏的在前，带 `favorite` / `hidden` / `aliases` 中文名）；加 `?rescan=1` 重新扫系统字体目录 |
 | PUT | `/api/fonts/prefs` | 收藏或隐藏字体：`{"family":"…","favorite":true}` / `{"family":"…","hidden":true}`，返回新的列表 |
 | POST | `/api/fonts` | 上传 `.ttf`/`.otf`，按 `@font-face` 注入页面 |
+| GET | `/api/colors/favorites` | 收藏的单个颜色，按收藏顺序返回 `{ok, colors:[...]}`，独立于配色组合 |
+| PUT | `/api/colors/favorites` | `{color, favorite:true/false}` 收藏或取消收藏，返回完整列表；接受 `#RGB`、`#RGBA`、`#RRGGBB`、`#RRGGBBAA`，统一小写、展开短色值、去除不透明 alpha 后去重；完全透明的颜色不收藏 |
 | POST | `/api/assets` | 导入图片（multipart `file`，或表单字段 `path` / `url`） |
 | GET | `/api/projects` | 项目列表，最近更新的在前。默认只列作品；`?kind=template` 列模板库，`?kind=all` 全部；`?q=`（名称/标签/备注/链接，空格拆词都要命中）`&tag=`（整个标签匹配） |
 | POST | `/api/projects` | 新建项目：`{name, preset?, width?, height?, kind?, tags?, note?, link?}` |

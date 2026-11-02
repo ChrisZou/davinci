@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Document, Layer } from '../types'
 import { FontPicker } from './FontPicker'
 import { presets } from '../editor/presets'
@@ -8,7 +8,6 @@ import { DEFAULT_SHEAR, SHEAR, WARPS, warpShape } from '../editor/warp'
 import { keys } from '../editor/keys'
 import { ColorField, NumField, Section, Segmented, Select, Slider, Switch, Toggle } from './fields'
 import { ShapeFill } from './ShapeFill'
-import { readGradient } from '../render/gradient'
 import { DEFAULT_FONT_SIZE, letterSpacingPx } from '../render/text'
 
 /**
@@ -70,35 +69,6 @@ export function Properties(props: PanelProps) {
       </fieldset>
     </div>
   )
-}
-
-/**
- * The colours this design already uses, most-used first. A cover lives on a
- * handful of colours, so offering them as swatches is usually the whole choice.
- */
-function docColours(doc: Document): string[] {
-  const count = new Map<string, number>()
-  const add = (c: unknown) => {
-    if (typeof c !== 'string') return
-    const s = c.trim().toLowerCase()
-    const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(s)
-    if (!hex) return
-    const full = hex[1].length === 3 ? `#${hex[1].split('').map((x) => x + x).join('')}` : s
-    count.set(full, (count.get(full) ?? 0) + 1)
-  }
-  add(doc.canvas.background)
-  const walk = (layers: Layer[]) => {
-    for (const l of layers) {
-      const st = (l.style ?? {}) as Record<string, unknown>
-      add(st.fill)
-      readGradient(st.fillGradient)?.stops.forEach((stop) => add(stop.color))
-      add(st.textBackgroundColor)
-      add(parseStroke(st.stroke as string | undefined).stroke)
-      if (l.children) walk(l.children)
-    }
-  }
-  walk(doc.layers)
-  return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c)
 }
 
 // --- shared bits ----------------------------------------------------------
@@ -532,7 +502,6 @@ function NameField({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) => vo
 
 function CanvasSection({ doc, onRun, onUpload }: PanelProps) {
   const bgFile = useRef<HTMLInputElement>(null)
-  const palette = useMemo(() => docColours(doc), [doc])
 
   return (
     <>
@@ -572,7 +541,6 @@ function CanvasSection({ doc, onRun, onUpload }: PanelProps) {
         <ColorField
           label="颜色"
           allowNone
-          palette={palette}
           value={doc.canvas.backgroundImage ? '' : doc.canvas.background ?? ''}
           testId="canvas-bg"
           onCommit={(color) => onRun({ type: 'setBackground', color: color || 'transparent' })}
@@ -688,7 +656,6 @@ function LayerSection(props: PanelProps & { layer: Layer }) {
   const patch = (next: Record<string, unknown>) => onRun({ type: 'updateLayer', id: layer.id, props: next })
   const top = doc.layers[doc.layers.length - 1]?.id === layer.id
   const bottom = doc.layers[0]?.id === layer.id
-  const palette = useMemo(() => docColours(doc), [doc])
 
   return (
     <>
@@ -738,10 +705,10 @@ function LayerSection(props: PanelProps & { layer: Layer }) {
         </div>
       </Section>
 
-      {layer.type === 'text' && <TextSections key={layer.id} layer={layer} readOnly={props.readOnly} patch={patch} onRun={onRun} onPreview={props.onPreview} palette={palette} />}
+      {layer.type === 'text' && <TextSections key={layer.id} layer={layer} readOnly={props.readOnly} patch={patch} onRun={onRun} onPreview={props.onPreview} />}
       {layer.type === 'image' && <ImageSections {...props} layer={layer} />}
-      {layer.type === 'shape' && layer.shape?.kind === 'line' && <LineSection layer={layer} onRun={onRun} palette={palette} />}
-      {layer.type === 'shape' && layer.shape?.kind !== 'line' && <ShapeSection layer={layer} onRun={onRun} palette={palette} />}
+      {layer.type === 'shape' && layer.shape?.kind === 'line' && <LineSection layer={layer} onRun={onRun} />}
+      {layer.type === 'shape' && layer.shape?.kind !== 'line' && <ShapeSection layer={layer} onRun={onRun} />}
       {layer.type === 'group' && (
         <Section title="编组">
           <p className="text-xs leading-relaxed text-muted">这几个图层作为一个整体移动、缩放、旋转。要单独改其中某个，先解散。</p>
@@ -863,14 +830,12 @@ function TextSections({
   patch,
   onRun,
   onPreview,
-  palette,
 }: {
   layer: Layer
   readOnly?: boolean
   patch: (props: Record<string, unknown>) => void
   onRun: (cmd: unknown) => void
   onPreview: PanelProps['onPreview']
-  palette: string[]
 }) {
   const style = (layer.style ?? {}) as Record<string, any>
   const [text, setText] = useState(String(layer.text ?? ''))
@@ -939,11 +904,10 @@ function TextSections({
       </Section>
 
       <Section title="颜色">
-        <ColorField label="文字" value={String(style.fill ?? '#000000')} palette={palette} testId="text-color" onCommit={(fill) => patch({ fill })} />
+        <ColorField label="文字" value={String(style.fill ?? '#000000')} testId="text-color" onCommit={(fill) => patch({ fill })} />
         <ColorField
           label="底色"
           allowNone
-          palette={palette}
           value={String(style.textBackgroundColor ?? '')}
           onCommit={(textBackgroundColor) => patch({ textBackgroundColor })}
         />
@@ -961,7 +925,6 @@ function TextSections({
         <ColorField
           label="描边"
           allowNone
-          palette={palette}
           value={stroke.stroke ?? ''}
           // A colour picked for an absent stroke needs a width to be seen.
           onCommit={(c) => patch({ stroke: c ? `${c}:${stroke.strokeWidth || 4}` : '' })}
@@ -1106,12 +1069,12 @@ function ImageSections({ layer, onRun, onUpload, onCrop, onPreview, onPickFromLi
 // --- shape ---------------------------------------------------------------
 
 /** A line: its colour, thickness, dash and arrowheads. */
-function LineSection({ layer, onRun, palette }: { layer: Layer; onRun: (cmd: unknown) => void; palette: string[] }) {
+function LineSection({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) => void }) {
   const style = (layer.style ?? {}) as Record<string, any>
   const set = (props: Record<string, unknown>) => onRun({ type: 'setShapeProps', id: layer.id, ...props })
   return (
     <Section title="线条">
-      <ColorField label="颜色" palette={palette} value={String(style.stroke ?? '#1c1b18')} testId="line-color" onCommit={(stroke) => set({ stroke })} />
+      <ColorField label="颜色" value={String(style.stroke ?? '#1c1b18')} testId="line-color" onCommit={(stroke) => set({ stroke })} />
       <Grid2>
         <NumField label="粗细" value={Number(style.strokeWidth ?? 4)} min={1} max={200} onCommit={(strokeWidth) => set({ strokeWidth })} />
       </Grid2>
@@ -1138,21 +1101,19 @@ function LineSection({ layer, onRun, palette }: { layer: Layer; onRun: (cmd: unk
   )
 }
 
-function ShapeSection({ layer, onRun, palette }: { layer: Layer; onRun: (cmd: unknown) => void; palette: string[] }) {
+function ShapeSection({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) => void }) {
   const style = (layer.style ?? {}) as Record<string, any>
   const hasStroke = !!style.stroke && Number(style.strokeWidth) > 0
   return (
     <Section title="外观">
       <ShapeFill
         key={layer.id}
-        palette={palette}
         style={style}
         onChange={(props) => onRun({ type: 'setShapeProps', id: layer.id, ...props })}
       />
       <ColorField
         label="描边"
         allowNone
-        palette={palette}
         value={hasStroke ? String(style.stroke) : ''}
         onCommit={(stroke) =>
           onRun(

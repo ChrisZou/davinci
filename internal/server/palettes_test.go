@@ -208,7 +208,7 @@ func TestPalettesAPI(t *testing.T) {
 		} `json:"commands"`
 	}
 	json.Unmarshal(body, &schema)
-	if code != 200 || len(schema.Endpoints) != len(paletteRoutes) {
+	if code != 200 || len(schema.Endpoints) != len(paletteRoutes)+len(favoriteColorRoutes) {
 		t.Fatal("missing REST schema")
 	}
 	found := false
