@@ -222,7 +222,7 @@ export function ColorField({
       {favorites.error && <button type="button" className="text-left text-xs text-accent" onClick={() => { void favorites.reload() }}>{favorites.error}</button>}
       {saveError && <span role="alert" className="text-xs text-accent">{saveError}</span>}
       {showFavorites && swatches.length > 0 && (
-        <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto p-0.5" role="group" aria-label="收藏的颜色">
+        <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto p-1" role="group" aria-label="收藏的颜色">
           {swatches.map((c) => (
             <button
               key={c}
