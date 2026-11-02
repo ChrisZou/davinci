@@ -348,8 +348,8 @@ export const api = {
     return out.project
   },
 
-  async fonts() {
-    const out = await asJSON<{ fonts: FontInfo[] }>(await fetch(`${base}/api/fonts`))
+  async fonts({ rescan = false }: { rescan?: boolean } = {}) {
+    const out = await asJSON<{ fonts: FontInfo[] }>(await fetch(`${base}/api/fonts${rescan ? '?rescan=1' : ''}`))
     return out.fonts
   },
 

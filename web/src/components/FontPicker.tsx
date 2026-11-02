@@ -3,6 +3,23 @@ import { createPortal } from 'react-dom'
 import { api, type FontInfo } from '../api'
 import { fontStack } from '../editor/fonts'
 
+// Share the first scan across picker remounts (for example, switching layers).
+// A page reload resets it; a failed scan can be retried on the next open.
+let rescanned = false
+let rescanning: Promise<FontInfo[]> | null = null
+
+function pickerFonts(open: boolean): Promise<FontInfo[]> {
+  if (rescanning) return rescanning
+  if (!open || rescanned) return api.fonts()
+  rescanning = api.fonts({ rescan: true })
+    .then((fonts) => {
+      rescanned = true
+      return fonts
+    })
+    .finally(() => { rescanning = null })
+  return rescanning
+}
+
 /**
  * The font picker: a search box, the starred fonts on top, then the rest.
  * Fonts nobody puts on a cover (system UI faces, other scripts' faces) are
@@ -26,8 +43,12 @@ export function FontPicker({ value, onChange, readOnly = false, disabled = false
   const search = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    void api.fonts().then(setFonts).catch(() => setFonts([]))
-  }, [])
+    let alive = true
+    void pickerFonts(open).then((next) => {
+      if (alive) setFonts(next)
+    }).catch(() => {}) // Keep the current list usable if refreshing fails.
+    return () => { alive = false }
+  }, [open])
 
   useEffect(() => {
     if (inactive) {
