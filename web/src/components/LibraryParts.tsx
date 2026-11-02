@@ -10,7 +10,7 @@ import { api, type LibraryCategory, type LibraryItem } from '../api'
 /** Drag payload type: a library item dragged onto the canvas. */
 export const LIBRARY_DRAG_TYPE = 'application/x-davinci-library'
 
-export function useLibrary(category: string, query: string) {
+export function useLibrary(category: string, query: string, enabled = true) {
   const [categories, setCategories] = useState<LibraryCategory[] | null>(null)
   const [items, setItems] = useState<LibraryItem[] | null>(null)
   const [error, setError] = useState('')
@@ -41,9 +41,10 @@ export function useLibrary(category: string, query: string) {
 
   // Typing in the search box waits for a pause before asking the server.
   useEffect(() => {
+    if (!enabled) return
     const t = window.setTimeout(() => void loadItems(), query ? 200 : 0)
     return () => window.clearTimeout(t)
-  }, [loadItems, query])
+  }, [loadItems, query, enabled])
 
   const reload = useCallback(async () => {
     await Promise.all([loadCategories(), loadItems()])

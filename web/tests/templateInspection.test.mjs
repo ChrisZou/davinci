@@ -163,7 +163,7 @@ test('layer list keeps selection and range modifiers while disabling rename, reo
 
 test('properties keep the same values but disable controls and all mutation callbacks in read-only mode', async () => {
   const calls = []
-  const callbacks = Object.fromEntries(['onRun', 'onRunSelect', 'onUpload', 'onPickFromLibrary', 'onCrop', 'onPreview'].map((key) => [key, (...args) => calls.push([key, ...args])]))
+  const callbacks = Object.fromEntries(['onRun', 'onRunSelect', 'onUpload', 'onPickFromLibrary', 'onPickBackground', 'onCrop', 'onPreview'].map((key) => [key, (...args) => calls.push([key, ...args])]))
   for (const selection of [[], layers.slice(0, 1), layers.slice(1, 2), layers.slice(2), layers]) {
     const props = { doc, selection, layer: selection.length === 1 ? selection[0] : undefined, ...callbacks }
     const tree = Properties({ ...props, readOnly: true })

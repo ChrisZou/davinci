@@ -100,6 +100,10 @@ export function Editor({ projectID }: { projectID: string }) {
   const [rightPanel, setRightPanel] = useState<'properties' | 'comments'>('properties')
   /** The image layer the library is open to replace, when it is. */
   const [replaceFor, setReplaceFor] = useState<string | null>(null)
+  /** Capture the board when opening the picker, including while a local file uploads. */
+  const [backgroundFor, setBackgroundFor] = useState<string | null>(null)
+  const backgroundFile = useRef<HTMLInputElement>(null)
+  const backgroundUploadBoard = useRef<string | null>(null)
   // Read by the shortcut handler, which is installed once and must not go stale.
   const editingRef = useRef<string | null>(null)
   editingRef.current = editing
@@ -387,6 +391,7 @@ export function Editor({ projectID }: { projectID: string }) {
       setEditing(null)
       setLibraryOpen(false)
       setReplaceFor(null)
+      setBackgroundFor(null)
       setCropFor(null)
       setPaletteOpen(false)
       setMenu(null)
@@ -491,9 +496,9 @@ export function Editor({ projectID }: { projectID: string }) {
                   onLine={(k) => void addLine(k)}
                   onFiles={(files) => void addImageFiles(files)}
                   libraryOpen={libraryOpen}
-                  onToggleLibrary={() => { setPaletteOpen(false); setLibraryOpen((v) => !v) }}
+                  onToggleLibrary={() => { setPaletteOpen(false); setBackgroundFor(null); setReplaceFor(null); setLibraryOpen((v) => !v) }}
                 >
-                  <button className="icon-btn" data-palette-toggle aria-label="配色" title="配色" aria-pressed={paletteOpen} onClick={() => { setLibraryOpen(false); setReplaceFor(null); setPaletteOpen((v) => !v) }}>
+                  <button className="icon-btn" data-palette-toggle aria-label="配色" title="配色" aria-pressed={paletteOpen} onClick={() => { setLibraryOpen(false); setReplaceFor(null); setBackgroundFor(null); setPaletteOpen((v) => !v) }}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9" /><circle cx="8" cy="9" r="1.5" /><circle cx="15" cy="8" r="1.5" /><circle cx="7" cy="15" r="1.5" /><path d="M20 16h-5l-2 5" /></svg>
                   </button>
                 </ToolDock>
@@ -613,7 +618,14 @@ export function Editor({ projectID }: { projectID: string }) {
               onPickFromLibrary={(l) => {
                 setPaletteOpen(false)
                 setLibraryOpen(false)
+                setBackgroundFor(null)
                 setReplaceFor(l.id)
+              }}
+              onPickBackground={() => {
+                setPaletteOpen(false)
+                setLibraryOpen(false)
+                setReplaceFor(null)
+                setBackgroundFor(project?.active ?? null)
               }}
               onCrop={setCropFor}
               onPreview={(id, key, value) => session?.editor.preview(id, key, value)}
@@ -622,8 +634,40 @@ export function Editor({ projectID }: { projectID: string }) {
         )}
       </div>
 
-      {!viewOnly && (replaceFor && showPanels ? (
+      <input
+        ref={backgroundFile}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        data-testid="background-upload"
+        onChange={async (e) => {
+          const file = e.target.files?.[0]
+          const board = backgroundUploadBoard.current
+          e.target.value = ''
+          if (!file || !board) return
+          const url = await upload(file)
+          if (url) await run({ type: 'setBackground', board, image: url })
+        }}
+      />
+      {!viewOnly && (backgroundFor && showPanels ? (
         <LibraryPanel
+          key="background"
+          mode="background"
+          onInsert={(it) => {
+            const board = backgroundFor
+            setBackgroundFor(null)
+            void run({ type: 'setBackground', board, image: it.url })
+          }}
+          onUploadLocal={() => {
+            backgroundUploadBoard.current = backgroundFor
+            setBackgroundFor(null)
+            backgroundFile.current?.click()
+          }}
+          onClose={() => setBackgroundFor(null)}
+        />
+      ) : replaceFor && showPanels ? (
+        <LibraryPanel
+          key="replace"
           mode="replace"
           onInsert={(it) => {
             const id = replaceFor
@@ -633,7 +677,7 @@ export function Editor({ projectID }: { projectID: string }) {
           onClose={() => setReplaceFor(null)}
         />
       ) : (
-        libraryOpen && showPanels && <LibraryPanel onInsert={(it) => void insertLibraryItem(it)} onClose={() => setLibraryOpen(false)} />
+        libraryOpen && showPanels && <LibraryPanel key="insert" onInsert={(it) => void insertLibraryItem(it)} onClose={() => setLibraryOpen(false)} />
       ))}
       {paletteOpen && showPanels && !viewOnly && <PalettePanel project={projectID} board={project?.active} onClose={() => setPaletteOpen(false)} onApply={async (id) => {
         const result = await run({ type: 'applyPalette', id, board: project?.active })

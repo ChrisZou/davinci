@@ -15,14 +15,19 @@ export function LibraryPanel({
   onInsert,
   onClose,
   mode = 'insert',
+  onUploadLocal,
 }: {
   onInsert: (item: LibraryItem) => void
   onClose: () => void
-  /** 'replace': the picked picture takes the place of the selected image. */
-  mode?: 'insert' | 'replace'
+  /** A pick inserts a layer, replaces an image, or sets the board background. */
+  mode?: 'insert' | 'replace' | 'background'
+  onUploadLocal?: () => void
 }) {
   const replacing = mode === 'replace'
-  const [category, setCategory] = useState(() => {
+  const background = mode === 'background'
+  const [category, setCategory] = useState<string | null>(() => {
+    // Wait for category IDs before requesting pictures, so portraits never flash here.
+    if (background) return null
     try {
       return localStorage.getItem(LAST_KEY) ?? ''
     } catch {
@@ -30,7 +35,7 @@ export function LibraryPanel({
     }
   })
   const [query, setQuery] = useState('')
-  const { categories, items, error } = useLibrary(category, query)
+  const { categories, items, error } = useLibrary(category ?? '', query, category !== null)
   const box = useRef<HTMLDivElement>(null)
   // While a picture is dragged out, the panel steps aside: it fades and lets
   // the drop through, so a picture can land on any part of the canvas.
@@ -38,16 +43,22 @@ export function LibraryPanel({
 
   // A shelf remembered from before may have been deleted since.
   useEffect(() => {
+    if (categories && category === null) {
+      setCategory(categories.find((c) => c.name === '背景')?.id ?? '')
+      return
+    }
     if (categories && category && !categories.some((c) => c.id === category)) setCategory('')
   }, [categories, category])
 
   useEffect(() => {
+    // Choosing a background should not change the general library's remembered shelf.
+    if (background || category === null) return
     try {
       localStorage.setItem(LAST_KEY, category)
     } catch {
       // Storage may be off; the panel just starts on 全部 next time.
     }
-  }, [category])
+  }, [category, background])
 
   // Escape and a click outside close it, like any other popover.
   useEffect(() => {
@@ -71,14 +82,14 @@ export function LibraryPanel({
     <div
       ref={box}
       role="dialog"
-      aria-label={replacing ? '从素材库换图' : '素材'}
+      aria-label={background ? '选择背景' : replacing ? '从素材库换图' : '素材'}
       // A drawer over the layer card, so the canvas stays in view to drop onto.
       className={`menu fixed bottom-5 left-5 top-[84px] z-30 flex w-[440px] flex-col !p-0 transition-opacity ${dragging ? 'pointer-events-none opacity-30' : ''}`}
       data-testid="library-panel"
     >
       <div className="flex flex-col gap-3 px-5 pb-3 pt-5">
         <div className="flex items-center justify-between">
-          <h2 className="m-0 font-serif text-lg font-black">{replacing ? '换成素材库里的图' : '素材'}</h2>
+          <h2 className="m-0 font-serif text-lg font-black">{background ? '选择背景' : replacing ? '换成素材库里的图' : '素材'}</h2>
           <a href="/library" target="_blank" rel="noreferrer" className="text-xs text-muted hover:text-accent">
             管理素材库 ↗
           </a>
@@ -86,7 +97,7 @@ export function LibraryPanel({
         <input
           autoFocus
           aria-label="搜索素材"
-          placeholder="搜名称、标签、说明，比如：指向"
+          placeholder={background ? '搜索素材' : '搜名称、标签、说明，比如：指向'}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="h-9 rounded-full bg-paper px-4 text-[13px] text-ink outline-none placeholder:text-faint focus:ring-2 focus:ring-accent/30"
@@ -121,15 +132,21 @@ export function LibraryPanel({
             <ItemTile
               key={it.id}
               item={it}
-              draggable={!replacing}
-              title={replacing ? `${it.name}\n点一下替换选中的图片` : `${it.name}\n点一下插入，或拖到画布上`}
+              draggable={mode === 'insert'}
+              title={background ? `${it.name}\n设为画布背景` : replacing ? `${it.name}\n点一下替换选中的图片` : `${it.name}\n点一下插入，或拖到画布上`}
               onClick={() => onInsert(it)}
               onDragState={setDragging}
             />
           ))}
         </div>
       </div>
-      <p className="m-0 border-t border-line px-5 py-2.5 text-[11px] text-faint">{replacing ? '点一张图替换选中的图片，新图按原比例放进原来的位置。' : '点一下插入到画布，或者直接拖到想放的位置。'}</p>
+      {background ? onUploadLocal && (
+        <div className="border-t border-line px-5 py-3">
+          <button className="chip w-full" onClick={onUploadLocal}>从本地上传</button>
+        </div>
+      ) : (
+        <p className="m-0 border-t border-line px-5 py-2.5 text-[11px] text-faint">{replacing ? '点一张图替换选中的图片，新图按原比例放进原来的位置。' : '点一下插入到画布，或者直接拖到想放的位置。'}</p>
+      )}
     </div>
   )
 }

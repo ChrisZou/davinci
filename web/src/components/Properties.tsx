@@ -34,6 +34,8 @@ export interface PanelProps {
   onUpload: (file: File) => Promise<string | null>
   /** Opens the material library to pick a replacement for an image layer. */
   onPickFromLibrary?: (layer: Layer) => void
+  /** Opens the library's backgrounds with a local upload option. */
+  onPickBackground: () => void
   /** Opens the crop dialog for an image layer. */
   onCrop: (layer: Layer) => void
   /** Shows a control's value on the canvas before it is committed; null cancels it. */
@@ -53,6 +55,7 @@ export function Properties(props: PanelProps) {
     onRunSelect: () => {},
     onUpload: async () => null,
     onPickFromLibrary: undefined,
+    onPickBackground: () => {},
     onCrop: () => {},
     onPreview: () => {},
   } : props
@@ -500,9 +503,7 @@ function NameField({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) => vo
 
 // --- nothing selected: the canvas ------------------------------------------
 
-function CanvasSection({ doc, onRun, onUpload }: PanelProps) {
-  const bgFile = useRef<HTMLInputElement>(null)
-
+function CanvasSection({ doc, onRun, onPickBackground }: PanelProps) {
   return (
     <>
       <Header kicker="没有选中图层">
@@ -546,7 +547,7 @@ function CanvasSection({ doc, onRun, onUpload }: PanelProps) {
           onCommit={(color) => onRun({ type: 'setBackground', color: color || 'transparent' })}
         />
         <div className="flex gap-2">
-          <button className="chip flex-1" onClick={() => bgFile.current?.click()}>
+          <button className="chip flex-1" data-library-toggle data-testid="choose-background" onClick={onPickBackground}>
             {doc.canvas.backgroundImage ? '更换背景图' : '用图片做背景'}
           </button>
           {doc.canvas.backgroundImage && (
@@ -555,18 +556,6 @@ function CanvasSection({ doc, onRun, onUpload }: PanelProps) {
             </button>
           )}
         </div>
-        <input
-          ref={bgFile}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={async (e) => {
-            const f = e.target.files?.[0]
-            e.target.value = ''
-            const url = f ? await onUpload(f) : null
-            if (url) onRun({ type: 'setBackground', image: url })
-          }}
-        />
       </Section>
       <p className="px-5 py-5 text-xs leading-relaxed text-faint">
         {keys('点选图层即可编辑，按住 ⇧ 或 ⌘ 可多选。图片可以直接拖进画布或 ⌘V 粘贴，按 ? 查看全部快捷键。')}
