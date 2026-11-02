@@ -1,7 +1,7 @@
 import type { Canvas, CanvasKit, Image, ImageFilter, Paint } from 'canvaskit-wasm'
 import type { Board, Layer } from '../types'
 import { contentMatrix, frameOf, membersBox, type Frame, type Mat } from './geometry'
-import { FontCache, layoutText, numericWeight, textFaces, type Face, type FaceLookup, type TextLayout } from './text'
+import { FONT_SIZE_MULT, FontCache, layoutText, letterSpacingPx, numericWeight, textBackgroundPadding, textFaces, type Face, type FaceLookup, type TextLayout } from './text'
 import { gradientLine, readGradient } from './gradient'
 
 /**
@@ -456,7 +456,9 @@ export class Renderer implements FaceLookup {
     const hit = this.flats.get(l.id)
     if (hit && hit.key === key) return hit.flat
     const [, sw] = splitStroke(typeof st.stroke === 'string' ? st.stroke : '', st.strokeWidth)
-    const pad = t.fontSize * 0.6 + sw * 2 + 8
+    // Background padding can extend beyond the usual glyph/stroke overhang.
+    const backgroundPad = parseColour(ck, st.textBackgroundColor) ? textBackgroundPadding(st) + Math.max(0, letterSpacingPx(st)) + 1 : 0
+    const pad = Math.max(t.fontSize * 0.6 + sw * 2 + 8, backgroundPad)
     const region = { left: -f.cw / 2 - pad, top: -f.ch / 2 - pad, width: f.cw + pad * 2, height: f.ch + pad * 2 }
     const k = Math.min(q, 4096 / Math.max(region.width, region.height))
     const surface = ck.MakeSurface(Math.max(1, Math.ceil(region.width * k)), Math.max(1, Math.ceil(region.height * k)))
@@ -485,12 +487,20 @@ export class Renderer implements FaceLookup {
     // Line backgrounds first, under everything.
     const bg = parseColour(ck, st.textBackgroundColor)
     if (bg) {
+      const padding = textBackgroundPadding(st)
+      const builder = new ck.PathBuilder()
       const p = new ck.Paint()
+      p.setAntiAlias(true)
       p.setColor(bg)
       t.lines.forEach((ln, i) => {
         if (!ln.glyphs.length) return
-        canvas.drawRect(ck.XYWHRect(leftOf(ln.width), t.lineTop(i), ln.boxWidth, t.fontSize * 1.13), p)
+        builder.addRect(ck.XYWHRect(leftOf(ln.width) - padding, t.lineTop(i) - padding, ln.boxWidth + padding * 2, t.fontSize * FONT_SIZE_MULT + padding * 2))
       })
+      // Fill once so overlapping padded lines keep the same alpha.
+      const path = builder.detach()
+      builder.delete()
+      canvas.drawPath(path, p)
+      path.delete()
       p.delete()
     }
 
@@ -608,12 +618,36 @@ export class Renderer implements FaceLookup {
   bounds(l: Layer): { left: number; top: number; width: number; height: number } {
     const m = contentMatrix(l, this.frame(l))
     const f = this.frame(l)
-    const pts = [
-      [-f.cw / 2 - f.strokeWidth / 2, -f.ch / 2 - f.strokeWidth / 2],
-      [f.cw / 2 + f.strokeWidth / 2, -f.ch / 2 - f.strokeWidth / 2],
-      [f.cw / 2 + f.strokeWidth / 2, f.ch / 2 + f.strokeWidth / 2],
-      [-f.cw / 2 - f.strokeWidth / 2, f.ch / 2 + f.strokeWidth / 2],
-    ].map(([x, y]) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] }))
+    let left = -f.cw / 2 - f.strokeWidth / 2
+    let right = -left
+    let top = -f.ch / 2 - f.strokeWidth / 2
+    let bottom = -top
+    const st = l.style ?? {}
+    const padding = l.type === 'text' && parseColour(this.ck, st.textBackgroundColor) ? textBackgroundPadding(st) : 0
+    if (padding > 0) {
+      left -= padding
+      right += padding + Math.max(0, letterSpacingPx(st))
+      top -= padding
+      bottom += padding
+      // Negative trapezoid amounts enlarge the right edge vertically.
+      if (st.warp && Number(st.warpAmount) < 0) {
+        const growth = 0.8 * Math.min(1, -Number(st.warpAmount) / 100)
+        const bias = Math.max(-1, Math.min(1, Number(st.warpBias) || 0))
+        top -= growth * (padding + (1 - bias) * f.ch / 2)
+        bottom += growth * (padding + (1 + bias) * f.ch / 2)
+      }
+    }
+    const local = [[left, top], [right, top], [right, bottom], [left, bottom]]
+    if (l.type === 'group') {
+      const b = membersBox(l.children ?? [])
+      for (const child of l.children ?? []) {
+        const cb = this.bounds(child)
+        const x = cb.left - b.left - f.cw / 2
+        const y = cb.top - b.top - f.ch / 2
+        local.push([x, y], [x + cb.width, y], [x + cb.width, y + cb.height], [x, y + cb.height])
+      }
+    }
+    const pts = local.map(([x, y]) => ({ x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] }))
     const xs = pts.map((p) => p.x)
     const ys = pts.map((p) => p.y)
     return { left: Math.min(...xs), top: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) }

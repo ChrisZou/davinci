@@ -37,7 +37,7 @@ export interface PanelProps {
   /** Opens the crop dialog for an image layer. */
   onCrop: (layer: Layer) => void
   /** Shows a control's value on the canvas before it is committed; null cancels it. */
-  onPreview: (id: string, key: 'opacity' | 'filters' | 'letterSpacing', value: number | Record<string, number> | null) => void
+  onPreview: (id: string, key: 'opacity' | 'filters' | 'letterSpacing' | 'padding', value: number | Record<string, number> | null) => void
 }
 
 /**
@@ -869,7 +869,15 @@ function TextSections({
             onPreview={(value) => onPreview(layer.id, 'letterSpacing', value)}
             onCommit={(letterSpacing) => patch({ letterSpacing })}
           />
-          <NumField label="内边距" value={Number(style.padding ?? 0)} min={0} onCommit={(padding) => patch({ padding })} />
+          <NumField
+            label="内边距"
+            value={Number(style.padding ?? 0)}
+            suffix="px"
+            min={0}
+            testId="text-padding"
+            onPreview={(value) => onPreview(layer.id, 'padding', value)}
+            onCommit={(padding) => patch({ padding })}
+          />
         </Grid2>
         <Segmented
           label=""
@@ -906,8 +914,9 @@ function TextSections({
       <Section title="颜色">
         <ColorField label="文字" value={String(style.fill ?? '#000000')} testId="text-color" onCommit={(fill) => patch({ fill })} />
         <ColorField
-          label="底色"
+          label="背景色"
           allowNone
+          showFavorites={false}
           value={String(style.textBackgroundColor ?? '')}
           onCommit={(textBackgroundColor) => patch({ textBackgroundColor })}
         />

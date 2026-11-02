@@ -22,7 +22,7 @@ export interface TextStyle {
   shadow?: string
   /** Textbox only: colour painted behind the glyphs. */
   textBackgroundColor?: string
-  /** Textbox only: breathing room around the (multi-line) text block. */
+  /** Extra space on all four sides of each text background, in pixels. */
   padding?: number
   /** Outline, as "colour:width". */
   stroke?: string

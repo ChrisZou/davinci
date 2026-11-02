@@ -327,7 +327,7 @@ export class Editor {
    * command when it settles (one undo step, not hundreds); until then the
    * canvas shows the value from here.
    */
-  preview(id: string, key: 'opacity' | 'filters' | 'letterSpacing', value: number | Record<string, number> | null) {
+  preview(id: string, key: 'opacity' | 'filters' | 'letterSpacing' | 'padding', value: number | Record<string, number> | null) {
     if (this.readOnly) return
     const g: Ghost = { ...(this.previews.get(id) ?? {}) }
     if (value === null) {
