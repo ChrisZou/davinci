@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-// A person's font list: favourites first, and the fonts nobody puts on a cover
-// hidden. macOS alone ships hundreds of families — system UI faces (".SF …"),
+// A person's font list: private system families omitted, favourites first,
+// and the fonts nobody puts on a cover hidden. macOS ships hundreds of families —
 // fallback and private-use fonts, and faces for scripts a Chinese cover never
 // uses — and a picker that lists them all is useless. Favourites and hidden
 // fonts are kept on the server, so every page and the CLI (which is what an
@@ -63,8 +63,9 @@ func (s *Server) setFontPref(family string, favorite, hidden *bool) error {
 	return s.saveFontPrefs(p)
 }
 
-// fontList is every font, favourites first (in the order they were starred),
-// each marked favourite and/or hidden.
+// fontList offers document fonts, favourites first (in the order they were
+// starred), each marked favourite and/or hidden. Private system families are
+// excluded even if an older preference starred or unhid them.
 func (s *Server) fontList() []FontFamily {
 	p := s.loadFontPrefs()
 	fav := index(p.Favorites)
@@ -74,6 +75,9 @@ func (s *Server) fontList() []FontFamily {
 	out := make([]FontFamily, 0, len(all))
 	var favs []FontFamily
 	for _, f := range all {
+		if strings.HasPrefix(f.Family, ".") {
+			continue
+		}
 		_, isFav := fav[f.Family]
 		_, byHand := hid[f.Family]
 		_, back := shown[f.Family]
