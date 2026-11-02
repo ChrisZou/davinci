@@ -861,6 +861,8 @@ function TextSections({
         <Grid2>
           <NumField label="字号" value={Number(style.fontSize ?? 48)} min={1} testId="text-size" onCommit={(fontSize) => patch({ fontSize })} />
           <NumField label="行高" value={Number(style.lineHeight ?? 1.2)} step={0.05} min={0.5} max={4} onCommit={(lineHeight) => patch({ lineHeight })} />
+        </Grid2>
+        <div className="flex">
           <NumField
             label="字距"
             value={letterSpacingPx(style)}
@@ -869,16 +871,7 @@ function TextSections({
             onPreview={(value) => onPreview(layer.id, 'letterSpacing', value)}
             onCommit={(letterSpacing) => patch({ letterSpacing })}
           />
-          <NumField
-            label="内边距"
-            value={Number(style.padding ?? 0)}
-            suffix="px"
-            min={0}
-            testId="text-padding"
-            onPreview={(value) => onPreview(layer.id, 'padding', value)}
-            onCommit={(padding) => patch({ padding })}
-          />
-        </Grid2>
+        </div>
         <Segmented
           label=""
           value={String(style.fontWeight ?? '400')}
@@ -920,6 +913,17 @@ function TextSections({
           value={String(style.textBackgroundColor ?? '')}
           onCommit={(textBackgroundColor) => patch({ textBackgroundColor })}
         />
+        <div className="flex">
+          <NumField
+            label="内边距"
+            value={Number(style.padding ?? 0)}
+            suffix="px"
+            min={0}
+            testId="text-padding"
+            onPreview={(value) => onPreview(layer.id, 'padding', value)}
+            onCommit={(padding) => patch({ padding })}
+          />
+        </div>
       </Section>
 
       <Section title="样式">
