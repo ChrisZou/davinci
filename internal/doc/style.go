@@ -17,7 +17,7 @@ import (
 var propKeys = []string{
 	"x", "y", "rotation", "opacity", "visible", "locked", "name",
 	"color", "fill", "fillGradient", "fontFamily", "fontSize", "fontWeight", "fontStyle", "textAlign",
-	"lineHeight", "letterSpacing", "charSpacing", "padding", "textBackgroundColor", "underline",
+	"lineHeight", "letterSpacing", "charSpacing", "padding", "paddingX", "paddingY", "textBackgroundColor", "underline",
 	"linethrough", "paintFirst", "shadow", "stroke", "strokeWidth", "cornerRadius",
 	"flipX", "flipY", "filters", "width", "height", "skew", "skewY", "stretch", "warp", "warpAmount", "warpBias",
 }
@@ -26,7 +26,7 @@ var propKeys = []string{
 var textStyleKeys = []string{
 	"fontFamily", "fontSize", "fontWeight", "fontStyle", "fill", "color", "textAlign",
 	"lineHeight", "letterSpacing", "charSpacing", "shadow", "textBackgroundColor", "stroke", "strokeWidth",
-	"paintFirst", "underline", "linethrough", "padding", "skew", "skewY", "stretch", "warp", "warpAmount", "warpBias",
+	"paintFirst", "underline", "linethrough", "padding", "paddingX", "paddingY", "skew", "skewY", "stretch", "warp", "warpAmount", "warpBias",
 }
 
 // Warps are the envelope shapes text can take (稿定's 变形).
@@ -132,6 +132,15 @@ func applyProps(l *Layer, props map[string]any) error {
 	}
 	if v, ok := props["padding"]; ok {
 		l.SetS("padding", nilIfZero(math.Max(0, num(v, 0))))
+		// The shorthand resets both axes; explicit axes in this command win below.
+		l.SetS("paddingX", nil)
+		l.SetS("paddingY", nil)
+	}
+	for _, key := range []string{"paddingX", "paddingY"} {
+		if v, ok := props[key]; ok {
+			// Keep zero: omitting it would expose an older uniform padding value.
+			l.SetS(key, math.Max(0, num(v, 0)))
+		}
 	}
 	if v, ok := props["textBackgroundColor"]; ok {
 		s := strings.TrimSpace(str(v))

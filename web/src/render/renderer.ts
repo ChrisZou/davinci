@@ -457,9 +457,12 @@ export class Renderer implements FaceLookup {
     if (hit && hit.key === key) return hit.flat
     const [, sw] = splitStroke(typeof st.stroke === 'string' ? st.stroke : '', st.strokeWidth)
     // Background padding can extend beyond the usual glyph/stroke overhang.
-    const backgroundPad = parseColour(ck, st.textBackgroundColor) ? textBackgroundPadding(st) + Math.max(0, letterSpacingPx(st)) + 1 : 0
-    const pad = Math.max(t.fontSize * 0.6 + sw * 2 + 8, backgroundPad)
-    const region = { left: -f.cw / 2 - pad, top: -f.ch / 2 - pad, width: f.cw + pad * 2, height: f.ch + pad * 2 }
+    const background = parseColour(ck, st.textBackgroundColor)
+    const padding = textBackgroundPadding(st)
+    const overhang = t.fontSize * 0.6 + sw * 2 + 8
+    const padX = Math.max(overhang, background ? padding.x + Math.max(0, letterSpacingPx(st)) + 1 : 0)
+    const padY = Math.max(overhang, background ? padding.y + 1 : 0)
+    const region = { left: -f.cw / 2 - padX, top: -f.ch / 2 - padY, width: f.cw + padX * 2, height: f.ch + padY * 2 }
     const k = Math.min(q, 4096 / Math.max(region.width, region.height))
     const surface = ck.MakeSurface(Math.max(1, Math.ceil(region.width * k)), Math.max(1, Math.ceil(region.height * k)))
     if (!surface) return null
@@ -494,7 +497,7 @@ export class Renderer implements FaceLookup {
       p.setColor(bg)
       t.lines.forEach((ln, i) => {
         if (!ln.glyphs.length) return
-        builder.addRect(ck.XYWHRect(leftOf(ln.width) - padding, t.lineTop(i) - padding, ln.boxWidth + padding * 2, t.fontSize * FONT_SIZE_MULT + padding * 2))
+        builder.addRect(ck.XYWHRect(leftOf(ln.width) - padding.x, t.lineTop(i) - padding.y, ln.boxWidth + padding.x * 2, t.fontSize * FONT_SIZE_MULT + padding.y * 2))
       })
       // Fill once so overlapping padded lines keep the same alpha.
       const path = builder.detach()
@@ -623,18 +626,25 @@ export class Renderer implements FaceLookup {
     let top = -f.ch / 2 - f.strokeWidth / 2
     let bottom = -top
     const st = l.style ?? {}
-    const padding = l.type === 'text' && parseColour(this.ck, st.textBackgroundColor) ? textBackgroundPadding(st) : 0
-    if (padding > 0) {
-      left -= padding
-      right += padding + Math.max(0, letterSpacingPx(st))
-      top -= padding
-      bottom += padding
+    const padding = l.type === 'text' && parseColour(this.ck, st.textBackgroundColor) ? textBackgroundPadding(st) : { x: 0, y: 0 }
+    if (padding.x > 0 || padding.y > 0) {
+      left -= padding.x
+      right += padding.x + Math.max(0, letterSpacingPx(st))
+      top -= padding.y
+      bottom += padding.y
       // Negative trapezoid amounts enlarge the right edge vertically.
       if (st.warp && Number(st.warpAmount) < 0) {
         const growth = 0.8 * Math.min(1, -Number(st.warpAmount) / 100)
         const bias = Math.max(-1, Math.min(1, Number(st.warpBias) || 0))
-        top -= growth * (padding + (1 - bias) * f.ch / 2)
-        bottom += growth * (padding + (1 + bias) * f.ch / 2)
+        top -= growth * (padding.y + (1 - bias) * f.ch / 2)
+        bottom += growth * (padding.y + (1 + bias) * f.ch / 2)
+      }
+      if (st.warp && Number(st.warpAmount)) {
+        // Bilinear sampling of the warped strips reaches past the geometric edge.
+        left -= 1
+        right += 1
+        top -= 1
+        bottom += 1
       }
     }
     const local = [[left, top], [right, top], [right, bottom], [left, bottom]]

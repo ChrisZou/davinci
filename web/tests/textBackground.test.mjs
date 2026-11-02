@@ -43,7 +43,7 @@ test('padding expands all four sides for every alignment without changing text l
 })
 
 test('multiline translucent backgrounds do not darken at padded overlaps; blank lines stay empty', () => {
-  const l = layer({ padding: 12, textBackgroundColor: '#ff000080' }, { text: 'AB\nA' })
+  const l = layer({ paddingX: 12, paddingY: 12, textBackgroundColor: '#ff000080' }, { text: 'AB\nA' })
   const p = pixels(l)
   assert.equal(p.alpha(110, 110), 128)
   assert.equal(p.alpha(110, 150), 128)
@@ -51,6 +51,20 @@ test('multiline translucent backgrounds do not darken at padded overlaps; blank 
   assert.equal(p.alpha(170, 180), 0)
   const blank = pixels(layer({ padding: 4 }, { text: 'AB\n\nA' }))
   assert.equal(blank.alpha(110, 175), 0)
+})
+
+test('horizontal and vertical padding stay independent, including explicit zero over legacy padding', () => {
+  for (const textAlign of ['left', 'center', 'right']) {
+    const original = pixels(layer({ textAlign })).bounds
+    for (const [x, y] of [[24, 0], [0, 16], [24, 8]]) {
+      const l = layer({ textAlign, padding: 12, paddingX: x, paddingY: y })
+      assert.deepEqual(pixels(l).bounds, { left: original.left - x, right: original.right + x, top: original.top - y, bottom: original.bottom + y })
+      assert.deepEqual(renderer.measure(l), renderer.measure(layer({ textAlign })))
+    }
+    assert.deepEqual(pixels(layer({ textAlign, padding: 12, paddingX: 0 })).bounds, {
+      ...original, top: original.top - 12, bottom: original.bottom + 12,
+    })
+  }
 })
 
 test('large padding remains visible with warping and invalidates the flattened-text cache', () => {
@@ -66,14 +80,16 @@ test('large padding remains visible with warping and invalidates the flattened-t
 
 test('selected-layer and group PNG exports retain the full padded background', () => {
   for (const warpAmount of [0, 50, -50]) {
-    const l = layer({ padding: 30, warp: 'trapezoid', warpAmount }, { text: 'ABCDE' })
-    const full = pixels(l)
-    const cropped = pixels(l, { ids: [l.id] })
-    // Skia's warped strip edges can cover a few different subpixels after translation.
-    assert.ok(Math.abs(cropped.count - full.count) <= full.count * 0.002, JSON.stringify({ warpAmount, full: full.bounds, cropped: cropped.bounds, fullCount: full.count, croppedCount: cropped.count }))
-    const group = { id: 'group', type: 'group', x: 60, y: 60, width: 201, height: 46.2, children: [l] }
-    const fullGroup = pixels(group)
-    const croppedGroup = pixels(group, { ids: [group.id] })
-    assert.ok(Math.abs(croppedGroup.count - fullGroup.count) <= fullGroup.count * 0.002)
+    for (const padding of [{ padding: 30 }, { paddingX: 50, paddingY: 0 }, { paddingX: 0, paddingY: 50 }, { paddingX: 24, paddingY: 8 }]) {
+      const l = layer({ ...padding, warp: 'trapezoid', warpAmount }, { text: 'ABCDE' })
+      const full = pixels(l)
+      const cropped = pixels(l, { ids: [l.id] })
+      // Skia's warped strip edges can cover a few different subpixels after translation.
+      assert.ok(Math.abs(cropped.count - full.count) <= full.count * 0.002, JSON.stringify({ warpAmount, full: full.bounds, cropped: cropped.bounds, fullCount: full.count, croppedCount: cropped.count }))
+      const group = { id: 'group', type: 'group', x: 100, y: 100, width: 201, height: 46.2, children: [l] }
+      const fullGroup = pixels(group)
+      const croppedGroup = pixels(group, { ids: [group.id] })
+      assert.ok(Math.abs(croppedGroup.count - fullGroup.count) <= fullGroup.count * 0.002, JSON.stringify({ warpAmount, padding, fullGroup: fullGroup.bounds, croppedGroup: croppedGroup.bounds }))
+    }
   }
 })

@@ -22,8 +22,12 @@ export interface TextStyle {
   shadow?: string
   /** Textbox only: colour painted behind the glyphs. */
   textBackgroundColor?: string
-  /** Extra space on all four sides of each text background, in pixels. */
+  /** Legacy uniform background padding; fallback for either missing axis. */
   padding?: number
+  /** Left/right background padding, in text pixels. Explicit zero overrides padding. */
+  paddingX?: number
+  /** Top/bottom background padding, in text pixels. Explicit zero overrides padding. */
+  paddingY?: number
   /** Outline, as "colour:width". */
   stroke?: string
   /** Paint the stroke under the fill instead of over it. */

@@ -302,6 +302,11 @@ func bakeScale(l *Layer, sx, sy float64) {
 		if p := num(l.S("padding"), 0); p > 0 {
 			l.SetS("padding", round(p*sy))
 		}
+		for _, key := range []string{"paddingX", "paddingY"} {
+			if p := l.S(key); p != nil {
+				l.SetS(key, round(num(p, 0)*sy))
+			}
+		}
 	case "group":
 		l.Width, l.Height = l.Width*sx, l.Height*sy
 	default:

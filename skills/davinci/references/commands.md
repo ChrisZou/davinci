@@ -81,7 +81,8 @@ davinci -p <项目> exec --file cover.json          # 从文件读（长的一�
 | `applyTextPreset` | `id* preset*` | 预设见 `davinci text presets` |
 
 `style` 的键：`fontFamily` `fontSize` `fontWeight`(100–900) `fontStyle` `fill`（别名 `color`）
-`textAlign`(left/center/right) `lineHeight` `letterSpacing`（画布像素，同 CSS `letter-spacing`）`padding`
+`textAlign`(left/center/right) `lineHeight` `letterSpacing`（画布像素，同 CSS `letter-spacing`）
+`paddingX` / `paddingY`（背景色左右 / 上下内边距，px，可独立为 0）；旧 `padding` 兼容两个方向，写入时重置两个方向。
 `textBackgroundColor`（文字底色）`stroke`（`"#000:8"` = 颜色:粗细）`paintFirst`（描边压在字下面，粗描边必开）
 `shadow`（`"rgba(0,0,0,.5):18:4:6"` = 颜色:模糊:x:y）`underline` `linethrough`。
 旧 `charSpacing` 仍兼容，单位为千分之一 em；新编辑使用 `letterSpacing`。

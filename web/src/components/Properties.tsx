@@ -8,7 +8,7 @@ import { DEFAULT_SHEAR, SHEAR, WARPS, warpShape } from '../editor/warp'
 import { keys } from '../editor/keys'
 import { ColorField, NumField, Section, Segmented, Select, Slider, Switch, Toggle } from './fields'
 import { ShapeFill } from './ShapeFill'
-import { DEFAULT_FONT_SIZE, letterSpacingPx } from '../render/text'
+import { DEFAULT_FONT_SIZE, letterSpacingPx, textBackgroundPadding } from '../render/text'
 
 /**
  * The right-hand panel: whatever the selection is, or the canvas when nothing
@@ -37,7 +37,7 @@ export interface PanelProps {
   /** Opens the crop dialog for an image layer. */
   onCrop: (layer: Layer) => void
   /** Shows a control's value on the canvas before it is committed; null cancels it. */
-  onPreview: (id: string, key: 'opacity' | 'filters' | 'letterSpacing' | 'padding', value: number | Record<string, number> | null) => void
+  onPreview: (id: string, key: 'opacity' | 'filters' | 'letterSpacing' | 'padding' | 'paddingX' | 'paddingY', value: number | Record<string, number> | null) => void
 }
 
 /**
@@ -913,16 +913,30 @@ function TextSections({
           value={String(style.textBackgroundColor ?? '')}
           onCommit={(textBackgroundColor) => patch({ textBackgroundColor })}
         />
-        <div className="flex">
-          <NumField
-            label="内边距"
-            value={Number(style.padding ?? 0)}
-            suffix="px"
-            min={0}
-            testId="text-padding"
-            onPreview={(value) => onPreview(layer.id, 'padding', value)}
-            onCommit={(padding) => patch({ padding })}
-          />
+        <div className="flex flex-col gap-2" role="group" aria-label="内边距">
+          <span className="text-xs text-muted">内边距</span>
+          <Grid2>
+            <NumField
+              label="横向"
+              ariaLabel="横向内边距"
+              value={textBackgroundPadding(style).x}
+              suffix="px"
+              min={0}
+              testId="text-padding-x"
+              onPreview={(value) => onPreview(layer.id, 'paddingX', value)}
+              onCommit={(paddingX) => patch({ paddingX })}
+            />
+            <NumField
+              label="纵向"
+              ariaLabel="纵向内边距"
+              value={textBackgroundPadding(style).y}
+              suffix="px"
+              min={0}
+              testId="text-padding-y"
+              onPreview={(value) => onPreview(layer.id, 'paddingY', value)}
+              onCommit={(paddingY) => patch({ paddingY })}
+            />
+          </Grid2>
         </div>
       </Section>
 

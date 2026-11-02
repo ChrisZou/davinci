@@ -23,10 +23,13 @@ export const FONT_SIZE_MULT = 1.13
 export const FONT_SIZE_FRACTION = 0.222
 export const DEFAULT_LINE_HEIGHT = 1.16
 export const DEFAULT_FONT_SIZE = 40
-/** Extra space on each side of a line's background, in text pixels. */
-export function textBackgroundPadding(style: TextStyle): number {
-  const padding = Number(style.padding)
-  return Number.isFinite(padding) ? Math.max(0, padding) : 0
+/** Per-axis background padding; older documents use one value for both axes. */
+export function textBackgroundPadding(style: TextStyle): { x: number; y: number } {
+  const read = (value: unknown) => {
+    const n = Number(value)
+    return Number.isFinite(n) ? Math.max(0, n) : 0
+  }
+  return { x: read(style.paddingX ?? style.padding), y: read(style.paddingY ?? style.padding) }
 }
 
 /** Shared by canvas layout, the HTML text editor and the properties panel. */
