@@ -47,7 +47,7 @@ export interface TextStyle {
   skewY?: number
   /** Horizontal scale of the glyphs: 0.8 condenses, 1.2 widens. */
   stretch?: number
-  /** Envelope warp (稿定's 变形): arch, flag, bulge, taperRight … see editor/warp.ts. */
+  /** Envelope warp (稿定's 变形): bulge, flag, pinch, trapezoid, taperLeft, taperRight … see editor/warp.ts. */
   warp?: string
   /** Warp strength, −100…100 (negative flips the shape). */
   warpAmount?: number

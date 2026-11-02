@@ -30,7 +30,7 @@ var textStyleKeys = []string{
 }
 
 // Warps are the envelope shapes text can take (稿定's 变形).
-var Warps = []string{"trapezoid"}
+var Warps = []string{"bulge", "flag", "pinch", "trapezoid", "taperLeft", "taperRight"}
 
 func checkKeys(props map[string]any, allowed []string) error {
 	ok := map[string]bool{}

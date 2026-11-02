@@ -87,8 +87,8 @@ davinci -p <项目> exec --file cover.json          # 从文件读（长的一�
 `shadow`（`"rgba(0,0,0,.5):18:4:6"` = 颜色:模糊:x:y）`underline` `linethrough`。
 旧 `charSpacing` 仍兼容，单位为千分之一 em；新编辑使用 `letterSpacing`。
 斜体：`fontStyle: "italic"`。
-变形（梯形，右端收窄的透视标题）：`warp: "trapezoid"`，`warpAmount` 梯形强度 -100~100（常用 15–35），
-`warpBias` 相对高度 -100~100（-100 下沿平直、上沿往右压低；100 上沿平直；0 上下各收一半）；`warp: "none"` 取消。
+变形（稿定式信封）：`warp` 取 `bulge`（鼓形）、`flag`（旗帜）、`pinch`（等腰梯形，短上沿）、`trapezoid` / `taperRight`（左高、右端收窄，旧文档兼容）、`taperLeft`（右高）；`warpAmount` 强度 -100~100（常用 15–35，负值翻转）；
+`warpBias` 相对高度 -100~100（-100 下沿平直；100 上沿平直；0 上下各收一半）；`warp: "none"` 取消。斜切仍用 `skewY`，与 warp 互斥。
 另有 `skew` 字形倾斜角度（只歪竖笔）、`skewY` 纵向斜切角度（正值右端抬高，整行斜向上走、竖笔仍竖直）、
 `stretch` 横向拉伸倍数（0.85 压窄）。整行连字带竖笔一起斜着走用 `rotateLayer`；只想让行往右上爬用 `skewY`。
 

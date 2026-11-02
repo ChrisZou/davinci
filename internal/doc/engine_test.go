@@ -2,6 +2,7 @@ package doc
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"strings"
 	"testing"
@@ -301,6 +302,15 @@ func TestTextStrokeAndPresetEncoding(t *testing.T) {
 	if l.S("warpAmount") != 50.0 {
 		t.Fatalf("warp default = %v", l.Style)
 	}
+	for _, key := range []string{"bulge", "flag", "pinch", "taperLeft", "taperRight"} {
+		run(t, e, fmt.Sprintf(`{"type":"updateLayer","id":"t","props":{"warp":"%s"}}`, key))
+		if l.S("warp") != key {
+			t.Fatalf("warp %s = %v", key, l.Style)
+		}
+	}
+	fail(t, e, `{"type":"updateLayer","id":"t","props":{"warp":"nope"}}`, `unknown warp`)
+	// A failed Apply restores the document from JSON, so re-resolve the layer.
+	l = layer(e, "t")
 	run(t, e, `{"type":"updateLayer","id":"t","props":{"warp":"none"}}`)
 	if l.S("warp") != nil || l.S("warpAmount") != nil {
 		t.Fatalf("warp none = %v", l.Style)

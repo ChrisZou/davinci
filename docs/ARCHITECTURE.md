@@ -65,7 +65,7 @@ davinci 是一个本地图片编辑器：人在浏览器里拖，AI 通过命令
 |---|---|
 | `geometry.ts` | 图层几何：盒子、旋转、描边计入、斜切。Go 侧有逐行对应的 `internal/doc/geometry.go` |
 | `text.ts` | 文字排版：折行、行高、字距、合成粗体/斜体、回退字体 |
-| `renderer.ts` | 画图层、背景、滤镜、阴影、描边、梯形变形；`encode` 出图；`measure` 量文字 |
+| `renderer.ts` | 画图层、背景、滤镜、阴影、描边、文字变形（鼓形/旗帜/梯形/楔形）；`encode` 出图；`measure` 量文字 |
 | `node.ts` | Node 入口：服务端的渲染进程 |
 
 浏览器里它画编辑器画布、画板缩略图、导出；服务端的 Node 进程（`internal/render/sidecar.go`

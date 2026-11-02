@@ -632,14 +632,24 @@ export class Renderer implements FaceLookup {
       right += padding.x + Math.max(0, letterSpacingPx(st))
       top -= padding.y
       bottom += padding.y
-      // Negative trapezoid amounts enlarge the right edge vertically.
-      if (st.warp && Number(st.warpAmount) < 0) {
-        const growth = 0.8 * Math.min(1, -Number(st.warpAmount) / 100)
-        const bias = Math.max(-1, Math.min(1, Number(st.warpBias) || 0))
-        top -= growth * (padding.y + (1 - bias) * f.ch / 2)
-        bottom += growth * (padding.y + (1 + bias) * f.ch / 2)
-      }
+      // Warps that enlarge an edge (negative taper / bulge / flag wave) need
+      // extra room so the background padding still covers the silhouette.
       if (st.warp && Number(st.warpAmount)) {
+        const amount = Math.min(1, Math.abs(Number(st.warpAmount)) / 100)
+        const bias = Math.max(-1, Math.min(1, Number(st.warpBias) || 0))
+        const kind = String(st.warp)
+        let growth = 0
+        if (Number(st.warpAmount) < 0 && (kind === 'trapezoid' || kind === 'taperRight' || kind === 'taperLeft')) {
+          growth = 0.8 * amount
+        } else if (kind === 'bulge' || kind === 'flag') {
+          growth = (kind === 'flag' ? 0.35 : 0.8) * amount
+        } else if (kind === 'pinch') {
+          growth = 0.35 * amount
+        }
+        if (growth > 0) {
+          top -= growth * (padding.y + (1 - bias) * f.ch / 2)
+          bottom += growth * (padding.y + (1 + bias) * f.ch / 2)
+        }
         // Bilinear sampling of the warped strips reaches past the geometric edge.
         left -= 1
         right += 1
@@ -812,11 +822,18 @@ function mul(m: number[], n: number[]): number[] {
 }
 
 /**
- * The 梯形 warp: the right end shrinks toward the chosen edge. The flat text
- * is laid down in vertical strips, each squashed for its position: y ↦
- * y0 + top·H + (y − y0)·k, where k shrinks toward the right end.
+ * Envelope warps: the flat text is laid down in thin vertical strips (or
+ * textured quads for pinch), each remapped for its position along the line.
+ *
+ *   trapezoid / taperRight — right end shrinks (左高); negative grows it
+ *   taperLeft              — left end shrinks (右高)
+ *   bulge                  — capsule drum; negative pinches the middle
+ *   flag                   — S-curve wave of constant height
+ *   pinch                  — classic short-top / long-bottom trapezoid
  */
 function drawWarped(ck: CanvasKit, canvas: Canvas, flat: FlatText, st: Record<string, any>, t: TextLayout, f: Frame) {
+  const raw = String(st.warp || '')
+  const kind = raw === 'taperRight' ? 'trapezoid' : raw
   const s = Math.max(-1, Math.min(1, Number(st.warpAmount) / 100))
   const bias = Math.max(-1, Math.min(1, Number(st.warpBias || 0) / 100))
   const W = f.cw
@@ -828,20 +845,122 @@ function drawWarped(ck: CanvasKit, canvas: Canvas, flat: FlatText, st: Record<st
   const align = st.textAlign === 'center' ? 0.5 : st.textAlign === 'right' ? 1 : 0
   const left = x0 + (W - lineW) * align
   const { region, k: px } = flat
-  // About one image pixel per strip keeps the steps invisible.
   const strips = Math.max(PREVIEW_STRIPS, Math.min(1600, Math.ceil(region.width * px)))
   const sw = region.width / strips
+
+  if (kind === 'pinch') {
+    drawPinchWarp(ck, canvas, flat, { s, bias, y0, H, left, lineW, strips, sw })
+    return
+  }
+
   const paint = new ck.Paint()
   paint.setAntiAlias(false)
   for (let i = 0; i < strips; i++) {
     const sx = region.left + i * sw
     const u = Math.min(1, Math.max(0, (sx + sw / 2 - left) / lineW))
-    const k = Math.max(0.02, 1 - 0.8 * s * u)
-    const top = y0 + ((1 - k) * (1 - bias)) / 2 * H
-    const dy = top + (region.top - y0) * k
+    let scaleY = 1
+    let top = y0
+    if (kind === 'bulge') {
+      // sin(πu) peaks in the middle; negative s pinches instead of drums.
+      const wave = Math.sin(Math.PI * u)
+      scaleY = Math.max(0.02, 1 + 0.8 * s * wave)
+      top = y0 + ((1 - scaleY) * (1 - bias)) / 2 * H
+    } else if (kind === 'flag') {
+      // Constant height; both edges follow an S-curve. Bias shifts the wave
+      // toward the top (positive) or bottom (negative).
+      const wave = Math.sin(2 * Math.PI * u) * 0.35 * s * H
+      const shift = wave + bias * Math.abs(wave) * 0.25
+      scaleY = 1
+      top = y0 + shift
+    } else if (kind === 'taperLeft') {
+      // Left end shrinks as u→0 (mirror of trapezoid).
+      scaleY = Math.max(0.02, 1 - 0.8 * s * (1 - u))
+      top = y0 + ((1 - scaleY) * (1 - bias)) / 2 * H
+    } else {
+      // trapezoid (and unknown fallback): right end shrinks as u→1.
+      scaleY = Math.max(0.02, 1 - 0.8 * s * u)
+      top = y0 + ((1 - scaleY) * (1 - bias)) / 2 * H
+    }
+    const dy = top + (region.top - y0) * scaleY
     const src = ck.XYWHRect(i * sw * px, 0, sw * px, region.height * px)
-    const dst = ck.XYWHRect(sx, dy, sw, region.height * k)
+    const dst = ck.XYWHRect(sx, dy, sw, region.height * scaleY)
     canvas.drawImageRectOptions(flat.image, src, dst, ck.FilterMode.Linear, ck.MipmapMode.None, paint)
   }
   paint.delete()
+}
+
+/**
+ * Classic short-top trapezoid via bilinear quads: top edge inset, bottom full
+ * width (negative amount flips to short-bottom). Bias anchors the vertical
+ * shrink toward the bottom (−1) or top (+1).
+ */
+function drawPinchWarp(
+  ck: CanvasKit,
+  canvas: Canvas,
+  flat: FlatText,
+  p: { s: number; bias: number; y0: number; H: number; left: number; lineW: number; strips: number; sw: number },
+) {
+  const { region, k: px, image } = flat
+  const { s, bias, y0, H, left, lineW, strips, sw } = p
+  const inset = 0.45 * Math.min(1, Math.abs(s)) * lineW
+  const shortTop = s >= 0
+  // Vertical compression of the short edge, steered by bias (−1 bottom flat, +1 top flat).
+  const shrink = 0.35 * Math.abs(s)
+  const topY = y0 + shrink * (1 - bias) * 0.5 * H
+  const botY = y0 + H - shrink * (1 + bias) * 0.5 * H
+  const shortL = left + inset
+  const shortR = left + lineW - inset
+  const longL = left
+  const longR = left + lineW
+  const TL = { x: shortTop ? shortL : longL, y: topY }
+  const TR = { x: shortTop ? shortR : longR, y: topY }
+  const BL = { x: shortTop ? longL : shortL, y: botY }
+  const BR = { x: shortTop ? longR : shortR, y: botY }
+
+  const shader = image.makeShaderOptions(ck.TileMode.Clamp, ck.TileMode.Clamp, ck.FilterMode.Linear, ck.MipmapMode.None)
+  if (!shader) return
+  const paint = new ck.Paint()
+  paint.setAntiAlias(true)
+  paint.setShader(shader)
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+
+  for (let i = 0; i < strips; i++) {
+    const sx0 = region.left + i * sw
+    const sx1 = sx0 + sw
+    const mid = (sx0 + sx1) / 2
+    const inLine = mid >= left - sw && mid <= left + lineW + sw
+    const t0 = inLine ? Math.min(1, Math.max(0, (sx0 - left) / lineW)) : 0
+    const t1 = inLine ? Math.min(1, Math.max(0, (sx1 - left) / lineW)) : 1
+    const edgeTop = (t: number) => ({ x: lerp(TL.x, TR.x, t), y: lerp(TL.y, TR.y, t) })
+    const edgeBot = (t: number) => ({ x: lerp(BL.x, BR.x, t), y: lerp(BL.y, BR.y, t) })
+    const map = (t: number, yContent: number) => {
+      const top = edgeTop(t)
+      const bot = edgeBot(t)
+      const frac = (yContent - y0) / Math.max(1e-6, H)
+      return {
+        x: top.x + frac * (bot.x - top.x),
+        y: top.y + frac * (bot.y - top.y),
+      }
+    }
+    let positions: number[]
+    if (inLine) {
+      const a = map(t0, region.top)
+      const b = map(t1, region.top)
+      const c = map(t1, region.top + region.height)
+      const d = map(t0, region.top + region.height)
+      positions = [a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y]
+    } else {
+      positions = [sx0, region.top, sx1, region.top, sx1, region.top + region.height, sx0, region.top + region.height]
+    }
+    const srcL = i * sw * px
+    const srcR = (i + 1) * sw * px
+    const texCoords = [srcL, 0, srcR, 0, srcR, region.height * px, srcL, region.height * px]
+    const verts = ck.MakeVertices(ck.VertexMode.TriangleFan, positions, texCoords, null, null, false)
+    if (verts) {
+      canvas.drawVertices(verts, ck.BlendMode.SrcOver, paint)
+      verts.delete()
+    }
+  }
+  paint.delete()
+  shader.delete()
 }

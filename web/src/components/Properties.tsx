@@ -4,7 +4,7 @@ import { FontPicker } from './FontPicker'
 import { presets } from '../editor/presets'
 import { textPresets, type TextPreset } from '../editor/textPresets'
 import { parseStroke, parseShadow } from '../editor/style'
-import { DEFAULT_SHEAR, SHEAR, WARPS, warpShape } from '../editor/warp'
+import { DEFAULT_SHEAR, SHEAR, WARP_PANEL, warpShape } from '../editor/warp'
 import { keys } from '../editor/keys'
 import { ColorField, NumField, Section, Segmented, Select, Slider, Switch, Toggle } from './fields'
 import { ShapeFill } from './ShapeFill'
@@ -225,8 +225,7 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
           </div>
           <div className="grid grid-cols-3 gap-2.5">
             {tile('', '无变形', null)}
-            {WARPS.map((w) => tile(w.key, w.label, w.icon))}
-            {tile(SHEAR.key, SHEAR.label, SHEAR.icon)}
+            {WARP_PANEL.map((w) => tile(w.key, w.label, w.icon))}
           </div>
           {warp && (
             <div className="mt-4 flex flex-col gap-3">
