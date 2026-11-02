@@ -7,7 +7,7 @@ async function load(entry) {
   return import(`data:text/javascript;base64,${Buffer.from(outputFiles[0].text).toString('base64')}`)
 }
 
-const { WARPS, WARP_PANEL, SHEAR, WARP_ALIASES, warpShape } = await load('src/editor/warp.ts')
+const { WARPS, WARP_PANEL, SHEAR, WARP_ALIASES, WEDGE_WARPS, defaultWarpBias, warpShape } = await load('src/editor/warp.ts')
 
 test('warp catalog covers the reference shapes and resolves aliases', () => {
   const keys = WARPS.map((w) => w.key)
@@ -28,4 +28,21 @@ test('panel order matches 鼓形 → 斜切 → 旗帜 → 梯形 → 左高 →
     ['bulge', 'shear', 'flag', 'pinch', 'trapezoid', 'taperLeft'],
   )
   assert.equal(WARP_PANEL[1], SHEAR)
+})
+
+test('wedge icons keep a flat bottom (only the top edge slopes)', () => {
+  const leftHigh = WARPS.find((w) => w.key === 'trapezoid')
+  const rightHigh = WARPS.find((w) => w.key === 'taperLeft')
+  assert.equal(leftHigh.icon, 'M5 4 L35 14 L35 20 L5 20 Z')
+  assert.equal(rightHigh.icon, 'M5 14 L35 4 L35 20 L5 20 Z')
+})
+
+test('wedge warps default bias to −100 (bottom flat); others to 0', () => {
+  assert.equal(defaultWarpBias('trapezoid'), -100)
+  assert.equal(defaultWarpBias('taperLeft'), -100)
+  assert.equal(defaultWarpBias('taperRight'), -100)
+  assert.equal(defaultWarpBias('bulge'), 0)
+  assert.equal(defaultWarpBias('flag'), 0)
+  assert.equal(defaultWarpBias('pinch'), 0)
+  assert.ok(WEDGE_WARPS.has('trapezoid') && WEDGE_WARPS.has('taperLeft'))
 })

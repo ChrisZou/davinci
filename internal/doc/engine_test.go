@@ -302,6 +302,13 @@ func TestTextStrokeAndPresetEncoding(t *testing.T) {
 	if l.S("warpAmount") != 50.0 {
 		t.Fatalf("warp default = %v", l.Style)
 	}
+	if l.S("warpBias") != -100.0 {
+		t.Fatalf("wedge warpBias default = %v", l.Style)
+	}
+	run(t, e, `{"type":"updateLayer","id":"t","props":{"warp":"bulge","warpBias":0}}`)
+	if l.S("warpBias") != 0.0 {
+		t.Fatalf("explicit warpBias 0 should persist = %v", l.Style)
+	}
 	for _, key := range []string{"bulge", "flag", "pinch", "taperLeft", "taperRight"} {
 		run(t, e, fmt.Sprintf(`{"type":"updateLayer","id":"t","props":{"warp":"%s"}}`, key))
 		if l.S("warp") != key {

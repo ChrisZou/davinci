@@ -32,6 +32,11 @@ var textStyleKeys = []string{
 // Warps are the envelope shapes text can take (稿定's 变形).
 var Warps = []string{"bulge", "flag", "pinch", "trapezoid", "taperLeft", "taperRight"}
 
+// Wedge warps shrink one end; default bias −100 keeps the bottom edge horizontal.
+func isWedgeWarp(key string) bool {
+	return key == "trapezoid" || key == "taperLeft" || key == "taperRight"
+}
+
 func checkKeys(props map[string]any, allowed []string) error {
 	ok := map[string]bool{}
 	for _, k := range allowed {
@@ -256,13 +261,18 @@ func applyProps(l *Layer, props map[string]any) error {
 				if num(l.S("warpAmount"), 0) == 0 && !has(props, "warpAmount") {
 					l.SetS("warpAmount", 50.0)
 				}
+				// Wedges keep the bottom edge flat unless the caller set a bias.
+				if isWedgeWarp(key) && !has(props, "warpBias") && l.S("warpBias") == nil {
+					l.SetS("warpBias", -100.0)
+				}
 			}
 		}
 		if v, ok := props["warpAmount"]; ok && l.S("warp") != nil {
 			l.SetS("warpAmount", clamp(round(num(v, 0)), -100, 100))
 		}
 		if v, ok := props["warpBias"]; ok && l.S("warp") != nil {
-			l.SetS("warpBias", nilIfZero(clamp(round(num(v, 0)), -100, 100)))
+			// Keep explicit 0 (center shrink); wedges need to distinguish 0 from unset.
+			l.SetS("warpBias", clamp(round(num(v, 0)), -100, 100))
 		}
 	}
 	if l.Type == "image" {

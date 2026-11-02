@@ -4,7 +4,7 @@ import { FontPicker } from './FontPicker'
 import { presets } from '../editor/presets'
 import { textPresets, type TextPreset } from '../editor/textPresets'
 import { parseStroke, parseShadow } from '../editor/style'
-import { DEFAULT_SHEAR, SHEAR, WARP_PANEL, warpShape } from '../editor/warp'
+import { DEFAULT_SHEAR, SHEAR, WARP_PANEL, WEDGE_WARPS, defaultWarpBias, warpShape } from '../editor/warp'
 import { keys } from '../editor/keys'
 import { ColorField, NumField, Section, Segmented, Select, Slider, Switch, Toggle } from './fields'
 import { ShapeFill } from './ShapeFill'
@@ -177,7 +177,16 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
     setShearing(key === SHEAR.key)
     if (!key) patch({ warp: 'none', skewY: 0 })
     else if (key === SHEAR.key) patch({ warp: 'none', skewY: Number(style.skewY) || DEFAULT_SHEAR })
-    else patch({ warp: key, warpAmount: Number(style.warpAmount) || 30, skewY: 0 })
+    else {
+      // Wedges default to bottom-flat (−100) so the silhouette matches the icon.
+      const next: Record<string, unknown> = {
+        warp: key,
+        warpAmount: Number(style.warpAmount) || 30,
+        skewY: 0,
+      }
+      if (WEDGE_WARPS.has(key)) next.warpBias = -100
+      patch(next)
+    }
   }
 
   const tile = (key: string, label: string, icon: string | null) => {
@@ -240,7 +249,7 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
               />
               <Slider
                 label="相对高度"
-                value={Number(style.warpBias ?? 0)}
+                value={Number(style.warpBias ?? defaultWarpBias(style.warp))}
                 min={-100}
                 max={100}
                 step={1}

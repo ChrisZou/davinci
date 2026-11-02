@@ -4,6 +4,7 @@ import { canvasBackgroundVisible } from '../types'
 import { contentMatrix, frameOf, membersBox, type Frame, type Mat } from './geometry'
 import { FONT_SIZE_MULT, FontCache, layoutText, letterSpacingPx, numericWeight, textBackgroundPadding, textFaces, type Face, type FaceLookup, type TextLayout } from './text'
 import { gradientLine, readGradient } from './gradient'
+import { defaultWarpBias } from '../editor/warp'
 
 /**
  * The davinci renderer: turns a board of the document into pixels with
@@ -637,8 +638,8 @@ export class Renderer implements FaceLookup {
       // extra room so the background padding still covers the silhouette.
       if (st.warp && Number(st.warpAmount)) {
         const amount = Math.min(1, Math.abs(Number(st.warpAmount)) / 100)
-        const bias = Math.max(-1, Math.min(1, Number(st.warpBias) || 0))
         const kind = String(st.warp)
+        const bias = Math.max(-1, Math.min(1, Number(st.warpBias ?? defaultWarpBias(kind)) / 100))
         let growth = 0
         if (Number(st.warpAmount) < 0 && (kind === 'trapezoid' || kind === 'taperRight' || kind === 'taperLeft')) {
           growth = 0.8 * amount
@@ -826,8 +827,8 @@ function mul(m: number[], n: number[]): number[] {
  * Envelope warps: the flat text is laid down in thin vertical strips (or
  * textured quads for pinch), each remapped for its position along the line.
  *
- *   trapezoid / taperRight — right end shrinks (左高); negative grows it
- *   taperLeft              — left end shrinks (右高)
+ *   trapezoid / taperRight — right end shrinks (左高); negative grows it; bias defaults −100 (bottom flat)
+ *   taperLeft              — left end shrinks (右高); bias defaults −100 (bottom flat)
  *   bulge                  — capsule drum; negative pinches the middle
  *   flag                   — S-curve wave of constant height
  *   pinch                  — classic short-top / long-bottom trapezoid
@@ -836,7 +837,9 @@ function drawWarped(ck: CanvasKit, canvas: Canvas, flat: FlatText, st: Record<st
   const raw = String(st.warp || '')
   const kind = raw === 'taperRight' ? 'trapezoid' : raw
   const s = Math.max(-1, Math.min(1, Number(st.warpAmount) / 100))
-  const bias = Math.max(-1, Math.min(1, Number(st.warpBias || 0) / 100))
+  // Wedges (trapezoid / taperLeft): missing bias → −100 (bottom flat), matching icons.
+  // Explicit 0 still shrinks toward the middle. Bulge/flag/pinch default to 0.
+  const bias = Math.max(-1, Math.min(1, Number(st.warpBias ?? defaultWarpBias(raw)) / 100))
   const W = f.cw
   const H = f.ch
   const x0 = -W / 2
