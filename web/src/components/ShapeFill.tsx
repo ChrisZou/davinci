@@ -3,9 +3,11 @@ import type { LinearGradient, ShapeStyle } from '../types'
 import { gradientCSS, readGradient } from '../render/gradient'
 import { ColorField, NumField, Segmented } from './fields'
 
-export function ShapeFill({ style, onChange }: {
+export function ShapeFill({ style, onChange, onPreview }: {
   style: ShapeStyle
   onChange: (props: Record<string, unknown>) => void
+  /** Live canvas overlay while typing angle / stop opacity; null cancels. */
+  onPreview?: (props: Record<string, unknown> | null) => void
 }) {
   const gradient = readGradient(style.fillGradient)
   const baseColor = style.fill && !['none', 'transparent'].includes(style.fill) ? style.fill : '#000000'
@@ -15,10 +17,23 @@ export function ShapeFill({ style, onChange }: {
     previous.current = next
     onChange({ fillGradient: next })
   }
+  const previewGradient = (next: LinearGradient | null) => {
+    if (!onPreview) return
+    onPreview(next === null ? null : { fillGradient: next })
+  }
   const stop = (index: number, patch: Partial<LinearGradient['stops'][number]>) => {
     const current = previous.current ?? gradient
     if (!current) return
     set({ ...current, stops: current.stops.map((s, i) => i === index ? { ...s, ...patch } : s) as LinearGradient['stops'] })
+  }
+  const previewStop = (index: number, patch: Partial<LinearGradient['stops'][number]> | null) => {
+    const current = previous.current ?? gradient
+    if (!current) return
+    if (patch === null) {
+      previewGradient(null)
+      return
+    }
+    previewGradient({ ...current, stops: current.stops.map((s, i) => i === index ? { ...s, ...patch } : s) as LinearGradient['stops'] })
   }
 
   return (
@@ -55,13 +70,13 @@ export function ShapeFill({ style, onChange }: {
                 }} />
                 <div className="flex min-w-0 flex-col gap-2 [&>label]:h-8 [&>label]:flex-none">
                   <span className="text-xs text-muted">不透明度</span>
-                  <NumField label="" ariaLabel={`${i === 0 ? '起点' : '终点'}不透明度`} value={s.opacity} min={0} max={1} scale={100} suffix="%" testId={`gradient-opacity-${i}`} onCommit={(opacity) => stop(i, { opacity })} />
+                  <NumField label="" ariaLabel={`${i === 0 ? '起点' : '终点'}不透明度`} value={s.opacity} min={0} max={1} scale={100} suffix="%" testId={`gradient-opacity-${i}`} onPreview={(opacity) => previewStop(i, opacity === null ? null : { opacity })} onCommit={(opacity) => stop(i, { opacity })} />
                 </div>
               </div>
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <NumField label="角度" value={gradient.angle} min={0} max={360} suffix="°" testId="gradient-angle" onCommit={(angle) => set({ ...(previous.current ?? gradient), angle })} />
+            <NumField label="角度" value={gradient.angle} min={0} max={360} suffix="°" testId="gradient-angle" onPreview={(angle) => previewGradient(angle === null ? null : { ...(previous.current ?? gradient), angle })} onCommit={(angle) => set({ ...(previous.current ?? gradient), angle })} />
             <div className="flex gap-0.5 rounded-[10px] bg-paper p-0.5">
               {[{ angle: 90, name: '从左到右' }, { angle: 180, name: '从上到下' }, { angle: 135, name: '从左上到右下' }].map((direction) => (
                 <button key={direction.angle} type="button" title={direction.name} aria-label={direction.name} aria-pressed={gradient.angle === direction.angle}

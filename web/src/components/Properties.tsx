@@ -9,6 +9,7 @@ import { keys } from '../editor/keys'
 import { ColorField, NumField, Section, Segmented, Select, Slider, Switch, Toggle } from './fields'
 import { ShapeFill } from './ShapeFill'
 import { DEFAULT_FONT_SIZE, letterSpacingPx, textBackgroundPadding } from '../render/text'
+import type { PreviewKey } from '../editor/Editor'
 
 /**
  * The right-hand panel: whatever the selection is, or the canvas when nothing
@@ -39,7 +40,7 @@ export interface PanelProps {
   /** Opens the crop dialog for an image layer. */
   onCrop: (layer: Layer) => void
   /** Shows a control's value on the canvas before it is committed; null cancels it. */
-  onPreview: (id: string, key: 'opacity' | 'filters' | 'letterSpacing' | 'padding' | 'paddingX' | 'paddingY', value: number | Record<string, number> | null) => void
+  onPreview: (id: string, key: PreviewKey, value: number | string | Record<string, unknown> | null) => void
 }
 
 /**
@@ -129,7 +130,7 @@ function AlignRow({ onAlign }: { onAlign: (h?: string, v?: string) => void }) {
  * opens a panel of shapes — 梯形, and 斜切 that makes a line climb — with the
  * chosen one's sliders under them.
  */
-function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (props: Record<string, unknown>) => void }) {
+function WarpPicker({ style, patch, layerId, onPreview }: { style: Record<string, any>; patch: (props: Record<string, unknown>) => void; layerId: string; onPreview: PanelProps['onPreview'] }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState({ top: 0, left: 0 })
   const card = useRef<HTMLButtonElement>(null)
@@ -245,6 +246,7 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
                 max={100}
                 step={1}
                 testId="warp-amount"
+                onPreview={(warpAmount) => onPreview(layerId, 'warpAmount', warpAmount)}
                 onChange={(warpAmount) => patch({ warpAmount })}
               />
               <Slider
@@ -254,6 +256,7 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
                 max={100}
                 step={1}
                 testId="warp-bias"
+                onPreview={(warpBias) => onPreview(layerId, 'warpBias', warpBias)}
                 onChange={(warpBias) => patch({ warpBias })}
               />
             </div>
@@ -268,6 +271,7 @@ function WarpPicker({ style, patch }: { style: Record<string, any>; patch: (prop
                 step={1}
                 display={(v) => `${v}°`}
                 testId="skew-y"
+                onPreview={(skewY) => onPreview(layerId, 'skewY', skewY)}
                 onChange={(skewY) => patch({ skewY })}
               />
             </div>
@@ -351,13 +355,20 @@ function CutoutButton({ layer, onRun }: { layer: Layer; onRun: PanelProps['onRun
  * as "colour:blur:x:y" in board pixels ('' removes it); the panel shows the
  * colour's alpha as its own opacity field, which reads better than rgba().
  */
-function ShadowFields({ value, fallback, onChange }: { value?: string; fallback: string; onChange: (shadow: string) => void }) {
+function ShadowFields({ value, fallback, onChange, onPreview }: { value?: string; fallback: string; onChange: (shadow: string) => void; onPreview?: (shadow: string | null) => void }) {
   const shadow = parseShadow(value)
   const { hex, alpha } = splitAlpha(shadow?.color ?? '#000000')
-  const set = (next: { hex?: string; alpha?: number; blur?: number; offsetX?: number; offsetY?: number }) => {
+  const encode = (next: { hex?: string; alpha?: number; blur?: number; offsetX?: number; offsetY?: number }) => {
     const s = { ...shadow!, ...next }
     const color = joinAlpha(next.hex ?? hex, next.alpha ?? alpha)
-    onChange(`${color}:${s.blur}:${s.offsetX}:${s.offsetY}`)
+    return `${color}:${s.blur}:${s.offsetX}:${s.offsetY}`
+  }
+  const set = (next: { hex?: string; alpha?: number; blur?: number; offsetX?: number; offsetY?: number }) => {
+    onChange(encode(next))
+  }
+  const preview = (next: { hex?: string; alpha?: number; blur?: number; offsetX?: number; offsetY?: number } | null) => {
+    if (!onPreview) return
+    onPreview(next === null ? null : encode(next))
   }
   return (
     <div className="flex flex-col gap-3">
@@ -369,10 +380,18 @@ function ShadowFields({ value, fallback, onChange }: { value?: string; fallback:
         <>
           <ColorField label="颜色" value={hex} onCommit={(c) => c && set({ hex: c })} />
           <div className="grid grid-cols-2 gap-2">
-            <NumField label="不透明度" value={Math.round(alpha * 100)} min={0} max={100} suffix="%" onCommit={(v) => set({ alpha: Math.max(0, Math.min(100, v)) / 100 })} />
-            <NumField label="模糊" value={shadow.blur} min={0} onCommit={(blur) => set({ blur })} />
-            <NumField label="X" value={shadow.offsetX} onCommit={(offsetX) => set({ offsetX })} />
-            <NumField label="Y" value={shadow.offsetY} onCommit={(offsetY) => set({ offsetY })} />
+            <NumField
+              label="不透明度"
+              value={Math.round(alpha * 100)}
+              min={0}
+              max={100}
+              suffix="%"
+              onPreview={(v) => preview(v === null ? null : { alpha: Math.max(0, Math.min(100, v)) / 100 })}
+              onCommit={(v) => set({ alpha: Math.max(0, Math.min(100, v)) / 100 })}
+            />
+            <NumField label="模糊" value={shadow.blur} min={0} onPreview={(blur) => preview(blur === null ? null : { blur })} onCommit={(blur) => set({ blur })} />
+            <NumField label="X" value={shadow.offsetX} onPreview={(offsetX) => preview(offsetX === null ? null : { offsetX })} onCommit={(offsetX) => set({ offsetX })} />
+            <NumField label="Y" value={shadow.offsetY} onPreview={(offsetY) => preview(offsetY === null ? null : { offsetY })} onCommit={(offsetY) => set({ offsetY })} />
           </div>
         </>
       )}
@@ -511,7 +530,7 @@ function NameField({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) => vo
 
 // --- nothing selected: the canvas ------------------------------------------
 
-function CanvasSection({ doc, onRun, onPickBackground }: PanelProps) {
+function CanvasSection({ doc, onRun, onPickBackground, onPreview }: PanelProps) {
   return (
     <>
       <Header kicker="没有选中图层">
@@ -525,6 +544,7 @@ function CanvasSection({ doc, onRun, onPickBackground }: PanelProps) {
             min={1}
             max={20000}
             testId="canvas-width"
+            onPreview={(width) => onPreview('', 'canvasWidth', width)}
             onCommit={(width) => onRun({ type: 'setCanvasSize', width, height: doc.canvas.height })}
           />
           <NumField
@@ -533,6 +553,7 @@ function CanvasSection({ doc, onRun, onPickBackground }: PanelProps) {
             min={1}
             max={20000}
             testId="canvas-height"
+            onPreview={(height) => onPreview('', 'canvasHeight', height)}
             onCommit={(height) => onRun({ type: 'setCanvasSize', width: doc.canvas.width, height })}
           />
         </Grid2>
@@ -704,8 +725,8 @@ function LayerSection(props: PanelProps & { layer: Layer }) {
 
       {layer.type === 'text' && <TextSections key={layer.id} layer={layer} readOnly={props.readOnly} patch={patch} onRun={onRun} onPreview={props.onPreview} />}
       {layer.type === 'image' && <ImageSections {...props} layer={layer} />}
-      {layer.type === 'shape' && layer.shape?.kind === 'line' && <LineSection layer={layer} onRun={onRun} />}
-      {layer.type === 'shape' && layer.shape?.kind !== 'line' && <ShapeSection layer={layer} onRun={onRun} />}
+      {layer.type === 'shape' && layer.shape?.kind === 'line' && <LineSection layer={layer} onRun={onRun} onPreview={props.onPreview} />}
+      {layer.type === 'shape' && layer.shape?.kind !== 'line' && <ShapeSection layer={layer} onRun={onRun} onPreview={props.onPreview} />}
       {layer.type === 'group' && (
         <Section title="编组">
           <p className="text-xs leading-relaxed text-muted">这几个图层作为一个整体移动、缩放、旋转。要单独改其中某个，先解散。</p>
@@ -717,16 +738,16 @@ function LayerSection(props: PanelProps & { layer: Layer }) {
 
       <Section title="位置">
         <Grid2>
-          <NumField label="X" value={layer.x} testId="layer-x" onCommit={(x) => onRun({ type: 'moveLayer', id: layer.id, x, y: layer.y })} />
-          <NumField label="Y" value={layer.y} testId="layer-y" onCommit={(y) => onRun({ type: 'moveLayer', id: layer.id, x: layer.x, y })} />
-          <NumField label="宽" value={layer.width} min={1} testId="layer-width" onCommit={(width) => onRun({ type: 'resizeLayer', id: layer.id, width })} />
+          <NumField label="X" value={layer.x} testId="layer-x" onPreview={(x) => props.onPreview(layer.id, 'x', x)} onCommit={(x) => onRun({ type: 'moveLayer', id: layer.id, x, y: layer.y })} />
+          <NumField label="Y" value={layer.y} testId="layer-y" onPreview={(y) => props.onPreview(layer.id, 'y', y)} onCommit={(y) => onRun({ type: 'moveLayer', id: layer.id, x: layer.x, y })} />
+          <NumField label="宽" value={layer.width} min={1} testId="layer-width" onPreview={(width) => props.onPreview(layer.id, 'width', width)} onCommit={(width) => onRun({ type: 'resizeLayer', id: layer.id, width })} />
           {layer.type === 'text' ? (
-            <NumField label="旋转" value={layer.rotation} suffix="°" onCommit={(rotation) => onRun({ type: 'rotateLayer', id: layer.id, rotation })} />
+            <NumField label="旋转" value={layer.rotation} suffix="°" onPreview={(rotation) => props.onPreview(layer.id, 'rotation', rotation)} onCommit={(rotation) => onRun({ type: 'rotateLayer', id: layer.id, rotation })} />
           ) : (
-            <NumField label="高" value={layer.height} min={1} onCommit={(height) => onRun({ type: 'resizeLayer', id: layer.id, width: layer.width, height })} />
+            <NumField label="高" value={layer.height} min={1} onPreview={(height) => props.onPreview(layer.id, 'height', height)} onCommit={(height) => onRun({ type: 'resizeLayer', id: layer.id, width: layer.width, height })} />
           )}
           {layer.type !== 'text' && (
-            <NumField label="旋转" value={layer.rotation} suffix="°" onCommit={(rotation) => onRun({ type: 'rotateLayer', id: layer.id, rotation })} />
+            <NumField label="旋转" value={layer.rotation} suffix="°" onPreview={(rotation) => props.onPreview(layer.id, 'rotation', rotation)} onCommit={(rotation) => onRun({ type: 'rotateLayer', id: layer.id, rotation })} />
           )}
         </Grid2>
         <Slider
@@ -856,8 +877,8 @@ function TextSections({
         />
         <FontPicker value={String(style.fontFamily ?? '')} readOnly={readOnly} onChange={(fontFamily) => patch({ fontFamily })} />
         <Grid2>
-          <NumField label="字号" value={Number(style.fontSize ?? 48)} min={1} testId="text-size" onCommit={(fontSize) => patch({ fontSize })} />
-          <NumField label="行高" value={Number(style.lineHeight ?? 1.2)} step={0.05} min={0.5} max={4} onCommit={(lineHeight) => patch({ lineHeight })} />
+          <NumField label="字号" value={Number(style.fontSize ?? 48)} min={1} testId="text-size" onPreview={(fontSize) => onPreview(layer.id, 'fontSize', fontSize)} onCommit={(fontSize) => patch({ fontSize })} />
+          <NumField label="行高" value={Number(style.lineHeight ?? 1.2)} step={0.05} min={0.5} max={4} onPreview={(lineHeight) => onPreview(layer.id, 'lineHeight', lineHeight)} onCommit={(lineHeight) => patch({ lineHeight })} />
         </Grid2>
         <div className="flex">
           <NumField
@@ -898,7 +919,7 @@ function TextSections({
       </Section>
 
       <Section title="变形">
-        <WarpPicker style={style} patch={patch} />
+        <WarpPicker style={style} patch={patch} layerId={layer.id} onPreview={onPreview} />
       </Section>
 
       <Section title="颜色">
@@ -955,11 +976,11 @@ function TextSections({
         />
         {stroke.stroke && (
           <div className="flex items-center gap-2">
-            <NumField label="粗细" value={Number(stroke.strokeWidth ?? 0)} min={0} onCommit={(w) => patch(w <= 0 ? { stroke: '' } : { strokeWidth: w })} />
+            <NumField label="粗细" value={Number(stroke.strokeWidth ?? 0)} min={0} onPreview={(w) => onPreview(layer.id, 'strokeWidth', w)} onCommit={(w) => patch(w <= 0 ? { stroke: '' } : { strokeWidth: w })} />
             <Toggle label="描边在字下" on={style.paintFirst === true} onToggle={(paintFirst) => patch({ paintFirst })} />
           </div>
         )}
-        <ShadowFields value={style.shadow} fallback="rgba(0,0,0,0.5):12:0:6" onChange={(shadow) => patch({ shadow })} />
+        <ShadowFields value={style.shadow} fallback="rgba(0,0,0,0.5):12:0:6" onChange={(shadow) => patch({ shadow })} onPreview={(shadow) => onPreview(layer.id, 'shadow', shadow)} />
       </Section>
     </>
   )
@@ -1024,6 +1045,7 @@ function ImageSections({ layer, onRun, onUpload, onCrop, onPreview, onPickFromLi
             value={Number(style.cornerRadius ?? 0)}
             min={0}
             max={Math.round(Math.min(layer.width, layer.height) / 2)}
+            onPreview={(cornerRadius) => onPreview(layer.id, 'cornerRadius', cornerRadius)}
             onCommit={(cornerRadius) => onRun({ type: 'setImageProps', id: layer.id, cornerRadius })}
           />
         </div>
@@ -1044,6 +1066,7 @@ function ImageSections({ layer, onRun, onUpload, onCrop, onPreview, onPickFromLi
                   label="粗细"
                   value={Number(style.strokeWidth ?? 12)}
                   min={0}
+                  onPreview={(w) => onPreview(layer.id, 'strokeWidth', w)}
                   onCommit={(w) => onRun({ type: 'setImageProps', id: layer.id, ...(w > 0 ? { strokeWidth: w } : { stroke: 'none' }) })}
                 />
               </div>
@@ -1054,6 +1077,7 @@ function ImageSections({ layer, onRun, onUpload, onCrop, onPreview, onPickFromLi
           value={style.shadow}
           fallback="rgba(0,0,0,0.35):40:0:16"
           onChange={(shadow) => onRun({ type: 'setImageProps', id: layer.id, shadow: shadow || 'none' })}
+          onPreview={(shadow) => onPreview(layer.id, 'shadow', shadow)}
         />
       </Section>
 
@@ -1093,14 +1117,14 @@ function ImageSections({ layer, onRun, onUpload, onCrop, onPreview, onPickFromLi
 // --- shape ---------------------------------------------------------------
 
 /** A line: its colour, thickness, dash and arrowheads. */
-function LineSection({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) => void }) {
+function LineSection({ layer, onRun, onPreview }: { layer: Layer; onRun: (cmd: unknown) => void; onPreview: PanelProps['onPreview'] }) {
   const style = (layer.style ?? {}) as Record<string, any>
   const set = (props: Record<string, unknown>) => onRun({ type: 'setShapeProps', id: layer.id, ...props })
   return (
     <Section title="线条">
       <ColorField label="颜色" value={String(style.stroke ?? '#1c1b18')} testId="line-color" onCommit={(stroke) => set({ stroke })} />
       <Grid2>
-        <NumField label="粗细" value={Number(style.strokeWidth ?? 4)} min={1} max={200} onCommit={(strokeWidth) => set({ strokeWidth })} />
+        <NumField label="粗细" value={Number(style.strokeWidth ?? 4)} min={1} max={200} onPreview={(strokeWidth) => onPreview(layer.id, 'strokeWidth', strokeWidth)} onCommit={(strokeWidth) => set({ strokeWidth })} />
       </Grid2>
       <Segmented
         label="线型"
@@ -1125,7 +1149,7 @@ function LineSection({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) => 
   )
 }
 
-function ShapeSection({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) => void }) {
+function ShapeSection({ layer, onRun, onPreview }: { layer: Layer; onRun: (cmd: unknown) => void; onPreview: PanelProps['onPreview'] }) {
   const style = (layer.style ?? {}) as Record<string, any>
   const hasStroke = !!style.stroke && Number(style.strokeWidth) > 0
   return (
@@ -1134,6 +1158,10 @@ function ShapeSection({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) =>
         key={layer.id}
         style={style}
         onChange={(props) => onRun({ type: 'setShapeProps', id: layer.id, ...props })}
+        onPreview={(props) => {
+          if (props === null) onPreview(layer.id, 'fillGradient', null)
+          else if ('fillGradient' in props) onPreview(layer.id, 'fillGradient', props.fillGradient as Record<string, unknown> | null)
+        }}
       />
       <ColorField
         label="描边"
@@ -1149,7 +1177,7 @@ function ShapeSection({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) =>
       />
       <Grid2>
         {hasStroke && (
-          <NumField label="描边粗细" value={Number(style.strokeWidth ?? 0)} min={0} onCommit={(strokeWidth) => onRun({ type: 'setShapeProps', id: layer.id, strokeWidth })} />
+          <NumField label="描边粗细" value={Number(style.strokeWidth ?? 0)} min={0} onPreview={(strokeWidth) => onPreview(layer.id, 'strokeWidth', strokeWidth)} onCommit={(strokeWidth) => onRun({ type: 'setShapeProps', id: layer.id, strokeWidth })} />
         )}
         {layer.shape?.kind === 'rect' && (
           <NumField
@@ -1157,6 +1185,7 @@ function ShapeSection({ layer, onRun }: { layer: Layer; onRun: (cmd: unknown) =>
             value={Number(style.cornerRadius ?? 0)}
             min={0}
             max={Math.round(Math.min(layer.width, layer.height) / 2)}
+            onPreview={(cornerRadius) => onPreview(layer.id, 'cornerRadius', cornerRadius)}
             onCommit={(cornerRadius) => onRun({ type: 'setShapeProps', id: layer.id, cornerRadius })}
           />
         )}

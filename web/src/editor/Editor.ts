@@ -106,6 +106,34 @@ type Gesture =
 
 type Ghost = Partial<Omit<Layer, 'style'>> & { style?: Record<string, unknown> }
 
+/** Property-panel values shown on the canvas before a control commits. */
+export type PreviewKey =
+  | 'opacity'
+  | 'x'
+  | 'y'
+  | 'width'
+  | 'height'
+  | 'rotation'
+  | 'filters'
+  | 'letterSpacing'
+  | 'padding'
+  | 'paddingX'
+  | 'paddingY'
+  | 'fontSize'
+  | 'lineHeight'
+  | 'strokeWidth'
+  | 'cornerRadius'
+  | 'shadow'
+  | 'fillGradient'
+  | 'warpAmount'
+  | 'warpBias'
+  | 'skewY'
+  | 'canvasWidth'
+  | 'canvasHeight'
+
+const LAYER_PREVIEW = new Set<PreviewKey>(['opacity', 'x', 'y', 'width', 'height', 'rotation'])
+const CANVAS_PREVIEW = new Set<PreviewKey>(['canvasWidth', 'canvasHeight'])
+
 const rad = (d: number) => (d * Math.PI) / 180
 
 function rotate(p: Pt, deg: number): Pt {
@@ -187,6 +215,8 @@ export class Editor {
   private ghosts = new Map<string, Ghost>()
   /** Control values being adjusted, by layer. */
   private previews = new Map<string, Ghost>()
+  /** Canvas size while the size fields are being typed. */
+  private canvasPreview: { width?: number; height?: number } | null = null
   private editing: { id: string; ta: HTMLTextAreaElement; done: boolean } | null = null
 
   static async create(container: HTMLElement, cb: EditorCallbacks = {}): Promise<Editor> {
@@ -247,6 +277,7 @@ export class Editor {
       this.gesture = null
       this.ghosts.clear()
       this.previews.clear()
+      this.canvasPreview = null
       this.finishEditing(false)
       this.fitToScreen()
     }
@@ -279,7 +310,7 @@ export class Editor {
   private viewBoard(): Board | null {
     const b = this.board
     if (!b) return null
-    if (!this.ghosts.size && !this.previews.size) return b
+    if (!this.ghosts.size && !this.previews.size && !this.canvasPreview) return b
     const layers = b.layers.map((l) => {
       const g = this.ghosts.get(l.id)
       const p = this.previews.get(l.id)
@@ -291,7 +322,8 @@ export class Editor {
         style: { ...(l.style ?? {}), ...(g?.style ?? {}), ...(p?.style ?? {}) },
       } as Layer
     })
-    return { ...b, layers }
+    const canvas = this.canvasPreview ? { ...b.canvas, ...this.canvasPreview } : b.canvas
+    return { ...b, canvas, layers }
   }
 
   private layer(id: string): Layer | undefined {
@@ -347,26 +379,50 @@ export class Editor {
    * command when it settles (one undo step, not hundreds); until then the
    * canvas shows the value from here.
    */
-  preview(id: string, key: 'opacity' | 'filters' | 'letterSpacing' | 'padding' | 'paddingX' | 'paddingY', value: number | Record<string, number> | null) {
+  preview(id: string, key: PreviewKey, value: number | string | Record<string, unknown> | null) {
     if (this.readOnly) return
+    if (CANVAS_PREVIEW.has(key)) {
+      const field = key === 'canvasWidth' ? 'width' : 'height'
+      if (value === null) {
+        if (this.canvasPreview) {
+          const next = { ...this.canvasPreview }
+          delete next[field]
+          this.canvasPreview = Object.keys(next).length ? next : null
+        }
+      } else {
+        const n = Math.max(1, Number(value))
+        if (!Number.isFinite(n)) return
+        this.canvasPreview = { ...(this.canvasPreview ?? {}), [field]: n }
+      }
+      this.render()
+      return
+    }
     const g: Ghost = { ...(this.previews.get(id) ?? {}) }
     if (value === null) {
-      if (key === 'opacity') delete g.opacity
+      if (LAYER_PREVIEW.has(key)) delete (g as Record<string, unknown>)[key]
       else {
         g.style = { ...(g.style ?? {}) }
         delete g.style[key]
         if (!Object.keys(g.style).length) delete g.style
       }
-    } else if (key === 'opacity') g.opacity = Math.max(0, Math.min(1, Number(value)))
-    else g.style = { ...(g.style ?? {}), [key]: value }
+    } else if (key === 'opacity') {
+      g.opacity = Math.max(0, Math.min(1, Number(value)))
+    } else if (LAYER_PREVIEW.has(key)) {
+      const n = Number(value)
+      if (!Number.isFinite(n)) return
+      ;(g as Record<string, unknown>)[key] = key === 'rotation' ? n : key === 'x' || key === 'y' ? n : Math.max(1, n)
+    } else {
+      g.style = { ...(g.style ?? {}), [key]: value }
+    }
     if (Object.keys(g).length) this.previews.set(id, g)
     else this.previews.delete(id)
     this.render()
   }
 
   endPreview() {
-    if (!this.previews.size) return
+    if (!this.previews.size && !this.canvasPreview) return
     this.previews.clear()
+    this.canvasPreview = null
     this.render()
   }
 
